@@ -1,0 +1,88 @@
+"""Main FastAPI application for AI Agent Service."""
+
+import logging
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env.prod
+load_dotenv('.env.prod')
+
+# Configure logging BEFORE importing any modules that use logger
+log_level = os.getenv('LOG_LEVEL', 'DEBUG')
+logging.basicConfig(
+    level=getattr(logging, log_level.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import after logging is configured
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from api.endpoints import router
+from api.customer_service import router as customer_service_router
+from api.admin import admin_router
+
+# Create FastAPI app
+app = FastAPI(
+    title="AI Agent Service",
+    description="Generic AI agent service with skill-based extensibility",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files
+static_path = Path(__file__).parent / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+# Include API routers
+app.include_router(router)  # Generic /api endpoints
+app.include_router(customer_service_router)  # /api/customer-service endpoints
+app.include_router(admin_router)  # /admin endpoints
+
+
+@app.get("/")
+async def root():
+    """Serve the chat UI."""
+    chat_html = Path(__file__).parent / "static" / "chat.html"
+    if chat_html.exists():
+        return FileResponse(chat_html)
+    return {"message": "AI Agent Service API", "docs": "/docs"}
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event."""
+    from api.dependencies import get_config_service
+
+    logger.info("Starting AI Agent Service")
+    logger.info(f"Working directory: {Path.cwd()}")
+
+    config_service = get_config_service()
+    current_config = config_service.get_current_config()
+    logger.info(f"Active model config: {config_service.get_current_config_name()}")
+    logger.info(f"  - Base URL: {current_config.base_url}")
+    logger.info(f"  - Model: {current_config.model or 'Default'}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Application shutdown event."""
+    logger.info("Shutting down AI Agent Service")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "9090"))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
