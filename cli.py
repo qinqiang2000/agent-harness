@@ -22,6 +22,10 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+
+# Load environment variables FIRST (before importing project modules)
+load_dotenv('.env.prod')
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from rich.console import Console
@@ -29,7 +33,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 # Import project modules
-from api.dependencies import get_agent_service
+from api.dependencies import get_agent_service, get_config_service
 from api.models.requests import QueryRequest
 
 # Configure logging - 分离系统日志和CLI输出
@@ -224,15 +228,15 @@ async def process_stream(agent_service, request, renderer, state):
         restore_term()
 
 
-async def handle_command(cmd: str, state: REPLState) -> bool:
+async def handle_command(cmd: str, state: REPLState, config_service=None) -> bool:
     """Handle special commands. Returns True to continue REPL loop."""
     if cmd in ["/q", "/quit", "/exit"]:
-        console.print("[yellow]再见！[/yellow]")
+        console.print("[yellow]bye bye![/yellow]")
         return False
 
     elif cmd == "/new":
         state.clear_session()
-        console.print("[green]✓ 已开始新会话[/green]\n")
+        console.print("[green]✓ new session started[/green]\n")
 
     elif cmd == "/sessions":
         if not state.session_history:
@@ -266,11 +270,27 @@ async def handle_command(cmd: str, state: REPLState) -> bool:
 
     elif cmd == "/config":
         from api.constants import AGENTS_ROOT, DATA_DIR
+
+        # Get current model config
+        current_model = "未知"
+        model_desc = "未知"
+        base_url = "未知"
+        if config_service:
+            current_model = config_service.get_current_config_name()
+            model_config = config_service.get_current_config()
+            model_desc = model_config.description
+            base_url = model_config.base_url
+
         console.print(Panel(
-            f"[cyan]租户ID:[/cyan] {state.tenant_id}\n"
-            f"[cyan]语言:[/cyan] {state.language}\n"
-            f"[cyan]Skill:[/cyan] {state.skill}\n"
-            f"[cyan]会话ID:[/cyan] {state.session_id or '(新会话)'}\n\n"
+            f"[bold cyan]模型配置:[/bold cyan]\n"
+            f"  [cyan]配置名称:[/cyan] {current_model}\n"
+            f"  [cyan]描述:[/cyan] {model_desc}\n"
+            f"  [cyan]Base URL:[/cyan] {base_url}\n\n"
+            f"[bold cyan]会话配置:[/bold cyan]\n"
+            f"  [cyan]租户ID:[/cyan] {state.tenant_id}\n"
+            f"  [cyan]语言:[/cyan] {state.language}\n"
+            f"  [cyan]Skill:[/cyan] {state.skill}\n"
+            f"  [cyan]会话ID:[/cyan] {state.session_id or '(新会话)'}\n\n"
             f"[dim]工作目录:[/dim] {AGENTS_ROOT}\n"
             f"[dim]数据目录:[/dim] {DATA_DIR}",
             title="当前配置",
@@ -308,19 +328,22 @@ async def handle_command(cmd: str, state: REPLState) -> bool:
 
 async def run_repl():
     """Main REPL loop."""
-    # Load environment variables
-    load_dotenv('.env.prod')
-
     # Initialize components
     agent_service = get_agent_service()
+    config_service = get_config_service()
     state = REPLState()
     session = PromptSession()
     renderer = StreamRenderer()
 
+    # Get current model config
+    current_model = config_service.get_current_config_name()
+    model_config = config_service.get_current_config()
+
     # Welcome message
     console.print(Panel.fit(
         "[bold cyan]AI Agent CLI 调试工具[/bold cyan]\n"
-        "[green]模式:[/green] 客服助手 (customer-service)\n"
+        f"[green]模型配置:[/green] {current_model} ({model_config.description})\n"
+        f"[green]模式:[/green] 客服助手 (customer-service)\n"
         "输入 /help 查看帮助，/config 查看配置，/q 退出",
         border_style="blue"
     ))
@@ -346,7 +369,7 @@ async def run_repl():
 
             # Handle special commands
             if user_input.startswith("/"):
-                should_continue = await handle_command(user_input, state)
+                should_continue = await handle_command(user_input, state, config_service)
                 if not should_continue:
                     break
                 continue
@@ -363,7 +386,7 @@ async def run_repl():
             continue
 
         except EOFError:
-            console.print("\n[yellow]再见！[/yellow]")
+            console.print("\n[yellow]bye bye![/yellow]")
             break
 
         except Exception as e:
@@ -375,5 +398,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_repl())
     except KeyboardInterrupt:
-        console.print("\n[yellow]已中断[/yellow]")
+        console.print("\n[yellow]interrupted[/yellow]")
         sys.exit(0)
