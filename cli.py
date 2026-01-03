@@ -29,6 +29,7 @@ load_dotenv('.env.prod')
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.history import FileHistory
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -170,18 +171,16 @@ def setup_keyboard_listener():
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
 
+    # Set cbreak mode immediately to prevent ESC key from echoing
+    tty.setcbreak(fd)
+
     def check_esc() -> bool:
         """Check if ESC was pressed (non-blocking). Returns True if ESC detected."""
         try:
             rlist, _, _ = select.select([sys.stdin], [], [], 0)
             if rlist:
-                # Temporarily set cbreak to read single char
-                tty.setcbreak(fd)
-                try:
-                    char = sys.stdin.read(1)
-                    return ord(char) == 27  # ESC key
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                char = sys.stdin.read(1)
+                return ord(char) == 27  # ESC key
         except Exception:
             pass
         return False
@@ -357,7 +356,11 @@ async def run_repl():
     agent_service = get_agent_service()
     config_service = get_config_service()
     state = REPLState()
-    session = PromptSession()
+
+    # Setup command history (persistent across sessions)
+    history_file = log_dir / ".cli_history"
+    session = PromptSession(history=FileHistory(str(history_file)))
+
     renderer = StreamRenderer()
 
     # Get current model config
