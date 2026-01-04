@@ -246,8 +246,13 @@ async def process_stream(agent_service, request, renderer, state):
                 renderer.show_error(data_obj)
 
     except Exception as e:
-        renderer.show_error({"message": str(e), "type": type(e).__name__})
-        logger.exception("Stream processing error")
+        # Don't show error if it's just an interrupt cleanup issue
+        error_msg = str(e)
+        if not ("cancel scope" in error_msg.lower() or interrupted):
+            renderer.show_error({"message": str(e), "type": type(e).__name__})
+            logger.exception("Stream processing error")
+        else:
+            logger.info(f"Stream ended: {type(e).__name__}")
     finally:
         restore_term()
 

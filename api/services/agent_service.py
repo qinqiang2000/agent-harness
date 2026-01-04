@@ -1,5 +1,6 @@
 """Agent business logic service."""
 
+import asyncio
 import logging
 from typing import Optional, AsyncGenerator
 from pathlib import Path
@@ -100,8 +101,13 @@ class AgentService:
                     yield message
 
         except Exception as e:
-            logger.error(f"Error in process_query: {str(e)}", exc_info=True)
-            yield format_sse_message("error", {
-                "message": str(e),
-                "type": type(e).__name__
-            })
+            # Suppress cancel scope errors from interrupt (expected behavior)
+            error_msg = str(e)
+            if "cancel scope" in error_msg.lower() or isinstance(e, (GeneratorExit, asyncio.CancelledError)):
+                logger.info(f"Stream interrupted: {type(e).__name__}")
+            else:
+                logger.error(f"Error in process_query: {str(e)}", exc_info=True)
+                yield format_sse_message("error", {
+                    "message": str(e),
+                    "type": type(e).__name__
+                })
