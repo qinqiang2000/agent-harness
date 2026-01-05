@@ -13,7 +13,6 @@ Features:
 """
 
 import asyncio
-import fcntl
 import json
 import logging
 import sys
@@ -43,29 +42,6 @@ from api.models.requests import QueryRequest
 log_dir = Path(__file__).parent / "logs"
 log_dir.mkdir(exist_ok=True)
 
-
-def rotate_log_if_needed(log_dir: Path) -> None:
-    """启动时轮转旧日志（带文件锁防止多实例并发冲突）"""
-    log_file = log_dir / "cli.log"
-    lock_file = log_dir / ".cli.lock"
-
-    lock_file.touch(exist_ok=True)
-
-    with open(lock_file, 'r') as lock_fd:
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-
-            if log_file.exists() and log_file.stat().st_size > 0:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                new_name = log_dir / f"cli.log.{timestamp}"
-                log_file.rename(new_name)
-
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-        except BlockingIOError:
-            pass  # 其他实例正在轮转，跳过
-
-
-rotate_log_if_needed(log_dir)
 
 # 配置根logger
 root_logger = logging.getLogger()
