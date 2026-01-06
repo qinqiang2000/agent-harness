@@ -43,3 +43,4 @@ logs/
 *.temp
 *.backup
 *.backup*
+.claude/settings.local.json
