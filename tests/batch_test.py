@@ -3,14 +3,17 @@
 批量自动化测试脚本 - 测试 customer-service skill
 
 Usage:
-    # 基本用法
+    # 基本用法 - 从文件读取问题
     python tests/batch_test.py tests/dataset/test_set_1.md
+
+    # 直接输入单个问题
+    python tests/batch_test.py -p "星空旗舰版如何配置开票人员？"
 
     # 控制并发数（每个问题约3-4分钟，建议并发数<=3）
     python tests/batch_test.py tests/dataset/test_set_1.md --concurrency 3
 
     # 指定默认产品（当 agent 询问产品时自动回复）
-    python tests/batch_test.py tests/dataset/test_set_1.md --default-product "星瀚旗舰版"
+    python tests/batch_test.py -p "如何配置开票人员？" --default-product "星瀚旗舰版"
 
     # 调整超时（默认360秒）
     python tests/batch_test.py tests/dataset/test_set_1.md --timeout 600
@@ -531,27 +534,37 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
 
 async def main():
     parser = argparse.ArgumentParser(description="批量测试 customer-service agent")
-    parser.add_argument("input_file", help="测试问题文件路径")
+    parser.add_argument("input_file", nargs="?", help="测试问题文件路径（可选，使用 -p 直接输入问题时不需要）")
+    parser.add_argument("-p", "--prompt", help="直接输入单个测试问题")
     parser.add_argument("--concurrency", "-c", type=int, default=1, help="并发数 (默认: 1)")
-    parser.add_argument("--default-product", "-p", default="旗舰版发票云",
+    parser.add_argument("--default-product", default="旗舰版发票云",
                         help="默认产品选择 (默认: 旗舰版发票云)")
     parser.add_argument("--timeout", "-t", type=float, default=360.0, help="单个测试超时(秒)，默认360秒")
     parser.add_argument("--output-dir", "-o", default="tests/results", help="输出目录")
 
     args = parser.parse_args()
 
-    # 解析测试问题
-    input_path = Path(args.input_file)
-    if not input_path.exists():
-        print(f"错误: 文件不存在 {input_path}")
+    # 解析测试问题：优先使用 -p 参数，否则从文件读取
+    if args.prompt:
+        questions = [args.prompt]
+        file_stem = "single_question"
+        print(f"使用命令行输入的问题: {args.prompt}")
+    elif args.input_file:
+        input_path = Path(args.input_file)
+        if not input_path.exists():
+            print(f"错误: 文件不存在 {input_path}")
+            sys.exit(1)
+        questions = parse_test_questions(str(input_path))
+        file_stem = input_path.stem
+        if not questions:
+            print("错误: 未找到有效的测试问题")
+            sys.exit(1)
+        print(f"加载了 {len(questions)} 个测试问题")
+    else:
+        print("错误: 请提供测试问题文件或使用 -p 参数直接输入问题")
+        parser.print_help()
         sys.exit(1)
 
-    questions = parse_test_questions(str(input_path))
-    if not questions:
-        print("错误: 未找到有效的测试问题")
-        sys.exit(1)
-
-    print(f"加载了 {len(questions)} 个测试问题")
     print(f"并发数: {args.concurrency}")
     print(f"默认产品: {args.default_product}")
     print()
@@ -561,7 +574,7 @@ async def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # 创建 Markdown 增量写入器
-    md_writer = MarkdownWriter(output_dir, input_path.stem)
+    md_writer = MarkdownWriter(output_dir, file_stem)
     print(f"📝 Markdown 结果将实时写入: {md_writer.get_path()}")
     print()
 
@@ -575,7 +588,7 @@ async def main():
     )
 
     # 保存 JSON 结果
-    save_results(results, output_dir, input_path.stem, md_writer=md_writer)
+    save_results(results, output_dir, file_stem, md_writer=md_writer)
 
 
 if __name__ == "__main__":
