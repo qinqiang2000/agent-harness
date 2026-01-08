@@ -126,6 +126,16 @@ class StreamProcessor:
                         logger.info(f"[TodoWrite] Emitting {len(todos)} todos")
                         yield format_sse_message("todos_update", {"todos": todos})
 
+                # Handle AskUserQuestion
+                elif block.name == "AskUserQuestion":
+                    if isinstance(block.input, dict):
+                        questions = block.input.get("questions", [])
+                        if questions:
+                            logger.info(f"[AskUserQuestion] Emitting {len(questions)} question(s)")
+                            yield format_sse_message("ask_user_question", {
+                                "questions": questions
+                            })
+
     async def _handle_result_message(self, msg: ResultMessage) -> AsyncGenerator[dict, None]:
         """Handle result message."""
         self.actual_session_id = msg.session_id

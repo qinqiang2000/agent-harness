@@ -175,6 +175,18 @@ class YunzhijiaHandler:
                         await self._send_message(yzj_token, msg.operatorOpenid, content)
                         logger.info(f"[YZJ] Sent message #{message_count} for session: {yzj_session_id}")
 
+                elif event_type == "ask_user_question":
+                    # 处理 AskUserQuestion 工具调用
+                    data = json.loads(event["data"])
+                    questions = data.get("questions", [])
+
+                    # 将问题格式化为文本消息
+                    for question in questions:
+                        formatted_message = self._format_question(question)
+                        message_count += 1
+                        await self._send_message(yzj_token, msg.operatorOpenid, formatted_message)
+                        logger.info(f"[YZJ] Sent question #{message_count} for session: {yzj_session_id}")
+
                 elif event_type == "result":
                     # 解析 JSON 数据
                     result_data = json.loads(event.get("data", "{}"))
@@ -319,6 +331,35 @@ class YunzhijiaHandler:
                 data_content[f"bigImage{j}Url"] = img_url
 
         return data_content
+
+    def _format_question(self, question: dict) -> str:
+        """将 AskUserQuestion 格式化为云之家可读的文本
+
+        Args:
+            question: 问题字典，包含 question, options 等字段
+
+        Returns:
+            格式化后的消息文本
+        """
+        question_text = question.get("question", "请选择")
+        options = question.get("options", [])
+
+        # 构建消息
+        lines = [question_text, ""]
+
+        for i, option in enumerate(options, 1):
+            label = option.get("label", "")
+            description = option.get("description", "")
+
+            if description:
+                lines.append(f"{i}. {label} - {description}")
+            else:
+                lines.append(f"{i}. {label}")
+
+        lines.append("")
+        lines.append("请回复对应的选项编号或文字。")
+
+        return "\n".join(lines)
 
     def get_session_stats(self) -> dict:
         """获取会话统计信息
