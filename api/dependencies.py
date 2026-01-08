@@ -53,7 +53,8 @@ def get_yunzhijia_handler():
     if _yunzhijia_handler_instance is None:
         from api.handlers.yunzhijia_handler import YunzhijiaHandler
         agent_service = get_agent_service()
-        _yunzhijia_handler_instance = YunzhijiaHandler(agent_service)
+        session_service = get_session_service()
+        _yunzhijia_handler_instance = YunzhijiaHandler(agent_service, session_service)
         logger.info("Created YunzhijiaHandler instance")
     return _yunzhijia_handler_instance
 

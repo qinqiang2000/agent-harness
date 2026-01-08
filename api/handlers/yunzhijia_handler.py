@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Dict
 
 import aiohttp
@@ -10,6 +11,7 @@ import aiohttp
 from api.models.yunzhijia import YZJRobotMsg
 from api.models.requests import QueryRequest
 from api.services.agent_service import AgentService
+from api.services.session_service import SessionService
 
 logger = logging.getLogger(__name__)
 
@@ -21,18 +23,56 @@ class YunzhijiaHandler:
     1. 会话映射管理：yzj_session_id ↔ agent_session_id
     2. 实时消息推送：每收到一条 assistant_message 立即发送给用户
     3. 云之家推送：调用云之家 Webhook API 发送消息
+    4. 会话中断：支持用户发送"停止"命令中断正在运行的会话
     """
 
     NOTIFY_URL = "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={}"
 
-    def __init__(self, agent_service: AgentService):
+    # 停止命令关键词（不区分大小写）
+    STOP_KEYWORDS = ["停止", "stop", "取消", "cancel"]
+
+    # 停止命令的最大长度（避免误伤）
+    MAX_STOP_COMMAND_LENGTH = 10
+
+    def __init__(self, agent_service: AgentService, session_service: SessionService):
         """初始化云之家处理器
 
         Args:
             agent_service: Agent 服务实例
+            session_service: Session 服务实例（用于会话中断）
         """
         self.agent_service = agent_service
+        self.session_service = session_service
         self.session_map: Dict[str, str] = {}  # {yzj_session_id: agent_session_id}
+
+    def _is_stop_command(self, content: str) -> bool:
+        """判断是否为停止命令
+
+        规则：
+        1. 去除 @提及（如 @API客服）
+        2. 去除前后空格
+        3. 消息长度 ≤ MAX_STOP_COMMAND_LENGTH
+        4. 包含停止关键词
+
+        Args:
+            content: 消息内容
+
+        Returns:
+            bool: 是否为停止命令
+        """
+        # 去除 @提及（匹配 @xxx 空格）
+        cleaned = re.sub(r'@\S+\s*', '', content)
+
+        # 去除前后空格
+        cleaned = cleaned.strip()
+
+        # 长度限制
+        if len(cleaned) > self.MAX_STOP_COMMAND_LENGTH:
+            return False
+
+        # 转小写后检查关键词
+        cleaned_lower = cleaned.lower()
+        return any(keyword in cleaned_lower for keyword in self.STOP_KEYWORDS)
 
     async def process_message(self, msg: YZJRobotMsg, yzj_token: str):
         """处理云之家消息
@@ -45,14 +85,46 @@ class YunzhijiaHandler:
         logger.info(f"[YZJ] Processing message: session={yzj_session_id}, content={msg.content[:50]}...")
 
         try:
-            # 1. 获取或创建 agent session
+            # 1. 检测停止命令
+            if self._is_stop_command(msg.content):
+                # 获取现有 agent session
+                agent_session_id = self.session_map.get(yzj_session_id)
+                if agent_session_id:
+                    logger.info(f"[YZJ] Stop command detected, interrupting session: {agent_session_id}")
+                    success = await self.session_service.interrupt(agent_session_id)
+
+                    if success:
+                        await self._send_message(
+                            yzj_token,
+                            msg.operatorOpenid,
+                            "✅ 已停止当前任务"
+                        )
+                        logger.info(f"[YZJ] Session interrupted successfully: {agent_session_id}")
+                    else:
+                        await self._send_message(
+                            yzj_token,
+                            msg.operatorOpenid,
+                            "⚠️ 停止失败，会话可能已结束"
+                        )
+                        logger.warning(f"[YZJ] Failed to interrupt session: {agent_session_id}")
+                else:
+                    await self._send_message(
+                        yzj_token,
+                        msg.operatorOpenid,
+                        "当前没有正在运行的任务"
+                    )
+                    logger.info(f"[YZJ] No active session to interrupt for: {yzj_session_id}")
+
+                return  # 直接返回，不继续处理
+
+            # 2. 获取或创建 agent session
             agent_session_id = self.session_map.get(yzj_session_id)
             if agent_session_id:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
 
-            # 2. 构建请求
+            # 3. 构建请求
             request = QueryRequest(
                 prompt=msg.content,
                 skill="customer-service",
@@ -61,7 +133,7 @@ class YunzhijiaHandler:
                 session_id=agent_session_id
             )
 
-            # 3. 实时处理消息流 - 每收到一条 assistant_message 立即发送
+            # 4. 实时处理消息流 - 每收到一条 assistant_message 立即发送
             message_count = 0
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("event")
@@ -154,6 +226,5 @@ class YunzhijiaHandler:
         """
         return {
             "total_sessions": len(self.session_map),
-            "processing_sessions": len(self.processing_sessions),
             "session_mappings": list(self.session_map.keys())
         }
