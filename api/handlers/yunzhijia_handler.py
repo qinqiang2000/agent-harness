@@ -49,6 +49,22 @@ class YunzhijiaHandler:
         self.session_service = session_service
         self.session_map: Dict[str, str] = {}  # {yzj_session_id: agent_session_id}
 
+    def _clean_content(self, content: str) -> str:
+        """清理消息内容
+
+        去除 @提及（如 @API客服）并去除前后空格
+
+        Args:
+            content: 原始消息内容
+
+        Returns:
+            str: 清理后的消息内容
+        """
+        # 去除 @提及（匹配 @xxx 空格）
+        cleaned = re.sub(r'@\S+\s*', '', content)
+        # 去除前后空格
+        return cleaned.strip()
+
     def _is_stop_command(self, content: str) -> bool:
         """判断是否为停止命令
 
@@ -64,11 +80,8 @@ class YunzhijiaHandler:
         Returns:
             bool: 是否为停止命令
         """
-        # 去除 @提及（匹配 @xxx 空格）
-        cleaned = re.sub(r'@\S+\s*', '', content)
-
-        # 去除前后空格
-        cleaned = cleaned.strip()
+        # 清理消息内容
+        cleaned = self._clean_content(content)
 
         # 长度限制
         if len(cleaned) > self.MAX_STOP_COMMAND_LENGTH:
@@ -128,16 +141,20 @@ class YunzhijiaHandler:
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
 
-            # 3. 构建请求
+            # 3. 清理消息内容（去除 @提及）
+            cleaned_content = self._clean_content(msg.content)
+            logger.info(f"[YZJ] Cleaned content: {cleaned_content[:50]}...")
+
+            # 4. 构建请求
             request = QueryRequest(
-                prompt=msg.content,
+                prompt=cleaned_content,
                 skill="customer-service",
                 tenant_id="yzj",
                 language="中文",
                 session_id=agent_session_id
             )
 
-            # 4. 实时处理消息流 - 每收到一条 assistant_message 立即发送
+            # 5. 实时处理消息流 - 每收到一条 assistant_message 立即发送
             message_count = 0
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("event")
