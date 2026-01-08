@@ -148,13 +148,14 @@ start_service() {
 
     # Start the service in background
     print_info "Starting uvicorn server..."
-    nohup uvicorn "$APP_MODULE" \
+    setsid nohup uvicorn "$APP_MODULE" \
         --host "$HOST" \
         --port "$PORT" \
         --reload \
-        > "$LOG_FILE" 2>&1 &
+        > "$LOG_FILE" 2>&1 < /dev/null &
 
     local pid=$!
+    disown
     echo "$pid" > "$PID_FILE"
 
     # Wait a moment and check if process started successfully
