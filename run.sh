@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Invoice Field Recommender Agent - Process Management Script
+# Agent - Process Management Script
 # Usage: ./run.sh [start|stop|restart]
 # Default: restart
 
@@ -60,7 +60,7 @@ is_running() {
 
 # Stop the service
 stop_service() {
-    print_info "Stopping Invoice Field Recommender Agent..."
+    print_info "Stopping Agent..."
 
     if [ ! -f "$PID_FILE" ]; then
         print_warning "PID file not found. Service may not be running."
@@ -101,7 +101,7 @@ stop_service() {
 
 # Start the service
 start_service() {
-    print_info "Starting Invoice Field Recommender Agent..."
+    print_info "Starting  Agent..."
 
     # Check if already running
     if is_running; then
@@ -163,7 +163,7 @@ start_service() {
         print_success "Service started successfully (PID: $pid)"
         echo ""
         echo "=========================================="
-        echo "Invoice Field Recommender Agent"
+        echo "Agent"
         echo "=========================================="
         echo "PID: $pid"
         echo "Log file: $LOG_FILE"
