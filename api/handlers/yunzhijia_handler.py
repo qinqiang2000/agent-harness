@@ -23,7 +23,7 @@ class YunzhijiaHandler:
 
     职责：
     1. 会话映射管理：yzj_session_id ↔ agent_session_id
-    2. 实时消息推送：每收到一条 assistant_message 立即发送给用户
+    2. 消息过滤：只发送 <reply> 标签内的内容给用户（过滤中间思考过程）
     3. 云之家推送：调用云之家 Webhook API 发送消息
     4. 会话中断：支持用户发送"停止"命令中断正在运行的会话
     5. 会话超时：自动清理超时未活动的会话，避免上下文无限累积
@@ -78,6 +78,25 @@ class YunzhijiaHandler:
         cleaned = re.sub(r'@\S+\s*', '', content)
         # 去除前后空格
         return cleaned.strip()
+
+    def _extract_replies(self, content: str) -> List[str]:
+        """从消息内容中提取 <reply> 标签内的内容
+
+        用于过滤 Agent 的中间思考过程，只保留面向用户的最终回复。
+        SKILL 中规定所有面向用户的内容必须包裹在 <reply> 标签中。
+
+        Args:
+            content: Agent 输出的消息内容
+
+        Returns:
+            List[str]: 提取的回复列表（可能有多个 <reply> 标签）
+        """
+        # 使用正则提取 <reply>...</reply> 之间的内容
+        # re.DOTALL 使 . 匹配换行符
+        pattern = r'<reply>(.*?)</reply>'
+        matches = re.findall(pattern, content, re.DOTALL)
+        # 去除每段回复的首尾空白
+        return [m.strip() for m in matches if m.strip()]
 
     def _is_stop_command(self, content: str) -> bool:
         """判断是否为停止命令
@@ -272,8 +291,10 @@ class YunzhijiaHandler:
                 session_id=agent_session_id
             )
 
-            # 7. 实时处理消息流 - 每收到一条 assistant_message 立即发送
+            # 7. 处理消息流 - 累积 <reply> 标签内容，在结束时发送
             message_count = 0
+            reply_buffer: List[str] = []  # 累积 <reply> 标签内的内容
+            
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("event")
 
@@ -286,20 +307,24 @@ class YunzhijiaHandler:
                     logger.info(f"[YZJ] Session mapping updated: {yzj_session_id} -> {new_session_id}")
 
                 elif event_type == "assistant_message":
-                    # 实时发送每条消息 - 解析 JSON 数据
+                    # 提取 <reply> 标签内容（过滤中间思考过程）
                     data = json.loads(event["data"])
                     content = data.get("content", "")
-                    if content and content.strip():
-                        message_count += 1
-                        await self._send_message(yzj_token, msg.operatorOpenid, content)
-                        logger.info(f"[YZJ] Sent message #{message_count} for session: {yzj_session_id}")
+                    if content:
+                        replies = self._extract_replies(content)
+                        if replies:
+                            reply_buffer.extend(replies)
+                            logger.info(f"[YZJ] Extracted {len(replies)} reply(s) for session: {yzj_session_id}")
+                        else:
+                            # 记录被过滤的内容（用于调试）
+                            logger.debug(f"[YZJ] Filtered thinking content: {content[:100]}...")
 
                         # 更新会话活动时间
                         if agent_session_id:
                             self._update_session_activity(yzj_session_id, agent_session_id)
 
                 elif event_type == "ask_user_question":
-                    # 处理 AskUserQuestion 工具调用
+                    # 处理 AskUserQuestion 工具调用 - 立即发送（需要用户交互）
                     data = json.loads(event["data"])
                     questions = data.get("questions", [])
 
@@ -311,13 +336,20 @@ class YunzhijiaHandler:
                         logger.info(f"[YZJ] Sent question #{message_count} for session: {yzj_session_id}")
 
                 elif event_type == "result":
+                    # 发送累积的 reply 内容
+                    for reply in reply_buffer:
+                        message_count += 1
+                        await self._send_message(yzj_token, msg.operatorOpenid, reply)
+                        logger.info(f"[YZJ] Sent reply #{message_count} for session: {yzj_session_id}")
+                    
                     # 解析 JSON 数据
                     result_data = json.loads(event.get("data", "{}"))
                     logger.info(
                         f"[YZJ] Agent completed: session={result_data.get('session_id')}, "
                         f"duration={result_data.get('duration_ms')}ms, "
                         f"turns={result_data.get('num_turns')}, "
-                        f"messages_sent={message_count}"
+                        f"messages_sent={message_count}, "
+                        f"replies_buffered={len(reply_buffer)}"
                     )
 
                 elif event_type == "error":

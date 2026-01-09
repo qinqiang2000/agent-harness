@@ -189,6 +189,7 @@ class TestRunner:
         self.result = TestResult(question=question)
         self.session_id = None
         self.full_answer = []
+        self._needs_product_reply = False  # 标记是否收到 ask_user_question 产品询问
         self.round_answer = []
         self.start_time = datetime.now()
 
@@ -274,6 +275,20 @@ class TestRunner:
                         if content:
                             self.round_answer.append(content)
 
+                    elif event_type == "ask_user_question":
+                        # Skill 使用 AskUserQuestion tool 询问用户，标记需要产品选择
+                        questions = data_obj.get("questions", [])
+                        for q in questions:
+                            # 检测是否是产品选择问题
+                            if "产品" in q.get("question", "") or "产品" in q.get("header", ""):
+                                self.log(f"检测到 ask_user_question 产品询问")
+                                # 将产品询问信息添加到回答中
+                                options_text = ", ".join([opt.get("label", "") for opt in q.get("options", [])])
+                                self.round_answer.append(f"\n[产品询问] {q.get('question', '')} 选项: {options_text}\n")
+                                # 标记需要产品选择，继续下一轮
+                                self._needs_product_reply = True
+                                break
+
                     elif event_type == "result":
                         self.result.duration_ms = data_obj.get("duration_ms", 0)
 
@@ -287,8 +302,11 @@ class TestRunner:
                 self.round_answer = []
                 self.log(f"第{round_num}轮完成, 回答长度: {len(round_text)}")
 
-                # 检测是否需要产品选择
-                if detect_product_question(round_text):
+                # 检测是否需要产品选择（优先使用 ask_user_question 事件标记）
+                needs_product = self._needs_product_reply or detect_product_question(round_text)
+                self._needs_product_reply = False  # 重置标记
+                
+                if needs_product:
                     if round_num < self.max_rounds and self.default_product:
                         reply_text = PRODUCT_REPLIES.get(self.default_product, f"我使用的是{self.default_product}")
                         auto_reply_note = f"\n\n[批量测试] 检测到产品询问，自动回复: {reply_text}\n"
