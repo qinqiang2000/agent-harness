@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Dict, List, Optional
 
 import aiohttp
@@ -25,6 +26,7 @@ class YunzhijiaHandler:
     2. 实时消息推送：每收到一条 assistant_message 立即发送给用户
     3. 云之家推送：调用云之家 Webhook API 发送消息
     4. 会话中断：支持用户发送"停止"命令中断正在运行的会话
+    5. 会话超时：自动清理超时未活动的会话，避免上下文无限累积
     """
 
     NOTIFY_URL = "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={}"
@@ -32,6 +34,9 @@ class YunzhijiaHandler:
     # 停止命令配置
     STOP_KEYWORDS = ["停止", "stop", "取消", "cancel"]
     MAX_STOP_COMMAND_LENGTH = 10
+
+    # 会话超时配置（单位：秒）
+    SESSION_TIMEOUT_SECONDS = int(os.getenv("YZJ_SESSION_TIMEOUT", "3600"))  # 默认 60 分钟
 
     # 图片卡片配置
     CARD_NOTICE_TEMPLATE_ID = os.getenv("YZJ_CARD_TEMPLATE_ID", "")  # 云之家卡片模板 ID
@@ -47,7 +52,8 @@ class YunzhijiaHandler:
         """
         self.agent_service = agent_service
         self.session_service = session_service
-        self.session_map: Dict[str, str] = {}  # {yzj_session_id: agent_session_id}
+        # 会话映射：{yzj_session_id: {"agent_session_id": str, "last_active": float}}
+        self.session_map: Dict[str, Dict[str, any]] = {}
 
     def _clean_content(self, content: str) -> str:
         """清理消息内容
@@ -91,6 +97,70 @@ class YunzhijiaHandler:
         cleaned_lower = cleaned.lower()
         return any(keyword in cleaned_lower for keyword in self.STOP_KEYWORDS)
 
+    def _check_session_timeout(self, yzj_session_id: str) -> Optional[str]:
+        """检查会话是否超时，返回有效的 agent_session_id
+
+        Args:
+            yzj_session_id: 云之家会话 ID
+
+        Returns:
+            Optional[str]: 如果会话未超时，返回 agent_session_id；否则返回 None
+        """
+        if yzj_session_id not in self.session_map:
+            return None
+
+        session_info = self.session_map[yzj_session_id]
+        last_active = session_info.get("last_active", 0)
+        current_time = time.time()
+        elapsed = current_time - last_active
+
+        if elapsed > self.SESSION_TIMEOUT_SECONDS:
+            # 会话超时，清理
+            agent_session_id = session_info.get("agent_session_id")
+            logger.info(
+                f"[YZJ] Session timeout: yzj_session={yzj_session_id}, "
+                f"agent_session={agent_session_id}, "
+                f"inactive_time={elapsed:.0f}s (threshold={self.SESSION_TIMEOUT_SECONDS}s)"
+            )
+            del self.session_map[yzj_session_id]
+            return None
+
+        # 会话有效
+        return session_info.get("agent_session_id")
+
+    def _update_session_activity(self, yzj_session_id: str, agent_session_id: str):
+        """更新会话活动时间
+
+        Args:
+            yzj_session_id: 云之家会话 ID
+            agent_session_id: Agent 会话 ID
+        """
+        self.session_map[yzj_session_id] = {
+            "agent_session_id": agent_session_id,
+            "last_active": time.time()
+        }
+
+    def _cleanup_expired_sessions(self):
+        """清理所有过期会话"""
+        current_time = time.time()
+        expired_sessions = []
+
+        for yzj_session_id, session_info in self.session_map.items():
+            last_active = session_info.get("last_active", 0)
+            if current_time - last_active > self.SESSION_TIMEOUT_SECONDS:
+                expired_sessions.append(yzj_session_id)
+
+        for yzj_session_id in expired_sessions:
+            agent_session_id = self.session_map[yzj_session_id].get("agent_session_id")
+            logger.info(
+                f"[YZJ] Cleaning expired session: yzj_session={yzj_session_id}, "
+                f"agent_session={agent_session_id}"
+            )
+            del self.session_map[yzj_session_id]
+
+        if expired_sessions:
+            logger.info(f"[YZJ] Cleaned {len(expired_sessions)} expired sessions")
+
     async def process_message(self, msg: YZJRobotMsg, yzj_token: str):
         """处理云之家消息
 
@@ -103,10 +173,14 @@ class YunzhijiaHandler:
         logger.info(f"[YZJ] Processing message: session={yzj_session_id}, content={msg.content[:50]}...")
 
         try:
+            # 0. 清理过期会话（定期维护）
+            self._cleanup_expired_sessions()
+
             # 1. 检测停止命令
             if self._is_stop_command(msg.content):
-                # 获取现有 agent session
-                agent_session_id = self.session_map.get(yzj_session_id)
+                # 获取现有 agent session（从新数据结构中获取）
+                session_info = self.session_map.get(yzj_session_id)
+                agent_session_id = session_info.get("agent_session_id") if session_info else None
                 if agent_session_id:
                     logger.info(f"[YZJ] Stop command detected, interrupting session: {agent_session_id}")
                     success = await self.session_service.interrupt(agent_session_id)
@@ -135,8 +209,8 @@ class YunzhijiaHandler:
 
                 return  # 直接返回，不继续处理
 
-            # 2. 获取或创建 agent session
-            agent_session_id = self.session_map.get(yzj_session_id)
+            # 2. 获取或创建 agent session（检查超时）
+            agent_session_id = self._check_session_timeout(yzj_session_id)
             if agent_session_id:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
@@ -168,7 +242,8 @@ class YunzhijiaHandler:
                     # 更新会话映射 - 解析 JSON 数据
                     data = json.loads(event["data"])
                     new_session_id = data["session_id"]
-                    self.session_map[yzj_session_id] = new_session_id
+                    agent_session_id = new_session_id  # 更新局部变量
+                    self._update_session_activity(yzj_session_id, new_session_id)
                     logger.info(f"[YZJ] Session mapping updated: {yzj_session_id} -> {new_session_id}")
 
                 elif event_type == "assistant_message":
@@ -179,6 +254,10 @@ class YunzhijiaHandler:
                         message_count += 1
                         await self._send_message(yzj_token, msg.operatorOpenid, content)
                         logger.info(f"[YZJ] Sent message #{message_count} for session: {yzj_session_id}")
+
+                        # 更新会话活动时间
+                        if agent_session_id:
+                            self._update_session_activity(yzj_session_id, agent_session_id)
 
                 elif event_type == "ask_user_question":
                     # 处理 AskUserQuestion 工具调用
@@ -384,9 +463,25 @@ class YunzhijiaHandler:
         """获取会话统计信息
 
         Returns:
-            dict: 统计信息
+            dict: 统计信息，包括会话数量、映射关系和活动时间
         """
+        current_time = time.time()
+        sessions = []
+
+        for yzj_session_id, session_info in self.session_map.items():
+            agent_session_id = session_info.get("agent_session_id")
+            last_active = session_info.get("last_active", 0)
+            inactive_seconds = current_time - last_active
+
+            sessions.append({
+                "yzj_session_id": yzj_session_id,
+                "agent_session_id": agent_session_id,
+                "inactive_seconds": int(inactive_seconds),
+                "will_expire_in": max(0, int(self.SESSION_TIMEOUT_SECONDS - inactive_seconds))
+            })
+
         return {
             "total_sessions": len(self.session_map),
-            "session_mappings": list(self.session_map.keys())
+            "session_timeout_seconds": self.SESSION_TIMEOUT_SECONDS,
+            "sessions": sessions
         }
