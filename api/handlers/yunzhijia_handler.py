@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import aiohttp
 
