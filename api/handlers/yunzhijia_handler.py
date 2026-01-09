@@ -524,9 +524,9 @@ class YunzhijiaHandler:
 
         lines.append("")
         if robot_name:
-            lines.append(f"请回复选项编号或文字（{robot_name} 回复）")
+            lines.append(f"请选项编号或文字. 【注】不可直接回复本消息，需 @{robot_name} 回复")
         else:
-            lines.append("请回复对应的选项编号或文字。")
+            lines.append("请选项编号或文字. 【注】不可直接回复本消息")
 
         return "\n".join(lines)
 
