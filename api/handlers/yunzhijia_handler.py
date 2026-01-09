@@ -142,7 +142,11 @@ class YunzhijiaHandler:
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
 
-            # 3. 清理消息内容（去除 @提及）
+            # 3. 获取机器人名称（用于引导用户回复）
+            robot_name = f"@{msg.robotName}" if msg.robotName else "@机器人"
+            logger.info(f"[YZJ] Robot name: {robot_name}")
+
+            # 4. 清理消息内容（去除 @提及）
             cleaned_content = self._clean_content(msg.content)
             logger.info(f"[YZJ] Cleaned content: {cleaned_content[:50]}...")
 
@@ -183,7 +187,7 @@ class YunzhijiaHandler:
 
                     # 将问题格式化为文本消息
                     for question in questions:
-                        formatted_message = self._format_question(question)
+                        formatted_message = self._format_question(question, robot_name)
                         message_count += 1
                         await self._send_message(yzj_token, msg.operatorOpenid, formatted_message)
                         logger.info(f"[YZJ] Sent question #{message_count} for session: {yzj_session_id}")
@@ -197,6 +201,15 @@ class YunzhijiaHandler:
                         f"turns={result_data.get('num_turns')}, "
                         f"messages_sent={message_count}"
                     )
+
+                    # 如果有消息发送，添加继续咨询的引导
+                    if message_count > 0 and robot_name:
+                        await self._send_message(
+                            yzj_token,
+                            msg.operatorOpenid,
+                            f"有其他问题欢迎继续咨询（{robot_name} 回复）"
+                        )
+                        logger.info(f"[YZJ] Sent guidance message for session: {yzj_session_id}")
 
                 elif event_type == "error":
                     # 解析 JSON 数据
@@ -333,14 +346,25 @@ class YunzhijiaHandler:
 
         return data_content
 
-    def _format_question(self, question: dict) -> str:
+    def _format_question(self, question: dict, robot_name: Optional[str] = None) -> str:
         """将 AskUserQuestion 格式化为云之家可读的文本
 
         Args:
             question: 问题字典，包含 question, options 等字段
+            robot_name: 机器人名称（如 "@API客服"），用于指引用户回复
 
         Returns:
             格式化后的消息文本
+
+        Examples:
+            输出示例（有 robot_name）：
+            请选择你的问题类型
+
+            1. 功能咨询 - 产品功能相关问题
+            2. 故障排查 - 使用中遇到的问题
+            3. 其他
+
+            请回复选项编号或文字（@API客服 回复）
         """
         question_text = question.get("question", "请选择")
         options = question.get("options", [])
@@ -358,7 +382,10 @@ class YunzhijiaHandler:
                 lines.append(f"{i}. {label}")
 
         lines.append("")
-        lines.append("请回复对应的选项编号或文字。")
+        if robot_name:
+            lines.append(f"请回复选项编号或文字（{robot_name} 回复）")
+        else:
+            lines.append("请回复对应的选项编号或文字。")
 
         return "\n".join(lines)
 

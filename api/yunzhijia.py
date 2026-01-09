@@ -61,10 +61,14 @@ async def yzj_chat(
     handler = get_yunzhijia_handler()
     background_tasks.add_task(handler.process_message, msg, yzj_token)
 
-    # 4. 立即返回
+    # 4. 立即返回（提醒用户可以打断）
+    robot_name = msg.robotName if msg.robotName else "机器人"
     return JSONResponse(content={
         "success": True,
-        "data": {"type": 2, "content": "请稍等..."}
+        "data": {
+            "type": 2,
+            "content": f"正在为您查询中... 可随时 @{robot_name} 回复「停止」来打断"
+        }
     })
 
 
