@@ -43,6 +43,14 @@ class YunzhijiaHandler:
     MAX_IMG_NUM_IN_CARD_NOTICE = int(os.getenv("YZJ_MAX_IMG_PER_CARD", "3"))  # 每个卡片最大图片数
     SERVICE_BASE_URL = os.getenv("SERVICE_BASE_URL", "http://localhost:9090")  # 服务基础 URL
 
+    # FAQ 配置：预定义问答，不走 agent（支持多个触发关键词）
+    FAQ_MAP = {
+        "你好，你能做什么呢?": '"0幻觉"回答发票云知识库相关问题',
+        "你好": '"你好，我可0幻觉"回答发票云知识库相关问题，请有什么可以帮助您',
+        "你能做什么": '"0幻觉"回答发票云知识库相关问题',
+        "能做什么": '"0幻觉"回答发票云知识库相关问题',
+    }
+
     def __init__(self, agent_service: AgentService, session_service: SessionService):
         """初始化云之家处理器
 
@@ -96,6 +104,30 @@ class YunzhijiaHandler:
         # 转小写后检查关键词
         cleaned_lower = cleaned.lower()
         return any(keyword in cleaned_lower for keyword in self.STOP_KEYWORDS)
+
+    def _match_faq(self, content: str) -> Optional[str]:
+        """匹配 FAQ，返回预定义答案
+
+        规则：
+        1. 去除 @提及和前后空格
+        2. 精确匹配 FAQ_MAP 中的关键词（不区分大小写）
+
+        Args:
+            content: 消息内容
+
+        Returns:
+            Optional[str]: 如果匹配，返回预定义答案；否则返回 None
+        """
+        # 清理消息内容
+        cleaned = self._clean_content(content)
+
+        # 精确匹配（不区分大小写）
+        for faq_key, faq_answer in self.FAQ_MAP.items():
+            if cleaned.lower() == faq_key.lower():
+                logger.info(f"[YZJ] FAQ matched: '{cleaned}' -> '{faq_answer}'")
+                return faq_answer
+
+        return None
 
     def _check_session_timeout(self, yzj_session_id: str) -> Optional[str]:
         """检查会话是否超时，返回有效的 agent_session_id
@@ -176,7 +208,14 @@ class YunzhijiaHandler:
             # 0. 清理过期会话（定期维护）
             self._cleanup_expired_sessions()
 
-            # 1. 检测停止命令
+            # 1. 检查 FAQ（固定回复，不走 agent）
+            faq_answer = self._match_faq(msg.content)
+            if faq_answer:
+                await self._send_message(yzj_token, msg.operatorOpenid, faq_answer)
+                logger.info(f"[YZJ] FAQ response sent for session: {yzj_session_id}")
+                return  # 直接返回，不继续处理
+
+            # 2. 检测停止命令
             if self._is_stop_command(msg.content):
                 # 获取现有 agent session（从新数据结构中获取）
                 session_info = self.session_map.get(yzj_session_id)
@@ -209,22 +248,22 @@ class YunzhijiaHandler:
 
                 return  # 直接返回，不继续处理
 
-            # 2. 获取或创建 agent session（检查超时）
+            # 3. 获取或创建 agent session（检查超时）
             agent_session_id = self._check_session_timeout(yzj_session_id)
             if agent_session_id:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
 
-            # 3. 获取机器人名称（用于引导用户回复）
+            # 4. 获取机器人名称（用于引导用户回复）
             robot_name = f"@{msg.robotName}" if msg.robotName else "@机器人"
             logger.info(f"[YZJ] Robot name: {robot_name}")
 
-            # 4. 清理消息内容（去除 @提及）
+            # 5. 清理消息内容（去除 @提及）
             cleaned_content = self._clean_content(msg.content)
             logger.info(f"[YZJ] Cleaned content: {cleaned_content[:50]}...")
 
-            # 4. 构建请求
+            # 6. 构建请求
             request = QueryRequest(
                 prompt=cleaned_content,
                 skill="customer-service",
@@ -233,7 +272,7 @@ class YunzhijiaHandler:
                 session_id=agent_session_id
             )
 
-            # 5. 实时处理消息流 - 每收到一条 assistant_message 立即发送
+            # 7. 实时处理消息流 - 每收到一条 assistant_message 立即发送
             message_count = 0
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("event")
