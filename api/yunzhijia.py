@@ -67,7 +67,7 @@ async def yzj_chat(
         "success": True,
         "data": {
             "type": 2,
-            "content": f"正在为您查询中... 可随时 @{robot_name} 回复「停止」来打断"
+            "content": f"收到，现在开始查询... 您可通过：@{robot_name} 停 来打断"
         }
     })
 
