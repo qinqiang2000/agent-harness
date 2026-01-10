@@ -1,6 +1,7 @@
 """Yunzhijia (云之家) API endpoints."""
 
 import logging
+import os
 from fastapi import APIRouter, Request, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
@@ -63,11 +64,13 @@ async def yzj_chat(
 
     # 4. 立即返回（提醒用户可以打断）
     robot_name = msg.robotName if msg.robotName else "机器人"
+    verbose = os.getenv("YZJ_VERBOSE", "false").lower() == "true"
+    message_content = "收到，我马上探索最佳答案" if verbose else "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）"
     return JSONResponse(content={
         "success": True,
         "data": {
             "type": 2,
-            "content": f"收到，开始deep research, 目前配置为简化输出，请耐心等待..."
+            "content": message_content
         }
     })
 
