@@ -13,12 +13,27 @@ LOG_DIR="$SCRIPT_DIR/log"
 PID_FILE="$LOG_DIR/app.pid"
 APP_MODULE="app:app"
 
-# Load environment variables from .env if it exists
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    set -a  # Automatically export all variables
-    source "$SCRIPT_DIR/.env"
-    set +a
+# Load environment variables from .env
+ENV_FILE="$SCRIPT_DIR/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    print_error ".env file not found at $ENV_FILE"
+    echo ""
+    print_info "To get started, copy the example file:"
+    echo "  cp .env.example .env"
+    echo ""
+    print_info "Then edit .env and configure the required variables"
+    exit 1
 fi
+
+# Load .env file
+set -a  # Automatically export all variables
+if ! source "$ENV_FILE" 2>/dev/null; then
+    print_error "Failed to load .env file: $ENV_FILE"
+    echo ""
+    print_info "Please check the file syntax and ensure it's readable"
+    exit 1
+fi
+set +a
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-9090}"
