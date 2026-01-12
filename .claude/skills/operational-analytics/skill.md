@@ -8,7 +8,7 @@ description: |
 
 # 运营分析 Skill
 
-根据自然语言查询EOP数据库，生成SQL并返回结果。
+根据自然语言查询 EOP 数据库，生成 SQL 并返回结果。
 
 ---
 
@@ -25,87 +25,117 @@ python .claude/skills/operational-analytics/scripts/diagnose.py --tenant "租户
 
 ---
 
-## 表结构
+## 查询规划工作流
 
-### 1. t_ocm_kbc_order_settle（销售出库单/结算表）
+复制下面的检查清单并跟踪进度：
 
-**用途**：结算、付款查询，**按客户名搜索最直接**
+```
+查询进度：
+- [ ] 步骤1：识别查询意图（客户查询 / 订单统计 / 营收分析等）
+- [ ] 步骤2：选择主表并根据需要关联其他表
+- [ ] 步骤3：应用业务规则过滤
+- [ ] 步骤4：验证并执行查询
+```
 
-| 字段名 | 含义 | 备注 |
-|--------|------|------|
-| fbillno | 结算单号 | - |
-| fkbc_settle_billno | 关联订单号 | 关联逻辑复杂，不建议依赖 |
-| **fuse_customer** | 使用客户 | **客户名搜索首选字段** |
-| **fsign_customer** | 签约客户 | **客户名搜索备选字段** |
-| **fsale_product_name** | 销售产品 | 产品名称 |
-| fversion_no | 版本号 | - |
-| **fpost_date** | 记账日期 | **时间轴字段** |
-| **fdelivery_status** | 交付状态 | '已交付' / '待交付' |
-| **famount** | 金额（不含税） | - |
-| ftax_amount | 税额 | - |
-| **fprice_tax_amount** | 金额（含税） | - |
-| forder_source | 订单来源 | '金蝶中国' / '运营后台' |
+### 步骤1：识别查询意图
 
-### 2. t_ocm_order_header（交易订单主表）
+- **客户/产品查询** → 优先使用 `t_ocm_kbc_order_settle`（结算表）
+- **订单详情/时间线** → 使用 `t_ocm_order_header`（订单表）
+- **营收统计** → 检查业务规则，选择合适的表
 
-**用途**：订单查询
+### 步骤2：选择主表并根据需要关联其他表
 
-| 字段名 | 含义 | 备注 |
-|--------|------|------|
-| fid | 主键ID | 关联 t_ocm_order_lines.fentryid |
-| fbillno | 订单号 | - |
-| **fcreatetime** | 创建时间 | **时间轴字段** |
-| **ftenant** | 租户ID | 关联 t_ocm_tenant.fid |
-| **fbiz_type** | 订单类别 | 'Standard' / 'Special' / 'Free' |
-| **fbusiness_type** | 业务类型 | 'New' / 'Renew' / 'Add' / 'Upgradation' / 'Return' |
-| ftotal_amount | 订单总额 | 产品明细缺失时用此字段 |
-| fproduct_num | 产品数量 | - |
-| fbillstatus | 单据状态 | - |
-| fbill_source | 订单来源 | 1-7 (数字) |
+参考下面的"表快速索引"和"表关联关系"选择最适合的表，根据表结构和查询需求判断是否需要JOIN。
 
-### 3. t_ocm_order_lines（产品订单明细）
+### 步骤3：应用业务规则过滤
 
-**用途**：订单产品明细，**数据可能不完整**
+根据查询类型应用相应的过滤规则（见下文"关键业务规则"）。
 
-| 字段名 | 含义 | 备注 |
-|--------|------|------|
-| fid | 主键ID | - |
-| **fentryid** | 关联订单ID | 关联 t_ocm_order_header.fid |
-| fproduct | 产品编码 | - |
-| fproduct_billno | 产品订单号 | - |
-| fquantity | 数量 | - |
-| funit_price | 单价 | - |
-| ftax_price | 含税单价 | - |
+### 步骤4：验证并执行查询
 
-**⚠️ 数据完整性**：此表经常无数据，优先使用：
-- 结算表 (t_ocm_kbc_order_settle) 查产品信息
-- 订单表 (t_ocm_order_header.ftotal_amount) 查金额
-
-### 4. t_ocm_tenant（租户表）
-
-**用途**：租户基本信息
-
-| 字段名 | 含义 | 备注 |
-|--------|------|------|
-| **fid** | 租户ID | 关联 t_ocm_order_header.ftenant |
-| **fname** | 租户名称 | **用于搜索** |
-| fenable | 使用状态 | '0' 禁用 / '1' 可用 |
-| fcontact_name | 联系人 | - |
-| fcontact_phone | 联系电话 | - |
+执行前检查：
+- 是否包含时间范围过滤
+- 是否应用了必要的业务规则
+- 查询逻辑是否正确
 
 ---
 
-## 表关系
+## 表快速索引
+
+**详细字段说明**：见 [reference/tables.md](reference/tables.md)
+
+| 表名 | 用途 | 关键字段 | 时间字段 | 记录数 |
+|------|------|----------|----------|--------|
+| **t_ocm_kbc_order_settle** | 结算/收款查询| fuse_customer, fsign_customer<br>fsale_product_name<br>fprice_tax_amount<br>fdelivery_status | fpost_date | 107K+ |
+| **t_ocm_order_header** | 订单查询<br>时间线分析 | fbillno, ftenant<br>fbiz_type, fbusiness_type<br>fcompany_name<br>fap_amount | fcreatetime | 109K+ |
+| **t_ocm_order_lines** | 产品订单明细 | fentryid (关联订单ID)<br>fproduct_billno<br>famount | fbenefit_start_date<br>fbenefit_end_date | 114K+ |
+| **t_ocm_tenant** | 租户基本信息 | fid (关联订单)<br>fnumber (租户编码)<br>fname (租户名称) | - | 35K+ |
+
+**查找详细字段**：当需要了解字段含义、业务逻辑或关联关系时，使用：
+```bash
+grep -i "字段名" .claude/skills/operational-analytics/reference/tables.md
+```
+
+或直接阅读 [reference/tables.md](reference/tables.md) 中的对应表章节。
+
+---
+
+## 核心字段速查
+
+### t_ocm_kbc_order_settle（结算表）
+
+| 字段 | 含义 | 说明 |
+|------|------|------|
+| **fuse_customer** / **fsign_customer** | 使用客户 / 签约客户 | 客户名搜索 |
+| **fsale_product_name** | 销售产品 | 产品名称 |
+| **fprice_tax_amount** | 金额（含税） | 结算金额 |
+| **fdelivery_status** | 交付状态 | '已交付' / '待交付' |
+| **fpost_date** | 记账日期 | 时间轴 |
+
+### t_ocm_order_header（订单表）
+
+| 字段 | 含义 | 说明 |
+|------|------|------|
+| **fbillno** | 订单号 | - |
+| **fcreatetime** | 创建时间 | 时间轴 |
+| **ftenant** | 租户编码 | 关联 t_ocm_tenant.fid |
+| **fbiz_type** | 订单类别 | Standard / Special / Free |
+| **fbusiness_type** | 业务类型 | New / Renew / Add / Upgradation / Return |
+| **fap_amount** | 实际结算价 | 订单金额 |
+
+### t_ocm_order_lines（产品明细）
+
+| 字段 | 含义 | 说明 |
+|------|------|------|
+| **fentryid** | 关联订单ID | 关联 t_ocm_order_header.fid |
+| **famount** | 金额 | 产品金额 |
+| **fbenefit_start_date** / **fbenefit_end_date** | 权益时间 | 开始/结束 |
+
+### t_ocm_tenant（租户表）
+
+| 字段 | 含义 | 说明 |
+|------|------|------|
+| **fid** | 主键ID | 订单表的 ftenant 字段关联此字段 |
+| **fname** | 租户名称 | 搜索租户 |
+
+**完整字段列表**：见 [reference/tables.md](reference/tables.md)
+
+---
+
+## 表关联关系
 
 ```
 t_ocm_order_header.fid (1) ←→ (N) t_ocm_order_lines.fentryid
 t_ocm_order_header.ftenant (N) ←→ (1) t_ocm_tenant.fid
-t_ocm_kbc_order_settle ← (复杂关联，不推荐) → t_ocm_order_header
+t_ocm_kbc_order_settle ← (复杂，不推荐) → t_ocm_order_header
 ```
 
 **JOIN 建议**：
-- 订单 + 产品明细：`INNER JOIN` (如果产品明细表有数据)
-- 订单 + 租户：`LEFT JOIN` (租户信息可能缺失)
+- 订单 + 产品明细：`INNER JOIN`（如果明细表有数据）
+- 订单 + 租户：`LEFT JOIN`（租户信息可能缺失）
+- 客户查产品：**无需JOIN**，直接查结算表
+
+**详细关联说明**：见 [reference/tables.md](reference/tables.md#表关联关系)
 
 ---
 
@@ -154,101 +184,83 @@ t_ocm_kbc_order_settle ← (复杂关联，不推荐) → t_ocm_order_header
 
 ### 营收统计标准过滤
 
+**订单表查询：**
 ```sql
--- 订单表查询
 WHERE fbiz_type = 'Standard'              -- 只统计标准付费订单
   AND fbusiness_type != 'Upgradation'     -- 排除升级订单（不计费）
   AND fbusiness_type != 'Return'          -- 排除退货（或单独统计）
+```
 
--- 结算表查询
+**结算表查询：**
+```sql
 WHERE fdelivery_status = '已交付'          -- 只统计已交付订单
   AND fpost_date >= '开始时间'
 ```
 
----
-
-## 常见查询场景
-
-### 1. 按客户名查产品（最常用）
-
-```sql
--- 直接在结算表搜索，无需 JOIN
-SELECT
-    fuse_customer AS 客户,
-    fsale_product_name AS 产品,
-    SUM(fprice_tax_amount) AS 总金额
-FROM t_ocm_kbc_order_settle
-WHERE fpost_date >= '2025-01-01'
-  AND (fuse_customer LIKE '%关键字%' OR fsign_customer LIKE '%关键字%')
-  AND fdelivery_status = '已交付'
-GROUP BY fuse_customer, fsale_product_name;
-```
-
-### 2. 按租户查订单
-
-```sql
--- 先查租户ID，再关联订单
-SELECT h.fbillno, h.fcreatetime, h.ftotal_amount, t.fname
-FROM t_ocm_order_header h
-LEFT JOIN t_ocm_tenant t ON h.ftenant = t.fid
-WHERE t.fname LIKE '%关键字%'
-  AND h.fcreatetime >= '2025-01-01'
-  AND h.fbiz_type = 'Standard';
-```
-
-### 3. 按时间统计订单
-
-```sql
--- 按月汇总
-SELECT
-    DATE_TRUNC('month', fcreatetime) AS 月份,
-    COUNT(*) AS 订单数,
-    SUM(ftotal_amount) AS 总金额
-FROM t_ocm_order_header
-WHERE fcreatetime >= '2025-01-01'
-  AND fbiz_type = 'Standard'
-  AND fbusiness_type != 'Upgradation'
-GROUP BY DATE_TRUNC('month', fcreatetime)
-ORDER BY 月份;
-```
+**详细业务规则**：见 [reference/tables.md](reference/tables.md)（包含物料过滤、合同业务类型过滤等）
 
 ---
 
-## 数据完整性提示
+### 查询优化
 
-1. **产品明细表(t_ocm_order_lines)经常无数据**
-   - 优先用结算表(t_ocm_kbc_order_settle)查产品信息
-   - 或用订单表(t_ocm_order_header.ftotal_amount)查金额
-
-2. **结算表与订单表关联复杂**
-   - 依赖 forder_source 字段判断关联方式
-   - 不建议依赖关联，直接按客户名搜索结算表更简单
-
-3. **租户信息可能缺失**
-   - 订单关联租户时用 LEFT JOIN
+- 添加时间范围过滤（fpost_date / fcreatetime）
+- 客户名搜索使用 `LIKE '%关键字%'`（支持模糊匹配）
+- 避免不必要的 JOIN（尤其是 t_ocm_order_lines）
 
 ---
 
-## 输出要求
+## 输出格式要求
 
-1. **展示生成的SQL** - 让用户了解查询逻辑
+### 1. 展示生成的 SQL
 
-2. **结构化列表展示结果** - 使用清晰的列表格式（适配微信、云之家等聊天工具）
-   ```
-   【标题】
+```sql
+-- 示例
+SELECT ...
+FROM ...
+WHERE ...
+```
 
-   ▪ 项目1
-     • 字段1：值1
-     • 字段2：值2
+### 2. 结构化列表展示结果
 
-   ▪ 项目2
-     • 字段1：值1
-     • 字段2：值2
+使用清晰的列表格式（适配微信、云之家等聊天工具）：
 
-   ━━━━━━━━━━━━━━
-   💰 汇总信息
+```
+【查询标题】
+
+▪ 项目1
+  • 字段1：值1
+  • 字段2：值2
+
+▪ 项目2
+  • 字段1：值1
+  • 字段2：值2
+
+━━━━━━━━━━━━━━
+💰 汇总信息
+```
+
+### 3. 自然语言解释
+
+说明查询思路、数据来源、业务含义。
+
+### 4. 复杂查询时说明过程
+
+如果经历多步探索、尝试多个查询或遇到问题，简要说明查询路径（审计用）。
+
+---
+
+## 故障排查
+
+### 查询结果为空？
+
+1. **运行诊断脚本：**
+   ```bash
+   python .claude/skills/operational-analytics/scripts/diagnose.py --tenant "租户名" --year 2025
    ```
 
-3. **自然语言解释** - 说明查询思路、数据来源、业务含义
-
-4. **复杂查询时说明过程（审计用）** - 如果经历多步探索、尝试多个查询或遇到问题，简要说明查询路径（包括每步SQL和结果）
+2. **检查常见问题：**
+   - 客户名拼写（使用 `LIKE '%关键字%'` 模糊匹配）
+   - 日期过滤范围过窄
+   - 交付状态过滤（'已交付' vs '待交付'）
+   - 订单类型过滤（Standard vs Special/Free）
+   - 业务类型过滤（检查是否误过滤了有效订单）
