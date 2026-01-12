@@ -54,10 +54,4 @@ def build_initial_prompt(
             if value is not None:
                 parts.append(f"{key}: {value}")
 
-    # 数据访问约束 (通用)
-    parts.append("\n# 数据访问约束")
-    parts.append("可访问目录:")
-    parts.append("- 公共知识库: ./data/kb/")
-    parts.append(f"- 租户数据: ./data/tenants/{tenant_id}/")
-
     return "\n".join(parts)
