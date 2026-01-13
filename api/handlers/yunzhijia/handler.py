@@ -194,12 +194,20 @@ class YunzhijiaHandler:
 
             elif event_type == "result":
                 # 发送累积的 reply 内容
-                for reply in reply_buffer:
+                for idx, reply in enumerate(reply_buffer):
                     message_count += 1
-                    await self.message_sender.send_with_images(
-                        yzj_token, operator_openid, reply,
-                        self.service_base_url, self.card_builder
-                    )
+                    # 在最后一条回复中添加继续交流提醒
+                    if idx == len(reply_buffer) - 1:
+                        reply_with_hint = f"{reply}\n\n【注】👉 如有其他问题，请继续 {robot_name} 咨询"
+                        await self.message_sender.send_with_images(
+                            yzj_token, operator_openid, reply_with_hint,
+                            self.service_base_url, self.card_builder
+                        )
+                    else:
+                        await self.message_sender.send_with_images(
+                            yzj_token, operator_openid, reply,
+                            self.service_base_url, self.card_builder
+                        )
                     logger.info(f"[YZJ] Sent reply #{message_count}")
 
                 result_data = json.loads(event.get("data", "{}"))
