@@ -1,9 +1,9 @@
 ---
 name: operational-analytics
 description: |
-  运营分析Agent，负责EOP（Enterprise Operation Platform，运营平台）数据库查询与分析。支持订单查询、租户数据统计、营收趋势分析、运营报表生成。
+  运营分析Agent，负责EOP（Enterprise Operation Platform）数据库查询与分析。支持订单查询、租户统计、营收分析、运营报表。
 
-  触发词：EOP、运营平台、Enterprise operation platform、订单查询、租户数据、销售数据、营收分析、运营报表、数据统计、交易订单、产品订单、结算单、销售出库单、t_ocm_kbc_order_settle、t_ocm_order_header、t_ocm_order_lines、t_ocm_tenant
+  触发词：EOP、运营平台、订单查询、租户数据、营收分析、结算单、t_ocm_* 表名
 ---
 
 # 运营分析 Skill
@@ -27,156 +27,46 @@ python .claude/skills/operational-analytics/scripts/diagnose.py --tenant "租户
 
 ## 查询规划工作流
 
-复制下面的检查清单并跟踪进度：
+复制检查清单并跟踪进度：
 
 ```
 查询进度：
-- [ ] 步骤1：识别查询意图（客户查询 / 订单统计 / 营收分析等）
-- [ ] 步骤2：选择主表并根据需要关联其他表
-- [ ] 步骤3：应用业务规则过滤
-- [ ] 步骤4：验证并执行查询
+- [ ] 步骤1：识别查询意图
+- [ ] 步骤2：选择主表
+- [ ] 步骤3：应用业务规则
+- [ ] 步骤4：验证并执行
 ```
 
 ### 步骤1：识别查询意图
 
 - **客户/产品查询** → 优先使用 `t_ocm_kbc_order_settle`（结算表）
 - **订单详情/时间线** → 使用 `t_ocm_order_header`（订单表）
-- **营收统计** → 检查业务规则，选择合适的表
-- **金额查询** → **必须先确认金额类型**（见下文"金额字段映射指南"），再选择对应表
+- **金额查询** → 先确认金额类型（见下文"金额字段映射"）
 
-### 步骤2：选择主表并根据需要关联其他表
+### 步骤2：选择主表
 
-参考下面的"表快速索引"和"表关联关系"选择最适合的表，根据表结构和查询需求判断是否需要JOIN。
+参考"表快速索引"选择最适合的表。
 
-### 步骤3：应用业务规则过滤
+### 步骤3：应用业务规则
 
-根据查询类型应用相应的过滤规则（见下文"关键业务规则"）。
+根据查询类型应用过滤规则（见下文"关键业务规则"）。
 
-### 步骤4：验证并执行查询
+### 步骤4：验证并执行
 
-执行前检查：
-- 是否包含时间范围过滤
-- 是否应用了必要的业务规则
-- 查询逻辑是否正确
+执行前检查：时间范围过滤、业务规则、查询逻辑。
 
 ---
 
 ## 表快速索引
 
-**详细字段说明**：见 [reference/tables.md](reference/tables.md)
+| 表名 | 用途 | 关键字段 |
+|------|------|----------|
+| **t_ocm_kbc_order_settle** | 结算/收款 | fuse_customer, fprice_tax_amount, fpost_date |
+| **t_ocm_order_header** | 订单查询 | fbillno, fap_amount, fcreatetime |
+| **t_ocm_order_lines** | 产品明细 | fentryid, famount |
+| **t_ocm_tenant** | 租户信息 | fid, fname |
 
-| 表名 | 用途 | 关键字段 | 时间字段 | 记录数 |
-|------|------|----------|----------|--------|
-| **t_ocm_kbc_order_settle** | 结算/收款查询| fuse_customer, fsign_customer<br>fsale_product_name<br>fprice_tax_amount<br>fdelivery_status | fpost_date | 107K+ |
-| **t_ocm_order_header** | 订单查询<br>时间线分析 | fbillno, ftenant<br>fbiz_type, fbusiness_type<br>fcompany_name<br>fap_amount | fcreatetime | 109K+ |
-| **t_ocm_order_lines** | 产品订单明细 | fentryid (关联订单ID)<br>fproduct_billno<br>famount | fbenefit_start_date<br>fbenefit_end_date | 114K+ |
-| **t_ocm_tenant** | 租户基本信息 | fid (关联订单)<br>fnumber (租户编码)<br>fname (租户名称) | - | 35K+ |
-
-**查找详细字段**：当需要了解字段含义、业务逻辑或关联关系时，使用：
-```bash
-grep -i "字段名" .claude/skills/operational-analytics/reference/tables.md
-```
-
-或直接阅读 [reference/tables.md](reference/tables.md) 中的对应表章节。
-
----
-
-## 金额字段映射指南
-
-当用户查询涉及"金额"但未明确具体类型时，**必须主动询问用户**，因为不同金额存储在不同表中。
-
-### 金额类型分类表
-
-| 金额类型 | 查询表 | 对应字段 | 说明 |
-|---------|--------|----------|------|
-| **结算金额** | t_ocm_kbc_order_settle | fprice_tax_amount | 已交付产品的结算金额 |
-| **收款金额** | t_ocm_kbc_order_settle | fprice_tax_amount | 实际收款金额 |
-| **订阅收款** | t_ocm_kbc_order_settle | fprice_tax_amount | 订阅制收款 |
-| **考核收款** | t_ocm_kbc_order_settle | fprice_tax_amount | 用于绩效考核的收款 |
-| **产品收款** | t_ocm_kbc_order_settle | fprice_tax_amount | 按产品统计的收款 |
-| **合同金额** | t_ocm_order_header | fap_amount | 合同实际金额 |
-| **实际报价** | t_ocm_order_header | fap_amount | 实际成交价 |
-| **标准报价** | t_ocm_order_header | fstandard_amount | 标准定价 |
-| **付款金额** | t_ocm_order_header | fap_amount | 客户付款金额 |
-| **销售额** | t_ocm_order_header | fap_amount | 销售订单金额 |
-
-### 金额查询决策流程
-
-**当用户问题包含"金额"但类型不明确时，执行以下步骤：**
-
-1. **暂停查询**，使用 `AskUserQuestion` 工具询问用户
-2. **提供选项**：
-   ```
-   请问您指的是以下哪种金额？
-
-   A. 结算/收款相关（结算金额、收款金额、订阅收款、考核收款、产品收款）
-      → 查询销售出库单/结算表
-
-   B. 订单/合同相关（合同金额、实际报价、标准报价、付款金额、销售额）
-      → 查询交易订单表
-   ```
-
-3. **根据用户回答选择表**：
-   - 选择 A → 使用 `t_ocm_kbc_order_settle`（结算表）
-   - 选择 B → 使用 `t_ocm_order_header`（订单表）
-
-### 示例对话
-
-```
-用户："帮我查一下2025年的金额统计"
-
-Agent：[检测到金额类型不明确]
-       "请问您指的是以下哪种金额？
-        A. 结算/收款相关
-        B. 订单/合同相关"
-
-用户："结算金额"
-
-Agent：[选择 t_ocm_kbc_order_settle 表]
-       SELECT fpost_date, SUM(fprice_tax_amount) ...
-```
-
----
-
-## 核心字段速查
-
-### t_ocm_kbc_order_settle（结算表）
-
-| 字段 | 含义 | 说明 |
-|------|------|------|
-| **fuse_customer** / **fsign_customer** | 使用客户 / 签约客户 | 客户名搜索 |
-| **fsale_product_name** | 销售产品 | 产品名称 |
-| **fprice_tax_amount** | 金额（含税） | 结算金额 |
-| **fdelivery_status** | 交付状态 | '已交付' / '待交付' |
-| **fpost_date** | 记账日期 | 时间轴 |
-
-### t_ocm_order_header（订单表）
-
-| 字段 | 含义 | 说明 |
-|------|------|------|
-| **fbillno** | 订单号 | - |
-| **fcreatetime** | 创建时间 | 时间轴 |
-| **ftenant** | 租户编码 | 关联 t_ocm_tenant.fid |
-| **fbiz_type** | 订单类别 | Standard / Special / Free |
-| **fbusiness_type** | 业务类型 | New / Renew / Add / Upgradation / Return |
-| **fap_amount** | 实际结算价 | 订单金额 |
-
-### t_ocm_order_lines（产品明细）
-
-| 字段 | 含义 | 说明 |
-|------|------|------|
-| **fentryid** | 关联订单ID | 关联 t_ocm_order_header.fid |
-| **famount** | 金额 | 产品金额 |
-| **fbenefit_start_date** / **fbenefit_end_date** | 权益时间 | 开始/结束 |
-
-### t_ocm_tenant（租户表）
-
-| 字段 | 含义 | 说明 |
-|------|------|------|
-| **fid** | 主键ID | 订单表的 ftenant 字段关联此字段 |
-| **fname** | 租户名称 | 搜索租户 |
-
-**完整字段列表**：见 [reference/tables.md](reference/tables.md)
+**详细字段说明**：[reference/tables.md](reference/tables.md)
 
 ---
 
@@ -185,126 +75,76 @@ Agent：[选择 t_ocm_kbc_order_settle 表]
 ```
 t_ocm_order_header.fid (1) ←→ (N) t_ocm_order_lines.fentryid
 t_ocm_order_header.ftenant (N) ←→ (1) t_ocm_tenant.fid
-t_ocm_kbc_order_settle ← (复杂，不推荐) → t_ocm_order_header
 ```
 
 **JOIN 建议**：
-- 订单 + 产品明细：`INNER JOIN`（如果明细表有数据）
+- 订单 + 产品明细：`INNER JOIN`
 - 订单 + 租户：`LEFT JOIN`（租户信息可能缺失）
 - 客户查产品：**无需JOIN**，直接查结算表
 
-**详细关联说明**：见 [reference/tables.md](reference/tables.md#表关联关系)
-
 ---
 
-## 枚举值
+## 金额字段映射
 
-### fbiz_type（订单类别）
+当用户查询"金额"但类型不明确时，**必须用 AskUserQuestion 确认**：
 
-| 值 | 含义 | 是否付费 |
-|----|------|---------|
-| **Standard** | 标准订单 | ✅ 付费 |
-| Special | 特批订单 | ❌ 免费 |
-| Free | 试用订单 | ❌ 免费 |
+| 用户意图 | 查询表 | 字段 |
+|---------|--------|------|
+| 结算/收款金额 | t_ocm_kbc_order_settle | fprice_tax_amount |
+| 订单/合同金额 | t_ocm_order_header | fap_amount |
+| 标准报价 | t_ocm_order_header | fstandard_amount |
 
-### fbusiness_type（业务类型）
+**收款类型细分**（结算表 fc_contract_type）：
+- 订阅收款：`= '租赁服务'`
+- 产品收款：`IN ('租赁服务', '软件许可')`
+- 考核收款：不过滤
 
-| 值 | 含义 | 是否计入营收 |
-|----|------|-------------|
-| New | 新购 | ✅ 是 |
-| Renew | 续费 | ✅ 是 |
-| Add | 加购 | ✅ 是 |
-| Return | 退货 | ❌ 否（负数） |
-| **Upgradation** | 升级 | ❌ **否（必须排除）** |
-
-### fdelivery_status（交付状态）
-
-| 值 | 含义 | 是否可结算 |
-|----|------|----------|
-| **已交付** | 已完成交付 | ✅ 是 |
-| 待交付 | 尚未交付 | ❌ 否 |
-
-### fbill_source（订单来源）
-
-| 值 | 渠道 |
-|----|------|
-| 1 | 发票云直销 |
-| 2 | 生态伙伴 |
-| 3 | 营销伙伴 |
-| 4 | 金蝶中国直销 |
-| 5 | 金蝶中国分销 |
-| 6 | 个人伙伴 |
-| 7 | 发票云特批 |
-
-### forder_source（订单来源 - 结算表）
-
-**表**: `t_ocm_kbc_order_settle`
-
-| 值 | 渠道 |
-|----|------|
-| 金蝶中国 | KBC |
-| 运营后台 | 运营后台 |
-| 官网下单 | 官网下单 |
-| 我家云 | 我家云 |
-| 爱普生 | 爱普生 |
-| 华盟 | 华盟 |
-| ICRM | ICRM |
+关系：考核收款 ⊇ 产品收款 ⊇ 订阅收款
 
 ---
 
 ## 关键业务规则
 
-### 营收统计标准过滤
+### 营收统计过滤
 
-**订单表查询：**
+**订单表 (t_ocm_order_header)**：
 ```sql
-WHERE fbiz_type = 'Standard'              -- 只统计标准付费订单
-  AND fbusiness_type != 'Upgradation'     -- 排除升级订单（不计费）
+WHERE fbiz_type = 'Standard'           -- 标准付费订单
+  AND fbusiness_type != 'Upgradation'  -- 排除升级（不计费）
 ```
 
-**结算表查询：**
+**结算表 (t_ocm_kbc_order_settle)**：
 ```sql
-WHERE fdelivery_status = '已交付'          -- 只统计已交付订单
-  AND fpost_date >= '开始时间'
+WHERE fdelivery_status = '已交付'       -- 已交付才可结算
 ```
 
-**详细业务规则**：见 [reference/tables.md](reference/tables.md)（包含物料过滤、合同业务类型过滤等）
+**完整枚举值和业务规则**：见 [reference/tables.md](reference/tables.md#枚举值定义)
 
 ---
 
-### 查询优化
+## 查询优化
 
 - 添加时间范围过滤（fpost_date / fcreatetime）
-- 客户名搜索使用 `LIKE '%关键字%'`（支持模糊匹配）
-- 避免不必要的 JOIN（尤其是 t_ocm_order_lines）
+- 客户名搜索使用 `LIKE '%关键字%'`
+- 避免不必要的 JOIN
 
 ---
 
-## 输出格式要求
+## 输出格式
 
-### 1. 展示生成的 SQL
+### 1. 展示 SQL
 
 ```sql
--- 示例
 SELECT ...
-FROM ...
-WHERE ...
 ```
 
-### 2. 结构化列表展示结果
-
-使用清晰的列表格式（适配微信、云之家等聊天工具）：
+### 2. 结构化列表（适配聊天工具）
 
 ```
 【查询标题】
 
 ▪ 项目1
   • 字段1：值1
-  • 字段2：值2
-
-▪ 项目2
-  • 字段1：值1
-  • 字段2：值2
 
 ━━━━━━━━━━━━━━
 💰 汇总信息
@@ -314,24 +154,19 @@ WHERE ...
 
 说明查询思路、数据来源、业务含义。
 
-### 4. 复杂查询时说明过程
-
-如果经历多步探索、尝试多个查询或遇到问题，简要说明查询路径（审计用）。
-
 ---
 
 ## 故障排查
 
 ### 查询结果为空？
 
-1. **运行诊断脚本：**
+1. **运行诊断**：
    ```bash
    python .claude/skills/operational-analytics/scripts/diagnose.py --tenant "租户名" --year 2025
    ```
 
-2. **检查常见问题：**
-   - 客户名拼写（使用 `LIKE '%关键字%'` 模糊匹配）
-   - 日期过滤范围过窄
-   - 交付状态过滤（'已交付' vs '待交付'）
-   - 订单类型过滤（Standard vs Special/Free）
-   - 业务类型过滤（检查是否误过滤了有效订单）
+2. **常见问题**：
+   - 客户名拼写（用 `LIKE '%关键字%'`）
+   - 日期范围过窄
+   - 交付状态过滤
+   - 订单类型过滤

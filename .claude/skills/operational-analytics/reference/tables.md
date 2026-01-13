@@ -9,6 +9,7 @@
 - [t_ocm_order_lines（产品订单明细）](#t_ocm_order_lines)
 - [t_ocm_tenant（租户表）](#t_ocm_tenant)
 - [表关联关系](#表关联关系)
+- [枚举值定义](#枚举值定义)
 
 ---
 
@@ -55,7 +56,7 @@
 | fenv_start_date           | 环境开始时间 |                                                              |
 | fenv_end_date             | 环境截止时间 |                                                              |
 | fdirect_distribution_sale | 直销分销     | **默认用此字段区分直销/分销**                                |
-| fc_contract_type          | 子合同类型   | 用此字段判断收款类型。如查询订阅收款，筛选收款类型=租赁服务；<br>如查询产品收款（订阅+买断），筛选收款类型=租赁服务+软件许可；如查询考核收款/收款，则全选 |
+| fc_contract_type          | 子合同类型   | 用此字段判断收款类型：<br>**订阅收款**：fc_contract_type = '租赁服务'<br>**产品收款**：fc_contract_type IN ('租赁服务', '软件许可')<br>**考核收款**：不过滤（包含所有类型）<br><br>关系（集合包含）：考核收款 ⊇ 产品收款 ⊇ 订阅收款 |
 | **fclassification**       | 产品分类     | 1: 开票 / 2: 收票 / 3: 影像 / 4: 增值服务 / 5: 收单机器人 / 6: 研发 / 7: 实施 |
 | fcustomer_code            | 客户编码     |                                                              |
 | fnew_or_renew             | 新购续费     | new: 新购 / renew: 续费                                      |
@@ -273,3 +274,56 @@ WHERE fbiz_type = 'Standard'              -- 只统计标准付费订单
 t_ocm_order_header.fid (1) ←→ (N) t_ocm_order_lines.fentryid
 t_ocm_order_header.ftenant (N) ←→ (1) t_ocm_tenant.fid
 ```
+
+---
+
+## 枚举值定义
+
+### fbiz_type（订单类别）- t_ocm_order_header
+
+| 值 | 含义 | 是否付费 |
+|----|------|---------|
+| **Standard** | 标准订单 | ✅ 付费 |
+| Special | 特批订单 | ❌ 免费 |
+| Free | 试用订单 | ❌ 免费 |
+
+### fbusiness_type（业务类型）- t_ocm_order_header
+
+| 值 | 含义 | 是否计入营收 |
+|----|------|-------------|
+| New | 新购 | ✅ |
+| Renew | 续费 | ✅ |
+| Add | 加购 | ✅ |
+| Return | 退货 | ❌（负数）|
+| **Upgradation** | 升级 | ❌ **必须排除** |
+
+### fdelivery_status（交付状态）- t_ocm_kbc_order_settle
+
+| 值 | 含义 | 是否可结算 |
+|----|------|----------|
+| **已交付** | 已完成交付 | ✅ |
+| 待交付 | 尚未交付 | ❌ |
+
+### fbill_source（订单来源）- t_ocm_order_header
+
+| 值 | 渠道 |
+|----|------|
+| 1 | 发票云直销 |
+| 2 | 生态伙伴 |
+| 3 | 营销伙伴 |
+| 4 | 金蝶中国直销 |
+| 5 | 金蝶中国分销 |
+| 6 | 个人伙伴 |
+| 7 | 发票云特批 |
+
+### forder_source（订单来源）- t_ocm_kbc_order_settle
+
+| 值 | 渠道 |
+|----|------|
+| 金蝶中国 | KBC |
+| 运营后台 | 运营后台 |
+| 官网下单 | 官网下单 |
+| 我家云 | 我家云 |
+| 爱普生 | 爱普生 |
+| 华盟 | 华盟 |
+| ICRM | ICRM |
