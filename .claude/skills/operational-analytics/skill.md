@@ -86,7 +86,7 @@ t_ocm_order_header.ftenant (N) ←→ (1) t_ocm_tenant.fid
 
 ## 金额字段映射
 
-当用户查询"金额"但类型不明确时，**必须用 AskUserQuestion 确认**：
+当用户查询"金额"但类型不明确时，**必须用 AskUserQuestion 工具确认**（见"输出规范"）：
 
 | 用户意图 | 查询表 | 字段 |
 |---------|--------|------|
@@ -130,15 +130,40 @@ WHERE fdelivery_status = '已交付'       -- 已交付才可结算
 
 ---
 
-## 输出格式
+## 输出规范
 
-### 1. 展示 SQL
+### CRITICAL: 询问用户
+
+**当需要用户确认或选择时（如金额类型不明确），MUST 使用 AskUserQuestion 工具：**
+
+```
+Use AskUserQuestion tool with:
+question: "请确认您要查询的金额类型"
+header: "金额类型"
+options:
+  - label: "结算/收款金额"
+    description: "fprice_tax_amount (结算表)"
+  - label: "订单/合同金额"
+    description: "fap_amount (订单表)"
+  - label: "标准报价"
+    description: "fstandard_amount (订单表)"
+```
+
+**NEVER**：
+- 直接输出问题让用户选择（必须用 AskUserQuestion 工具）
+- 在不确定时猜测用户意图
+
+### 输出格式
+
+**直接输出面向用户的内容，无需标签包装。**
+
+#### 1. 展示 SQL
 
 ```sql
 SELECT ...
 ```
 
-### 2. 结构化列表（适配聊天工具）
+#### 2. 结构化列表（适配聊天工具）
 
 ```
 【查询标题】
@@ -150,7 +175,7 @@ SELECT ...
 💰 汇总信息
 ```
 
-### 3. 自然语言解释
+#### 3. 自然语言解释
 
 说明查询思路、数据来源、业务含义。
 

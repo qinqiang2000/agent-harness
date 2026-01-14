@@ -9,7 +9,6 @@ from typing import Dict, List, Optional
 from api.handlers.yunzhijia.card_builder import YunzhijiaCardBuilder
 from api.handlers.yunzhijia.message_sender import YunzhijiaMessageSender
 from api.handlers.yunzhijia.session_mapper import SessionMapper
-from api.handlers.yunzhijia.tag_extractor import TagExtractor
 from api.models.requests import QueryRequest
 from api.models.yunzhijia import YZJRobotMsg
 from api.services.agent_service import AgentService
@@ -54,7 +53,6 @@ class YunzhijiaHandler:
         self.session_service = session_service
 
         # 初始化子组件
-        self.tag_extractor = TagExtractor()
         self.session_mapper = SessionMapper(
             timeout_seconds=int(os.getenv("YZJ_SESSION_TIMEOUT", "3600"))
         )
@@ -149,7 +147,7 @@ class YunzhijiaHandler:
             robot_name: 机器人名称（用于提示）
         """
         message_count = 0
-        reply_buffer: List[str] = []  # 累积 <reply> 标签内容
+        has_sent_question = False  # 标记是否已发送 AskUserQuestion
         agent_session_id = request.session_id
 
         async for event in self.agent_service.process_query(request):
@@ -163,24 +161,9 @@ class YunzhijiaHandler:
                 self.session_mapper.update_activity(yzj_session_id, new_session_id)
                 logger.info(f"[YZJ] Session mapping: {yzj_session_id} -> {new_session_id}")
 
-            elif event_type == "assistant_message":
-                # 处理助手消息
-                data = json.loads(event["data"])
-                content = data.get("content", "")
-
-                if content:
-                    sent = await self._handle_assistant_content(
-                        content, yzj_token, operator_openid,
-                        robot_name, reply_buffer
-                    )
-                    message_count += sent
-
-                # 更新会话活动时间
-                if agent_session_id:
-                    self.session_mapper.update_activity(yzj_session_id, agent_session_id)
-
             elif event_type == "ask_user_question":
                 # 处理 AskUserQuestion 工具调用
+                has_sent_question = True  # 标记已发送问题
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
 
@@ -195,38 +178,35 @@ class YunzhijiaHandler:
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
 
-                # Fallback: 如果 reply_buffer 为空，使用 ResultMessage.result 字段
-                if not reply_buffer and result_data.get("result"):
-                    sdk_result = result_data["result"]
-                    logger.warning(
-                        f"[YZJ] Fallback: using ResultMessage.result field "
-                        f"({len(sdk_result)} chars, no <reply> tags found)"
+                # 如果已发送问题，跳过 result 内容（避免重复消息）
+                if has_sent_question:
+                    logger.info(
+                        f"[YZJ] Skipped result (question sent): "
+                        f"session={result_data.get('session_id')}, "
+                        f"duration={result_data.get('duration_ms')}ms, "
+                        f"turns={result_data.get('num_turns')}"
                     )
-                    reply_buffer.append(sdk_result)
-
-                # 发送累积的 reply 内容
-                for idx, reply in enumerate(reply_buffer):
-                    message_count += 1
-                    # 在最后一条回复中添加继续交流提醒
-                    if idx == len(reply_buffer) - 1:
-                        reply_with_hint = f"{reply}\n\n【注】👉 如有其他问题，请继续 {robot_name} 咨询"
+                else:
+                    # 直接使用 ResultMessage.result 字段（已转换 kb:// 链接）
+                    if result_data.get("result"):
+                        final_result = result_data["result"]
+                        reply_with_hint = f"{final_result}\n\n【注】👉 如有其他问题，请继续 {robot_name} 咨询"
                         await self.message_sender.send_with_images(
                             yzj_token, operator_openid, reply_with_hint,
                             self.service_base_url, self.card_builder
                         )
+                        message_count += 1
+                        logger.info(f"[YZJ] Sent final result")
                     else:
-                        await self.message_sender.send_with_images(
-                            yzj_token, operator_openid, reply,
-                            self.service_base_url, self.card_builder
-                        )
-                    logger.info(f"[YZJ] Sent reply #{message_count}")
+                        # 异常：没有 result 内容
+                        logger.error("[YZJ] No result content in ResultMessage")
 
-                logger.info(
-                    f"[YZJ] Completed: session={result_data.get('session_id')}, "
-                    f"duration={result_data.get('duration_ms')}ms, "
-                    f"turns={result_data.get('num_turns')}, "
-                    f"messages={message_count}"
-                )
+                    logger.info(
+                        f"[YZJ] Completed: session={result_data.get('session_id')}, "
+                        f"duration={result_data.get('duration_ms')}ms, "
+                        f"turns={result_data.get('num_turns')}, "
+                        f"messages={message_count}"
+                    )
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
@@ -242,55 +222,6 @@ class YunzhijiaHandler:
                 yzj_token, operator_openid,
                 "抱歉，未能获取到答案，请稍后再试。"
             )
-
-    async def _handle_assistant_content(
-        self,
-        content: str,
-        yzj_token: str,
-        operator_openid: str,
-        robot_name: str,
-        reply_buffer: List[str]
-    ) -> int:
-        """处理助手消息内容
-
-        Args:
-            content: 消息内容
-            yzj_token: 云之家 token
-            operator_openid: 操作人 OpenID
-            robot_name: 机器人名称
-            reply_buffer: Reply 缓冲区（用于累积）
-
-        Returns:
-            发送的消息数量
-        """
-        if self.verbose:
-            # 调试模式：直接发送原始消息
-            await self.message_sender.send_text(yzj_token, operator_openid, content)
-            logger.info("[YZJ] Sent raw verbose message")
-            return 1
-
-        # 正常模式：提取标签内容
-        sent_count = 0
-
-        # 提取 <ask> 标签（立即发送）
-        asks = self.tag_extractor.extract_asks(content)
-        for ask in asks:
-            ask_with_hint = f"{ask}\n\n【注】👉 请 {robot_name} 回复\n例如：{robot_name} 1"
-            await self.message_sender.send_text(yzj_token, operator_openid, ask_with_hint)
-            logger.info(f"[YZJ] Sent ask message")
-            sent_count += 1
-
-        # 提取 <reply> 标签（累积后发送）
-        replies = self.tag_extractor.extract_replies(content)
-        if replies:
-            reply_buffer.extend(replies)
-            logger.info(f"[YZJ] Buffered {len(replies)} reply(s)")
-
-        # 无标签内容记录为过滤
-        if not asks and not replies:
-            logger.debug(f"[YZJ] Filtered thinking: {content[:100]}...")
-
-        return sent_count
 
     async def _handle_stop_command(
         self,

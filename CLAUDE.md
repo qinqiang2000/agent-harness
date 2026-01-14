@@ -176,6 +176,16 @@ Skills 是从 `.claude/skills/` 加载的 Claude Code 技能。样例的技能�
 
 Skills 通过查询中的 `Skill` 工具调用。
 
+### Skill Output Mechanism
+
+**Skills 使用 Claude SDK 原生输出机制：**
+
+- **最终输出**：直接输出内容，SDK 自动包装到 `ResultMessage.result` 字段
+- **询问用户**：必须使用 `AskUserQuestion` 工具（禁止直接输出问题）
+- **kb:// 链接**：使用 `kb://相对路径` 引用知识库文档，系统自动转换为实际 URL
+
+**已废弃**：`<reply>` 和 `<ask>` 标签系统（代码保留用于回滚）
+
 ## Key Environment Variables
 
 在 `.env` 中配置：
@@ -262,7 +272,7 @@ POSTGRES_ALLOWED_TABLES=t_ocm_kbc_order_settle,t_ocm_order_header,t_ocm_order_li
 ClaudeAgentOptions(
     system_prompt={"type": "preset", "preset": "claude_code"},
     setting_sources=["project"],  # 从 .claude/settings.local.json 加载
-    allowed_tools=["Skill", "Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch"],
+    allowed_tools=["Skill", "Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch", "AskUserQuestion"],
     resume=session_id,  # 用于会话续接
     max_buffer_size=10 * 1024 * 1024,
     cwd=str(AGENTS_ROOT)

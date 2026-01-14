@@ -177,7 +177,9 @@ class StreamProcessor:
 
         # Include result field if present (SDK final output)
         if msg.result:
-            result_data["result"] = msg.result
+            # 转换 kb:// 链接为真实 URL
+            from api.utils.kb_link_resolver import transform_kb_links
+            result_data["result"] = transform_kb_links(msg.result)
             logger.info(f"ResultMessage.result field present: {len(msg.result)} chars")
 
         yield format_sse_message("result", result_data)

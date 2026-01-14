@@ -1,14 +1,34 @@
-"""标签提取器 - 从消息内容中提取特定 XML 标签."""
+"""标签提取器 - 从消息内容中提取特定 XML 标签.
+
+DEPRECATED: This module is deprecated and no longer used.
+The system now uses Claude SDK native mechanisms:
+- Direct output to ResultMessage.result (no tags needed)
+- AskUserQuestion tool for user interaction (instead of <ask> tags)
+
+This file is kept for potential rollback only.
+"""
 
 import re
+import warnings
 from typing import List
+
+warnings.warn(
+    "TagExtractor is deprecated. Use Claude SDK native mechanisms instead "
+    "(ResultMessage.result and AskUserQuestion tool).",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class TagExtractor:
     """提取消息中的特定标签内容
 
-    用于从 Agent 输出中提取 <reply> 和 <ask> 标签，
-    过滤中间思考过程，只保留面向用户的内容。
+    DEPRECATED: 不再使用标签系统。
+
+    旧系统用于从 Agent 输出中提取 <reply> 和 <ask> 标签。
+    新系统使用 Claude SDK 原生机制：
+    - 直接输出到 ResultMessage.result
+    - 使用 AskUserQuestion 工具询问用户
     """
 
     @staticmethod

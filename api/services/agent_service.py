@@ -69,9 +69,10 @@ class AgentService:
 
             # Configure Claude SDK
             options = ClaudeAgentOptions(
+                model="claude-sonnet-4-5",
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 setting_sources=["project"],
-                allowed_tools=["Skill", "Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch"],
+                allowed_tools=["Skill", "Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch", "AskUserQuestion"],
                 resume=request.session_id,
                 max_buffer_size=10 * 1024 * 1024,
                 cwd=str(AGENTS_ROOT),
