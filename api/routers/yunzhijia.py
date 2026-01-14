@@ -18,7 +18,8 @@ async def yzj_chat(
     request: Request,
     msg: YZJRobotMsg,
     background_tasks: BackgroundTasks,
-    yzj_token: str = Query(..., description="云之家机器人 token")
+    yzj_token: str = Query(..., description="云之家机器人 token"),
+    skill: str = Query(None, description="指定使用的 skill（如 customer-service, operational-analytics）")
 ):
     """云之家消息接收端点
 
@@ -60,7 +61,7 @@ async def yzj_chat(
 
     # 3. 后台异步处理
     handler = get_yunzhijia_handler()
-    background_tasks.add_task(handler.process_message, msg, yzj_token)
+    background_tasks.add_task(handler.process_message, msg, yzj_token, skill)
 
     # 4. 立即返回（提醒用户可以打断）
     robot_name = msg.robotName if msg.robotName else "机器人"

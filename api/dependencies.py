@@ -1,6 +1,7 @@
 """Dependency injection container for services."""
 
 import logging
+import os
 from functools import lru_cache
 
 from api.services.agent_service import AgentService
@@ -54,8 +55,9 @@ def get_yunzhijia_handler():
         from api.handlers.yunzhijia import YunzhijiaHandler
         agent_service = get_agent_service()
         session_service = get_session_service()
-        _yunzhijia_handler_instance = YunzhijiaHandler(agent_service, session_service)
-        logger.info("Created YunzhijiaHandler instance")
+        default_skill = os.getenv("YZJ_DEFAULT_SKILL", "customer-service")
+        _yunzhijia_handler_instance = YunzhijiaHandler(agent_service, session_service, default_skill)
+        logger.info(f"Created YunzhijiaHandler instance with default_skill={default_skill}")
     return _yunzhijia_handler_instance
 
 

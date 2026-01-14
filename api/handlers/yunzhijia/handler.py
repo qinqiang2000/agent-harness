@@ -42,15 +42,17 @@ class YunzhijiaHandler:
         "能做什么": '"0幻觉"回答发票云知识库相关问题',
     }
 
-    def __init__(self, agent_service: AgentService, session_service: SessionService):
+    def __init__(self, agent_service: AgentService, session_service: SessionService, default_skill: str = "customer-service"):
         """初始化云之家处理器
 
         Args:
             agent_service: Agent 服务实例
             session_service: Session 服务实例（用于会话中断）
+            default_skill: 默认使用的 skill 名称
         """
         self.agent_service = agent_service
         self.session_service = session_service
+        self.default_skill = default_skill
 
         # 初始化子组件
         self.session_mapper = SessionMapper(
@@ -66,16 +68,19 @@ class YunzhijiaHandler:
         self.service_base_url = os.getenv("SERVICE_BASE_URL", "http://localhost:9090")
         self.verbose = os.getenv("YZJ_VERBOSE", "false").lower() == "true"
 
-    async def process_message(self, msg: YZJRobotMsg, yzj_token: str):
+    async def process_message(self, msg: YZJRobotMsg, yzj_token: str, skill: Optional[str] = None):
         """处理云之家消息
 
         Args:
             msg: 云之家消息
             yzj_token: 云之家机器人 token
+            skill: 指定的 skill 名称（为 None 时使用 default_skill）
         """
         yzj_session_id = msg.sessionId
+        # 确定使用的 skill（优先使用传入的，否则使用默认）
+        effective_skill = skill or self.default_skill
         logger.info(f"[YZJ] Received message: {msg.model_dump()}")
-        logger.info(f"[YZJ] Processing: session={yzj_session_id}, content={msg.content[:50]}...")
+        logger.info(f"[YZJ] Processing: session={yzj_session_id}, skill={effective_skill}, content={msg.content[:50]}...")
 
         try:
             # 0. 清理过期会话（定期维护）
@@ -109,7 +114,7 @@ class YunzhijiaHandler:
             # 6. 构建请求
             request = QueryRequest(
                 prompt=cleaned_content,
-                skill="customer-service",
+                skill=effective_skill,
                 tenant_id="yzj",
                 language="中文",
                 session_id=agent_session_id
