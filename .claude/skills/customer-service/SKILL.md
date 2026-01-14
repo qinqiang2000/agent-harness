@@ -19,6 +19,7 @@ description: 作为发票云客服Agent，负责回答售前咨询（产品能�
      - label: "星瀚旗舰版发票云"
      - label: "星空旗舰版发票云"
      - label: "标准版发票云"
+     - label: "其他"
    ```
 3. **🛑 调用 AskUserQuestion 后，立即停止执行 🛑**
    - **DO NOT** 调用任何其他工具（Glob、Grep、Read 等）
