@@ -47,10 +47,11 @@ class AgentService:
                     "Read(/*.key)",
                     "Bash(printenv)",
                     "Bash(export)",
-                    f"Write(/{self.SETTINGS_FILE_NAME})",
-                    f"Edit(/{self.SETTINGS_FILE_NAME})",
-                    f"Bash(rm */{self.SETTINGS_FILE_NAME})",
-                    f"Bash(mv */{self.SETTINGS_FILE_NAME} *)",
+                    "Read(/**/*settings.json)",
+                    "Write(/**/*settings.json)",
+                    "Edit(/**/*settings.json)",
+                    "Bash(rm /**/*settings.json)",
+                    "Bash(mv /**/*settings.json *)",
                 ]
             }
         }
