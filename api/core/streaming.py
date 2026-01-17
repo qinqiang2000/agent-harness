@@ -61,7 +61,6 @@ class StreamProcessor:
         if not self.session_registered and self.session_service:
             await self.session_service.register(session_id, self.client)
             self.session_registered = True
-            logger.info(f"Session registered: {session_id}")
 
     async def _emit_session_created(self, session_id: str) -> AsyncGenerator[dict, None]:
         """发送 session_created 事件（消除重复）
@@ -75,7 +74,6 @@ class StreamProcessor:
         if not self.session_id_sent:
             yield format_sse_message("session_created", {"session_id": session_id})
             self.session_id_sent = True
-            logger.info(f"Created new session: {session_id}")
 
     async def process(self) -> AsyncGenerator[dict, None]:
         """
@@ -92,7 +90,6 @@ class StreamProcessor:
             async for msg in self.client.receive_response():
                 if not self.first_message_received:
                     self.first_message_received = True
-                    logger.info(f"First message received: {type(msg).__name__}")
 
                 # Handle different message types
                 if isinstance(msg, SystemMessage):
