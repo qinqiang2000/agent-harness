@@ -15,6 +15,7 @@ __pycache__/
 # Environment
 .env
 .env.local
+*-settings.json
 
 # IDE
 .vscode/
