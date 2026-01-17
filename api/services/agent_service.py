@@ -27,6 +27,8 @@ class AgentService:
     - Does not directly depend on session_manager (uses dependency injection)
     """
 
+    SETTINGS_FILE_NAME = ".custom-settings.json"
+
     def __init__(self, session_service=None):
         """
         Args:
@@ -38,20 +40,26 @@ class AgentService:
         security_settings = {
             "permissions": {
                 "deny": [
-                    "Read(./.env)",
-                    "Read(./.env.*)",
-                    "Read(./secrets/**)"
+                    "Read(/.env)",
+                    "Read(/.env.*)",
+                    "Read(/secrets/**)",
+                    "Read(/*.pem)",
+                    "Read(/*.key)",
+                    "Bash(printenv)",
+                    "Bash(export)",
+                    f"Write(/{self.SETTINGS_FILE_NAME})",
+                    f"Edit(/{self.SETTINGS_FILE_NAME})",
+                    f"Bash(rm */{self.SETTINGS_FILE_NAME})",
+                    f"Bash(mv */{self.SETTINGS_FILE_NAME} *)",
                 ]
             }
         }
-        settings_file = AGENTS_ROOT / ".claude_settings.json"
-        with open(settings_file, "w") as f:
+        self.settings_file = AGENTS_ROOT / self.SETTINGS_FILE_NAME
+        with open(self.settings_file, "w") as f:
             json.dump(security_settings, f, indent=2)
 
     async def process_query(
-        self,
-        request: QueryRequest,
-        context_file_path: Optional[str] = None
+        self, request: QueryRequest, context_file_path: Optional[str] = None
     ) -> AsyncGenerator[dict, None]:
         """
         Process Agent query request and return SSE stream.
@@ -87,15 +95,26 @@ class AgentService:
                 model="claude-sonnet-4-5",
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 setting_sources=["project"],
-                settings=str(AGENTS_ROOT / ".claude_settings.json"),
-                allowed_tools=["Skill", "Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch", "AskUserQuestion"],
+                settings=str(self.settings_file),
+                allowed_tools=[
+                    "Skill",
+                    "Read",
+                    "Grep",
+                    "Glob",
+                    "Bash",
+                    "WebFetch",
+                    "WebSearch",
+                    "AskUserQuestion",
+                ],
                 resume=request.session_id,
                 max_buffer_size=10 * 1024 * 1024,
                 cwd=str(AGENTS_ROOT),
-                add_dirs=[]
+                add_dirs=[],
             )
 
-            logger.info(f"Claude SDK config: cwd={AGENTS_ROOT}, tenant={request.tenant_id}")
+            logger.info(
+                f"Claude SDK config: cwd={AGENTS_ROOT}, tenant={request.tenant_id}"
+            )
             logger.info("Creating ClaudeSDKClient...")
 
             # Stream responses
@@ -109,9 +128,7 @@ class AgentService:
 
                 # Use StreamProcessor to handle message stream
                 processor = StreamProcessor(
-                    client=client,
-                    request=request,
-                    session_service=self.session_service
+                    client=client, request=request, session_service=self.session_service
                 )
 
                 async for message in processor.process():
@@ -120,11 +137,12 @@ class AgentService:
         except Exception as e:
             # Suppress cancel scope errors from interrupt (expected behavior)
             error_msg = str(e)
-            if "cancel scope" in error_msg.lower() or isinstance(e, (GeneratorExit, asyncio.CancelledError)):
+            if "cancel scope" in error_msg.lower() or isinstance(
+                e, (GeneratorExit, asyncio.CancelledError)
+            ):
                 logger.info(f"Stream interrupted: {type(e).__name__}")
             else:
                 logger.error(f"Error in process_query: {str(e)}", exc_info=True)
-                yield format_sse_message("error", {
-                    "message": str(e),
-                    "type": type(e).__name__
-                })
+                yield format_sse_message(
+                    "error", {"message": str(e), "type": type(e).__name__}
+                )
