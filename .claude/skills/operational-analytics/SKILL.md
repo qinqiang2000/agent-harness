@@ -10,6 +10,10 @@ description: |
 
 根据自然语言查询 EOP 数据库，生成 SQL 并返回结果。
 
+> **CRITICAL: 此数据库为 PostgreSQL，禁止使用 MySQL 语法（如 YEAR()、MONTH() 等函数）**
+>
+> 日期提取使用 `EXTRACT(YEAR FROM field)`，时间过滤使用字符串比较 `>= '2024-01-01'`
+
 ---
 
 ## 查询工具
