@@ -36,10 +36,10 @@ class YunzhijiaHandler:
 
     # FAQ 配置：预定义问答，不走 agent
     FAQ_MAP = {
-        "你好，你能做什么呢?": '"0幻觉"回答发票云知识库相关问题',
-        "你好": '"你好，我可0幻觉"回答发票云知识库相关问题，请有什么可以帮助您',
-        "你能做什么": '"0幻觉"回答发票云知识库相关问题',
-        "能做什么": '"0幻觉"回答发票云知识库相关问题',
+        "你好，你能做什么呢?": '"0幻觉"回答发票云知识',
+        "你好": '"你好，我可0幻觉"回答发票云知识，请有什么可以帮助您',
+        "你能做什么": '"0幻觉"回答发票云知识',
+        "能做什么": '"0幻觉"回答发票云知识',
     }
 
     def __init__(self, agent_service: AgentService, session_service: SessionService, default_skill: str = "customer-service"):
@@ -195,7 +195,7 @@ class YunzhijiaHandler:
                     # 直接使用 ResultMessage.result 字段（已转换 kb:// 链接）
                     if result_data.get("result"):
                         final_result = result_data["result"]
-                        reply_with_hint = f"{final_result}\n\n【注】👉 如有其他问题，请继续 {robot_name} 咨询"
+                        reply_with_hint = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"
                         await self.message_sender.send_with_images(
                             yzj_token, operator_openid, reply_with_hint,
                             self.service_base_url, self.card_builder
@@ -333,13 +333,6 @@ class YunzhijiaHandler:
                 lines.append(f"{i}. {label} - {description}")
             else:
                 lines.append(f"{i}. {label}")
-
-        lines.append("")
-        if robot_name:
-            lines.append(f"【注】👉 请选项编号或文字后 {robot_name} 回复")
-            lines.append(f"例如：{robot_name} 1")
-        else:
-            lines.append("【注】👉 请选项编号或文字. 不可直接回复本消息")
 
         return "\n".join(lines)
 
