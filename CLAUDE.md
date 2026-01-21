@@ -61,12 +61,12 @@ PREDEFINED_CONFIGS = {
 
 ## Skill System
 
-Skills 是从 `.claude/skills/` 加载的 Claude Code 技能。样例的技能为：
+Skills 是从 `agent_cwd/.claude/skills/` 加载的 Claude Code 技能。样例的技能为：
 
 **customer-service** - 发票云客服 Agent
 
 * 处理售前（产品能力）、售后（故障排除）、API 集成等问题
-* 知识库位于 `data/kb/`：
+* 知识库位于 `agent_cwd/data/kb/`：
   * `产品与交付知识/` - 产品/交付文档 (默认)
   * `营销知识库/` - 营销/销售材料
   * `API文档/` - API 文档
@@ -96,8 +96,16 @@ Skills 通过查询中的 `Skill` 工具调用。
 - **kb:// 链接**：使用 `kb://相对路径` 引用知识库文档，系统自动转换为实际 URL
 
 
+## Directory Structure
+
+- `AGENT_CWD` - Agent 工作目录（默认 `agent_cwd/`，可通过环境变量配置）
+  - `agent_cwd/.claude/skills/` - Skills 定义
+  - `agent_cwd/data/kb/` - 知识库
+  - `agent_cwd/data/tenants/` - 租户数据
+
 ## Key Environment Variables
 
 在 `.env` 中配置环境变量，具体参考 `.env.example`
 
-Skills 可通过 `.claude/skills/` 中的项目设置访问。
+关键变量：
+- `AGENT_CWD=agent_cwd` - Agent 工作目录

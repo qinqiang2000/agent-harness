@@ -15,6 +15,7 @@ from claude_agent_sdk import (
 from api.models.requests import QueryRequest
 from api.utils import format_sse_message, extract_todos_from_tool
 from api.utils.sdk_logger import SDKLogger
+from api.constants import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -142,10 +143,11 @@ class StreamProcessor:
                 # 追踪 Read 工具读取的 KB 文件
                 if block.name == "Read":
                     file_path = block.input.get("file_path", "")
-                    if "data/kb/" in file_path:
+                    kb_path_str = str(DATA_DIR / "kb") + "/"
+                    if kb_path_str in file_path:
                         from api.utils.filename_normalizer import normalize_filename
 
-                        kb_relative = file_path.split("data/kb/")[-1]
+                        kb_relative = file_path.split(kb_path_str)[-1]
                         filename = Path(kb_relative).name
 
                         # 存储原始文件名

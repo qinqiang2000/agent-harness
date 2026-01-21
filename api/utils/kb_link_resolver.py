@@ -7,10 +7,12 @@ from typing import Optional
 
 import yaml
 
+from api.constants import DATA_DIR
+
 logger = logging.getLogger(__name__)
 
-# 知识库根目录（相对于项目根目录）
-KB_BASE_PATH = Path("data/kb")
+# 知识库根目录
+KB_BASE_PATH = DATA_DIR / "kb"
 
 
 def resolve_kb_url(relative_path: str) -> Optional[str]:

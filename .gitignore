@@ -1,5 +1,6 @@
 # Context data
 context/
+agent_cwd/data/
 data/
 
 # Python

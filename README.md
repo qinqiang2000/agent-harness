@@ -39,6 +39,9 @@ cp .env.example .env
 编辑 `.env` 文件，配置以下关键参数：
 
 ```bash
+# Agent 工作目录（可选，默认为项目根目录）
+AGENT_CWD=agent_cwd
+
 # 选择模型提供商
 DEFAULT_MODEL_CONFIG=claude-router  # 或 "glm"
 
@@ -144,11 +147,11 @@ python tests/batch_test.py -p "如何配置开票人员？" --default-product "�
 
 ### Skill 系统
 
-Skills 是从 `.claude/skills/` 加载的 [Agent Skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)。示例技能：
+Skills 是从 `agent_cwd/.claude/skills/` 加载的 [Agent Skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)。示例技能：
 
 **customer-service** - 发票云客服 Agent
 - 处理售前（产品能力）、售后（故障排除）、API 集成等问题
-- 知识库位于 `data/kb/`：
+- 知识库位于 `agent_cwd/data/kb/`：
   - `产品与交付知识/` - 产品/交付文档（默认）
   - `营销知识库/` - 营销/销售材料
   - `API文档/` - API 文档
@@ -156,14 +159,14 @@ Skills 是从 `.claude/skills/` 加载的 [Agent Skills](https://platform.claude
 
 ### Skill 与知识库关联
 
-每个 Skill 通过 `.claude/skills/{skill-name}/SKILL.md` 定义其能力和上下文。Skill 可以访问 `data/kb/` 目录下的知识库文件，通过工具（如 Glob、Grep、Read）搜索和读取相关文档。
+每个 Skill 通过 `agent_cwd/.claude/skills/{skill-name}/SKILL.md` 定义其能力和上下文。Skill 可以访问 `agent_cwd/data/kb/` 目录下的知识库文件，通过工具（如 Glob、Grep、Read）搜索和读取相关文档。
 
 **示例：customer-service Skill**
-- **Skill 定义**: `.claude/skills/customer-service/SKILL.md` 包含了处理逻辑、产品识别规则、输出格式等
+- **Skill 定义**: `agent_cwd/.claude/skills/customer-service/SKILL.md` 包含了处理逻辑、产品识别规则、输出格式等
 - **知识库路径**:
-  - `data/kb/产品与交付知识/` - 默认搜索路径，覆盖 80%+ 售后场景
-  - `data/kb/营销知识库/` - 当检测到售前信号（能力、功能、方案等）时搜索
-  - `data/kb/API文档/` - 当检测到 API 信号（接口、参数、集成等）时搜索
+  - `agent_cwd/data/kb/产品与交付知识/` - 默认搜索路径，覆盖 80%+ 售后场景
+  - `agent_cwd/data/kb/营销知识库/` - 当检测到售前信号（能力、功能、方案等）时搜索
+  - `agent_cwd/data/kb/API文档/` - 当检测到 API 信号（接口、参数、集成等）时搜索
 - **引用机制**: Skill 使用 `kb://相对路径` 格式引用文档，系统会自动转换为实际 URL
 
 ### 知识库管理
@@ -184,11 +187,11 @@ export YUQUE_TOKEN=your_yuque_token_here
 
 # 3. 导出知识库（以产品与交付知识为例）
 # 格式：node dist/bin/cli.js {namespace}/{book} -o {output_path} --repo .
-node dist/bin/cli.js nbklz3/tadboa -o /path/to/agent-harness/data/kb/产品与交付知识 --repo .
+node dist/bin/cli.js nbklz3/tadboa -o /path/to/agent-harness/agent_cwd/data/kb/产品与交付知识 --repo .
 
 # 4. 对其他知识库重复步骤 3
-node dist/bin/cli.js nbklz3/xxx -o /path/to/agent-harness/data/kb/营销知识库 --repo .
-node dist/bin/cli.js nbklz3/yyy -o /path/to/agent-harness/data/kb/API文档 --repo .
+node dist/bin/cli.js nbklz3/xxx -o /path/to/agent-harness/agent_cwd/data/kb/营销知识库 --repo .
+node dist/bin/cli.js nbklz3/yyy -o /path/to/agent-harness/agent_cwd/data/kb/API文档 --repo .
 ```
 
 **参数说明**：
@@ -250,6 +253,9 @@ curl -X POST "http://localhost:9090/api/interrupt/{session_id}"
 关键环境变量配置（在 `.env` 中）：
 
 ```bash
+# Agent 工作目录
+AGENT_CWD=agent_cwd  # Agent 工作目录（Skills、知识库、租户数据）
+
 # 模型提供商选择
 DEFAULT_MODEL_CONFIG=claude-router  # 或 "glm"
 
@@ -280,8 +286,11 @@ YZJ_VERBOSE=true  # false 为简洁模式
 
 ### 重要路径
 
-- `AGENTS_ROOT` = 项目根目录（Claude SDK 的工作目录，可配置）
-- 本地数据在 `data`（可配置）
+- `AGENTS_ROOT` = 项目根目录
+- `AGENT_CWD` = Agent 工作目录（默认 `agent_cwd/`，通过环境变量 `AGENT_CWD` 配置）
+  - `agent_cwd/.claude/skills/` - Skills 定义
+  - `agent_cwd/data/kb/` - 知识库文件
+  - `agent_cwd/data/tenants/` - 租户数据
 - 日志位于 `log/app.log`（重启时轮转）
 - CLI 日志位于 `log/cli.log`
 - 测试结果位于 `tests/results/`

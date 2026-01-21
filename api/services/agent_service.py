@@ -11,7 +11,7 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from api.models.requests import QueryRequest
 from api.core.streaming import StreamProcessor
 from api.utils import build_initial_prompt, format_sse_message
-from api.constants import AGENTS_ROOT, DATA_DIR
+from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +109,12 @@ class AgentService:
                 ],
                 resume=request.session_id,
                 max_buffer_size=10 * 1024 * 1024,
-                cwd=str(AGENTS_ROOT),
+                cwd=str(AGENT_CWD),
                 add_dirs=[],
             )
 
             logger.info(
-                f"Claude SDK config: cwd={AGENTS_ROOT}, tenant={request.tenant_id}"
+                f"Claude SDK config: cwd={AGENT_CWD}, tenant={request.tenant_id}"
             )
             logger.info("Creating ClaudeSDKClient...")
 

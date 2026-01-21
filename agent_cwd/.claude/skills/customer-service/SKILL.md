@@ -11,7 +11,7 @@ description: 作为发票云客服Agent，负责回答售前咨询（产品能�
 
 **当探索发现"多产品各有实现"时，MUST 执行以下操作：**
 1. **立即停止** - 不得搜索/读取任何产品的详细文档
-2. **使用 AskUserQuestion 工具询问用户使用的产品**
+2. **使用 AskUserQuestion 工具询问用户使用的产品**：根据查询结果设置AskUserQuestion的options
 3. **🛑 调用 AskUserQuestion 后，立即停止执行 🛑**
    - **DO NOT** 调用任何其他工具（Glob、Grep、Read 等）
    - **DO NOT** 继续搜索或准备数据
