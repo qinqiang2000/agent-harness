@@ -192,7 +192,7 @@ class YunzhijiaHandler:
                         f"turns={result_data.get('num_turns')}"
                     )
                 else:
-                    # 直接使用 ResultMessage.result 字段（已转换 kb:// 链接）
+                    # 直接使用 ResultMessage.result 字段
                     if result_data.get("result"):
                         final_result = result_data["result"]
                         reply_with_hint = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"

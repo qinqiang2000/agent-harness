@@ -62,16 +62,11 @@ def _format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
 
     elif tool_name in ("Grep", "WebSearch"):
         pattern = tool_input.get('pattern') or tool_input.get('query', '')
-        # Truncate long patterns
-        if len(pattern) > 60:
-            pattern = pattern[:57] + '...'
         return f'pattern="{pattern}"'
 
     elif tool_name == "Bash":
         cmd = tool_input.get('command', '')
-        # Truncate long commands
-        truncated = cmd[:60] + '...' if len(cmd) > 60 else cmd
-        return f'command="{truncated}"'
+        return f'command="{cmd}"'
 
     elif tool_name in ("Write", "Edit"):
         file_path = tool_input.get('file_path', 'N/A')
@@ -86,14 +81,11 @@ def _format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
         skill = tool_input.get('skill', '')
         args = tool_input.get('args', '')
         if args:
-            args_preview = args[:30] + '...' if len(args) > 30 else args
-            return f'skill="{skill}", args="{args_preview}"'
+            return f'skill="{skill}", args="{args}"'
         return f'skill="{skill}"'
 
-    # Default: show truncated JSON
+    # Default: show full JSON
     json_str = json.dumps(tool_input, ensure_ascii=False)
-    if len(json_str) > 100:
-        json_str = json_str[:97] + '...'
     return json_str
 
 
@@ -113,9 +105,7 @@ class SDKLogger:
 
             if subtype == 'init' and isinstance(data, dict):
                 session_id = data.get('session_id', 'N/A')
-                # Shorten long session IDs
-                session_id_short = session_id[:16] + '...' if len(session_id) > 16 else session_id
-                self.logger.info(f"{prefix} Session initialized - session_id: {session_id_short}")
+                self.logger.info(f"{prefix} Session initialized - session_id: {session_id}")
             else:
                 self.logger.info(f"{prefix} {data}")
         else:
@@ -124,11 +114,10 @@ class SDKLogger:
 
     def log_text_block(self, block):
         """Log TextBlock from AssistantMessage"""
-        text_preview = block.text[:80] + '...' if len(block.text) > 80 else block.text
         # Replace newlines with space for better log readability
-        text_preview = text_preview.replace('\n', ' ')
+        text_display = block.text.replace('\n', ' ')
         prefix = _colorize("[AssistantMessage]", Colors.GREEN)
-        self.logger.info(f'{prefix} Text: "{text_preview}"')
+        self.logger.info(f'{prefix} Text: "{text_display}"')
 
     def log_tool_use(self, block) -> Optional[str]:
         """
@@ -150,9 +139,6 @@ class SDKLogger:
         """Log ResultMessage"""
         prefix = _colorize("[ResultMessage]", Colors.BLUE)
 
-        # Shorten long session IDs
-        session_id_short = msg.session_id[:16] + '...' if len(msg.session_id) > 16 else msg.session_id
-
         # Log completion status
         if msg.is_error:
             status = _colorize("✗ ERROR", Colors.RED)
@@ -160,7 +146,7 @@ class SDKLogger:
             status = _colorize("✓", Colors.GREEN)
 
         self.logger.info(
-            f"{prefix} {status} Session {session_id_short} completed - "
+            f"{prefix} {status} Session {msg.session_id} completed - "
             f"duration={msg.duration_ms}ms, turns={msg.num_turns}, error={msg.is_error}"
         )
 

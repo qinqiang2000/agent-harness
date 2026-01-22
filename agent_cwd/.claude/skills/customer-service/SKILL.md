@@ -142,9 +142,9 @@ description: 作为发票云客服Agent，负责回答售前咨询（产品能�
 
 #### 输出示例
 
-知识库查询结果（必须使用 kb:// 引用）：
+知识库查询结果（使用 kb_link.py 获取链接）：
 ```
-根据 [开收票FAQ](kb://产品与交付知识/11-常见问题/一问一答/开收票FAQ.md) 文档：
+根据 [开收票FAQ](https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g) 文档：
 
 开票误差的允许范围由税局尾差校验规则决定：
 1. 单行金额校验: |单价×数量-金额| ≤ 0.01元
@@ -166,48 +166,36 @@ description: 作为发票云客服Agent，负责回答售前咨询（产品能�
 
 ---
 
-### CRITICAL: 知识库引用强制规范 ⚠️
+### CRITICAL: 知识库引用规范 ⚠️
 
-**当使用 Read 工具读取知识库文件后，在回复中引用该文件时，MUST 执行以下操作：**
+**读取 KB 文件后，必须使用 kb_link.py 获取可点击的链接：**
 
-1. **强制使用 `kb://` 协议引用**
-   - 格式：`[文档标题](kb://相对路径)`
-   - 相对路径：Read 工具读取的路径，去掉 `data/kb/` 前缀
+```bash
+python .claude/skills/customer-service/scripts/kb_link.py "data/kb/产品与交付知识/.../文档.md"
+# 输出: [文档标题](https://actual.url)
+```
 
-2. **引用位置**：在回复开头明确指出信息来源
-   - ✅ 正确：`根据 [开收票FAQ](kb://产品与交付知识/11-常见问题/一问一答/开收票FAQ.md) 文档：...`
-   - ❌ 错误：`根据知识库文档...`（笼统描述）
-   - ❌ 错误：直接使用 `https://` 链接
-
-3. **文档标题获取**：
-   - 从文件头部 YAML frontmatter 的 `title` 字段提取
-   - 如果没有 `title` 字段，使用文件名（去掉 .md 后缀）
+**工作流**：
+1. Read 工具读取 KB 文件
+2. 运行 `kb_link.py`（直接传入 Read 使用的路径）
+3. 将输出的 `[title](url)` 放入回复中
 
 **示例**：
-
-假设读取了文件 `data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md`，该文件头部有：
-```yaml
----
-title: 开收票FAQ
-url: https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g
----
+```
+根据 [开收票FAQ](https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g) 文档：
+...
 ```
 
-回复时必须这样引用：
-```
-根据 [开收票FAQ](kb://产品与交付知识/11-常见问题/一问一答/开收票FAQ.md) 文档：
-
-开票误差的允许范围由税局尾差校验规则决定：
-1. 单行金额校验: |单价×数量-金额| ≤ 0.01元
-2. 单行税额校验: ...
+**批量处理**（多个文件时）：
+```bash
+python .claude/skills/customer-service/scripts/kb_link.py "path1.md" "path2.md"
+# 每行输出一个链接
 ```
 
 **NEVER**：
+- 手动拼接 `kb://` 链接
+- 猜测或编造 URL
 - 使用笼统描述（如"根据知识库文档"、"根据相关资料"）
-- 省略文档引用
-- 使用 `https://` 链接（系统会自动转换 `kb://` 为真实 URL）
-
-**技术原因**：`kb://` 协议会被系统自动转换为真实 URL，提供可点击的文档链接。
 
 ---
 
@@ -219,9 +207,9 @@ url: https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g
 2. 即使路径是相对路径（如 `../../../../assets/xxx.png`），也要完整保留
 3. 图片通常是对说明的重要补充，不要省略
 
-示例：
+示例（使用 kb_link.py 获取链接后）：
 ```
-根据 [数电通用红冲规则](kb://产品与交付知识/发票管理/红冲规则.md) 文档：
+根据 [数电通用红冲规则](https://www.yuque.com/xxx/yyy/zzz) 文档：
 
 数电普票、专票红冲时，均需申请红字确认单...
 

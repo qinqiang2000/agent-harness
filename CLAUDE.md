@@ -93,7 +93,7 @@ Skills 通过查询中的 `Skill` 工具调用。
 
 - **最终输出**：直接输出内容，SDK 自动包装到 `ResultMessage.result` 字段
 - **询问用户**：必须使用 `AskUserQuestion` 工具（禁止直接输出问题）
-- **kb:// 链接**：使用 `kb://相对路径` 引用知识库文档，系统自动转换为实际 URL
+- **知识库链接**：使用 `kb_link.py` 工具将 KB 文件路径转换为可点击的 markdown 链接
 
 
 ## Directory Structure

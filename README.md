@@ -167,7 +167,7 @@ Skills 是从 `agent_cwd/.claude/skills/` 加载的 [Agent Skills](https://platf
   - `agent_cwd/data/kb/产品与交付知识/` - 默认搜索路径，覆盖 80%+ 售后场景
   - `agent_cwd/data/kb/营销知识库/` - 当检测到售前信号（能力、功能、方案等）时搜索
   - `agent_cwd/data/kb/API文档/` - 当检测到 API 信号（接口、参数、集成等）时搜索
-- **引用机制**: Skill 使用 `kb://相对路径` 格式引用文档，系统会自动转换为实际 URL
+- **引用机制**: Skill 使用 `kb_link.py` 工具将 KB 文件路径转换为可点击的 markdown 链接
 
 ### 知识库管理
 
