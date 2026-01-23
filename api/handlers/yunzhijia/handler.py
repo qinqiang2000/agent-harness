@@ -155,6 +155,10 @@ class YunzhijiaHandler:
         has_sent_question = False  # 标记是否已发送 AskUserQuestion
         agent_session_id = request.session_id
 
+        # Resume session 时也要更新 last_active，避免超时误判
+        if agent_session_id:
+            self.session_mapper.update_activity(yzj_session_id, agent_session_id)
+
         async for event in self.agent_service.process_query(request):
             event_type = event.get("event")
 
