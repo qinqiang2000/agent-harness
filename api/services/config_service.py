@@ -27,6 +27,7 @@ class ModelConfig:
     opus_model: Optional[str] = None
     haiku_model: Optional[str] = None
     proxy_env: Optional[str] = None  # Environment variable name for proxy URL
+    auth_env_target: str = "auth_token"  # "auth_token", "api_key", or "both"
     extra_env: Dict[str, str] = field(default_factory=dict)
 
     def get_auth_token(self) -> str:
@@ -100,6 +101,16 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         proxy_env="CLAUDE_PROXY",  # Optional proxy for official API
         extra_env={}
     ),
+    "litellm": ModelConfig(
+        name="litellm",
+        description="LiteLLM Proxy (通过 LiteLLM 代理访问 Claude)",
+        base_url=os.getenv("LITELLM_BASE_URL", "http://129.226.88.226:4000"),
+        auth_token_env="LITELLM_API_KEY",
+        timeout_ms=600000,
+        proxy_env=None,
+        auth_env_target="api_key",  # LiteLLM uses standard API key, not OAuth token
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    ),
 }
 
 # Validate that the default config exists
@@ -127,8 +138,8 @@ class ConfigService:
     ENV_KEY_MAPPING = {
         # Claude SDK基础配置
         "ANTHROPIC_BASE_URL": lambda c: c.base_url,
-        "ANTHROPIC_AUTH_TOKEN": lambda c: c.get_auth_token(),
-        # "ANTHROPIC_API_KEY": lambda c: c.get_auth_token(),
+        "ANTHROPIC_AUTH_TOKEN": lambda c: c.get_auth_token() if c.auth_env_target in ("auth_token", "both") else "",
+        "ANTHROPIC_API_KEY": lambda c: c.get_auth_token() if c.auth_env_target in ("api_key", "both") else "",
         "API_TIMEOUT_MS": lambda c: str(c.timeout_ms),
 
         # 可选模型配置
