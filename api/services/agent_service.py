@@ -93,7 +93,10 @@ class AgentService:
 
             # Configure Claude SDK
             options = ClaudeAgentOptions(
-                model="claude-sonnet-4-5",
+                # model 参数不传（默认 None），由 Claude Code CLI 自动决定模型版本。
+                # SDK 源码（subprocess_cli.py）：仅当 model 非空时才追加 --model 参数。
+                # 好处：CLI 升级后自动使用最新默认模型，无需手动维护版本号。
+                # 如需锁定特定版本，可显式传入，如 model="claude-sonnet-4-6"。
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 setting_sources=["project"],
                 settings=str(self.settings_file),
