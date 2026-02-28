@@ -139,7 +139,6 @@ class YunzhijiaHandler:
     ):
         """处理 Agent 消息流"""
         message_count = 0
-        has_sent_question = False
         agent_session_id = request.session_id
 
         # Resume session 时也要更新 last_active
@@ -157,7 +156,6 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Session mapping: {yzj_session_id} -> {new_session_id}")
 
             elif event_type == "ask_user_question":
-                has_sent_question = True
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
 
@@ -172,35 +170,33 @@ class YunzhijiaHandler:
                     )
                     logger.info(f"[YZJ] Sent question #{message_count}")
 
+                # 中断 SDK 会话，等待用户回复
+                if agent_session_id:
+                    await self.session_service.interrupt(agent_session_id)
+                logger.info(f"[YZJ] Session paused awaiting user reply: {agent_session_id}")
+                break  # 不再处理后续事件
+
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
 
-                if has_sent_question:
-                    logger.info(
-                        f"[YZJ] Skipped result (question sent): "
-                        f"session={result_data.get('session_id')}, "
-                        f"duration={result_data.get('duration_ms')}ms, "
-                        f"turns={result_data.get('num_turns')}"
+                if result_data.get("result"):
+                    final_result = result_data["result"]
+                    reply = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"
+                    await self.message_sender.send_with_images(
+                        yzj_token, operator_openid, reply,
+                        self.service_base_url, self.card_builder,
                     )
+                    message_count += 1
+                    logger.info(f"[YZJ] Sent final result")
                 else:
-                    if result_data.get("result"):
-                        final_result = result_data["result"]
-                        reply_with_hint = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"
-                        await self.message_sender.send_with_images(
-                            yzj_token, operator_openid, reply_with_hint,
-                            self.service_base_url, self.card_builder,
-                        )
-                        message_count += 1
-                        logger.info(f"[YZJ] Sent final result")
-                    else:
-                        logger.error("[YZJ] No result content in ResultMessage")
+                    logger.error("[YZJ] No result content in ResultMessage")
 
-                    logger.info(
-                        f"[YZJ] Completed: session={result_data.get('session_id')}, "
-                        f"duration={result_data.get('duration_ms')}ms, "
-                        f"turns={result_data.get('num_turns')}, "
-                        f"messages={message_count}"
-                    )
+                logger.info(
+                    f"[YZJ] Completed: session={result_data.get('session_id')}, "
+                    f"duration={result_data.get('duration_ms')}ms, "
+                    f"turns={result_data.get('num_turns')}, "
+                    f"messages={message_count}"
+                )
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
