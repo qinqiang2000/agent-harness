@@ -67,6 +67,34 @@ description: 作为发票云客服Agent,负责回答售前咨询(产品能力、
 
 按信号检测结果搜索对应知识库,详见 [DIRECTORY_MAP.md](DIRECTORY_MAP.md)。
 
+### 搜索效率规范 ⚠️
+
+**核心规则: 独立的工具调用必须在同一个 turn 并行发出。**
+
+当多个 Read/Grep 之间没有依赖关系时，在一个 turn 里全部发出，禁止一个一个串行调用。
+
+**示例 — 并行 Grep（一个 turn 同时发出）:**
+- Grep(pattern="物料|品名", path="data/kb/.../11-常见问题/星瀚旗舰版/")
+- Grep(pattern="物料|品名", path="data/kb/.../01-交付赋能/.../星瀚发票云/")
+
+**示例 — 并行 Read（一个 turn 同时发出）:**
+- Read("data/kb/.../开票管理配置FAQ.md")
+- Read("data/kb/.../开票项管理.md")
+- Read("data/kb/.../开票其他信息设置.md")
+
+**搜索策略（按顺序）**:
+1. 先读 DIRECTORY_MAP.md 确定目标目录
+2. 用 Grep 在目标目录下搜索关键词（最多 2 轮 grep，每轮可并行多个关键词）
+3. 用 Read 读取匹配的文件（并行读取多个文件）
+4. **2 轮 grep 后仍未找到 → 必须立即切换到 Agent(Explore, model=haiku)，禁止继续 grep**
+
+**BLOCKING RULE**: 累计 Grep 超过 2 轮后，任何额外的 Grep 调用都是违规。必须改用 Agent(Explore) 并行搜索剩余关键词和目录。
+
+**禁止:**
+- 一个 turn 只调一个 Read 然后等结果再调下一个（这就是串行，违规）
+- 超过 2 轮 Grep 仍继续 Grep，必须改用 Agent(Explore, model=haiku)
+- 重复搜索已搜过的目录
+
 ### 3. 答案校验 ⚠️
 
 **输出前验证文档路径与用户产品一致:**
