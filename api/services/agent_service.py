@@ -97,6 +97,7 @@ class AgentService:
                 # SDK 源码（subprocess_cli.py）：仅当 model 非空时才追加 --model 参数。
                 # 好处：CLI 升级后自动使用最新默认模型，无需手动维护版本号。
                 # 如需锁定特定版本，可显式传入，如 model="claude-sonnet-4-6"。
+                max_turns=30,  # 防止 agent 陷入无限搜索循环
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 setting_sources=["project"],
                 settings=str(self.settings_file),

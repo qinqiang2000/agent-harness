@@ -99,6 +99,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         auth_token_env="",  # 不设置，使用 SDK 内置认证（需先 claude login）
         timeout_ms=600000,
         proxy_env="CLAUDE_PROXY",  # Optional proxy for official API
+        small_fast_model=os.getenv("ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001"),  # 子 agent（Explore 等）用 Haiku
         extra_env={}
     ),
     "litellm": ModelConfig(
