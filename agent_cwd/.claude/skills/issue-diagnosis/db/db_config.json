@@ -1,0 +1,28 @@
+{
+  "datasources": [
+    {
+      "name": "prod-main",
+      "type": "mysql",
+      "host": "jump-test.piaozone.com",
+      "port": 23306,
+      "database": "cms",
+      "user": "rw_user",
+      "password": "EnkmcQHBEvUL1WKP",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-pg",
+      "type": "postgresql",
+      "host": "152.136.109.53",
+      "port": 5432,
+      "database": "analytics",
+      "user": "readonly",
+      "password": "xxx",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    }
+  ]
+}
