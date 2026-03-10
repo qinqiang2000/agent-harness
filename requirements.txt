@@ -18,6 +18,10 @@ psycopg2-binary>=2.9.11    # PostgreSQL sync driver (fallback)
 tqdm
 tabulate>=0.9.0            # Data formatting for operational-analytics
 
+# KDUBL XML validator dependencies
+lxml>=5.0.0               # XML parsing, XSD and XSLT 1.0 validation
+saxonche>=12.0.0          # Saxon-HE Python: XSLT 2.0/3.0 support (optional)
+
 # CLI tool dependencies
 prompt-toolkit>=3.0.43    # Interactive REPL
 rich>=13.7.0              # Terminal formatting
