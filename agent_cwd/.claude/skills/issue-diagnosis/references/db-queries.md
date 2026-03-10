@@ -9,7 +9,7 @@
 | 表名 | 含义 | 关键字段 |
 |------|------|---------|
 | `t_ou_tenant` | 租户表 | `fclient_id`（clientId）、`fou_no`（租户编号）、`fstatus`（1启用/2停用/3删除） |
-| `t_ou_company` | 企业表 | `ftax_no`（税号）、`fclient_id`、`fopen_invoice_type`（开票类型）、`fcity_name`、`fstatus` |
+| `t_ou_company` | 企业表 | `ftax_no`（税号）、`fclient_id`（企业clientid，非租户cleintid）、`fopen_invoice_type`（开票类型）、`fcity_name`、`fstatus` |
 | `t_tax_user` | 开票账户表 | `flogin_account_uid`（办税人账号）、`fcompany_ou_no`（企业编号）、`fdefault_flag`、`fselected` |
 
 ---
@@ -26,12 +26,10 @@ SELECT fid, fclient_id, fou_no, fstatus
 FROM t_ou_tenant
 WHERE fclient_id = '<clientId>';
 
--- 2. 查企业是否存在（确认税号与 clientId 匹配）
+-- 2. 查企业是否存在（确认税号与 租户 匹配）
 SELECT fid, ftax_no, fclient_id, fou_no, fopen_invoice_type, fstatus
-FROM t_ou_company c
-left join t_ou_tenant t
-WHERE t.fclient_id = '<clientId>'
-  AND c.ftax_no = '<税号>';
+FROM t_ou_company 
+WHERE ftenant_ou_no = '<租户 fou_no>' AND ftax_no = '<税号>';
 
 -- 3. 查开票账户是否配置（确认登录账号存在）
 SELECT fid, fcompany_ou_no, flogin_account_uid, fdefault_flag, fselected, fetax_account_type

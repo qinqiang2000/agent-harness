@@ -1,0 +1,23 @@
+{
+  "skill_name": "issue-diagnosis",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "测试环境，traceId：9c8a669ac4dd156b，提示未配置全电开票账号，帮我定位下具体原因",
+      "expected_output": "通过 traceId 查询 ELK 日志，分析日志内容，输出根因分析和解决建议",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用户反馈登录报错"未查询到您与该企业的关联关系信息，请确认录入的信息是否正确"，这是什么问题怎么处理？",
+      "expected_output": "命中鉴权登录 FAQ，输出对应解决方案",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "测试环境 收到报错：`com.kingdee.fpy.sso.client.KingdeeSsoClientImpl-124 - [获取应用Token] 请求异常，domain=tongwei, 耗时: 3.01s`，traceId: `7d1ac9b12bb7a8c3`，帮我定位根因",
+      "expected_output": "FAQ 未命中，通过 traceId 查询日志，尝试 GitLab 源码定位，输出根因分析",
+      "files": []
+    }
+  ]
+}
