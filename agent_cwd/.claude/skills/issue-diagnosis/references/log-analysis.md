@@ -71,5 +71,7 @@
 | 参数校验 / 不合法 | 参数名、实际值、期望格式 | 字段值含空格导致校验失败 |
 | NullPointerException | 堆栈、出错类和方法 | Service.process()中对象为null |
 | 连接失败 | 连接目标、地址、错误详情 | 连接Redis失败，地址127.0.0.1:6379 |
+| 缓存 key 不匹配 | 带下标 key、不带下标 key、tableIndex | checkData:261420000001211879265 vs checkData:26142000000121187926 |
+| 状态不一致 | 缓存状态、DB状态、税局状态、时间差 | 缓存返回正常，税局已红冲，时间差9分钟 |
 
 成功场景：`possibleCause` 填"操作正常完成"，`suggestedSolution` 填"无需处理"
