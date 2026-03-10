@@ -50,7 +50,7 @@ class YunzhijiaHandler:
         session_timeout = config.get("session_timeout", 3600)
         card_template_id = config.get("card_template_id", "")
         max_img_per_card = config.get("max_img_per_card", 3)
-        self.service_base_url = os.getenv("SERVICE_BASE_URL") or config.get("service_base_url", "http://localhost:9090")
+        self.service_base_url = os.getenv("SERVICE_BASE_URL") or config.get("service_base_url", "http://localhost:9123")
         self.verbose = config.get("verbose", False)
 
         # Initialize sub-components

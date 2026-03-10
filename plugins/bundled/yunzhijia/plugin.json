@@ -30,7 +30,7 @@
       },
       "service_base_url": {
         "type": "string",
-        "default": "http://localhost:9090",
+        "default": "http://localhost:9123",
         "description": "服务基础 URL（用于图片链接转换）"
       },
       "verbose": {
