@@ -18,6 +18,12 @@
       "prompt": "测试环境 收到报错：`com.kingdee.fpy.sso.client.KingdeeSsoClientImpl-124 - [获取应用Token] 请求异常，domain=tongwei, 耗时: 3.01s`，traceId: `7d1ac9b12bb7a8c3`，帮我定位根因",
       "expected_output": "FAQ 未命中，通过 traceId 查询日志，尝试 GitLab 源码定位，输出根因分析",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "老师，客户反馈这个混贴的发票图片上传一直报错"识别异常"\n我在演示环境复现也是一样的报错，演示环境日志trace id：96dd0432359f6717",
+      "expected_output": "通过 traceId 查询演示环境日志，定位到睿琪 OCR 服务超时（私有云超时后降级公有云也超时，Hystrix 熔断），输出根因分析（非系统 bug，OCR 服务不可用）和解决建议（检查睿琪服务状态、调整超时配置）",
+      "files": []
     }
   ]
 }

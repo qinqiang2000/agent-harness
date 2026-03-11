@@ -2,6 +2,8 @@
   "datasources": [
     {
       "name": "prod-main",
+      "env": "prod",
+      "domain": "开票/鉴权",
       "type": "mysql",
       "host": "jump-test.piaozone.com",
       "port": 23306,
@@ -13,7 +15,51 @@
       "timeout": 30
     },
     {
+      "name": "test-main",
+      "env": "test",
+      "domain": "开票/鉴权",
+      "type": "mysql",
+      "host": "TODO",
+      "port": 23306,
+      "database": "cms",
+      "user": "TODO",
+      "password": "TODO",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "prod-ops",
+      "env": "prod",
+      "domain": "运营/订单",
+      "type": "mysql",
+      "host": "TODO",
+      "port": 3306,
+      "database": "eop",
+      "user": "TODO",
+      "password": "TODO",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-ops",
+      "env": "test",
+      "domain": "运营/订单",
+      "type": "mysql",
+      "host": "TODO",
+      "port": 3306,
+      "database": "eop",
+      "user": "TODO",
+      "password": "TODO",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
       "name": "test-pg",
+      "env": "test",
+      "domain": "分析",
       "type": "postgresql",
       "host": "152.136.109.53",
       "port": 5432,

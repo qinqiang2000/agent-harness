@@ -171,3 +171,15 @@ https://jdpiaozone.yuque.com/nbklz3/dn5ehb/oghbn3vph14nz4ss?singleDoc#
 ## Q26: 查登录成功次数的关键字
 
 `税号 AND "第三方" AND "/newEra/issueLogin" AND "成功"`
+
+---
+
+## Q27: 企业配置信息出现错误
+
+检查使用的租户的 clientId 是否正常：若 clientId 以 `TN_` 开头，代表的是租户；否则是企业的 clientId，两者不可混用。
+
+**数据库验证**（`domain=开票/鉴权`，cms 库）：
+1. 查 `t_ou_tenant`：确认 clientId 是否存在及类型
+2. 查 `t_ou_company`：确认税号是否与该租户/企业匹配
+
+---

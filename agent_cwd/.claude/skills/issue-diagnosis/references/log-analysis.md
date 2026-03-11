@@ -49,6 +49,13 @@
 
 **needKnowledgeQuery**：成功场景（summary 含"成功"且无异常）→ `false`，其余 → `true`
 
+**contextInsufficient**：满足以下任一条件时标记为 `true`，否则 `false`：
+- `callChain` 为空
+- `callChain` 只有 1 条且不含 ERROR 级别
+- `summary` 少于 20 字且无错误码/异常类名
+
+`contextInsufficient == true` 时，`suggestedSolution` 末尾追加："⚠️ 日志上下文有限，建议提供 traceId 以获取完整调用链。"
+
 ---
 
 ## 第二步：按问题类型分组

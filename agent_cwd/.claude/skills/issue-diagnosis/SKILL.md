@@ -60,26 +60,42 @@ description: >-
 
 **构建查询参数**：
 - 有 traceId → 仅用 traceId
-- 无 traceId → 用 keywords 构建 searchWordList，追加 `"AI_KEYWORD ISSUE"`
+- 无 traceId → 用 keywords 构建 searchWordList
+- 时间范围：优先使用用户提供的 `timeRange`；未提供时默认查最近 7 天，若查不到结果则自动扩展到最近 30 天再查一次
 
 调用 `mcp__elastic__searchTraceOrKeyWordsLog`，从返回结果提取 `fields.project`（供 Step 2b 使用）。
 
-**日志查不到**：用原始问题重新检索 FAQ，输出结论后终止。
+**关键词查询后的扩展策略**（仅适用于无 traceId 的关键词查询）：
+- 返回结果恰好只有 1 条，且该条日志有 traceId → 自动用该 traceId 再查一次，将两次结果合并后再分析
+- 返回结果只有 1 条，且无 traceId → 继续分析，在输出结论中注明"日志上下文有限，建议提供 traceId 以获取完整调用链"
+- 返回结果 ≥ 2 条 → 直接分析，无需扩展查询
+
+**日志查不到**：
+1. 尝试截取核心词（去掉修饰词、保留异常类名/错误码/核心业务词）重新构建 searchWordList，再查一次
+2. 仍查不到 → 用原始问题重新检索 FAQ，输出结论后终止
+
 **日志连接异常**：重试一次。
 
 ---
 
 ## Step 2a：数据库辅助查询（条件触发）
 
-**触发条件**（满足任一）：
-- FAQ 建议"查询数据库确认配置"
-- FAQ 条目中标注「数据库验证」→ 命中后自动触发
-- 需确认用户数据、权益配置、租户信息
-- FAQ 未命中，但日志中出现 clientId 无效、租户不存在、权益到期、账号未配置等信号
+**触发条件**（必须同时满足）：
+- FAQ 条目中明确标注「数据库验证」标签
+
+**不触发的情况**：
+- FAQ 未命中
+- FAQ 命中但无「数据库验证」标签
+- 仅凭日志信号（如 clientId 无效、租户不存在）自行推断 → 跳过，不猜测表名
+
+**数据源选择规则**（参照 `db/db_config.json` 中各数据源的 `env` 和 `domain` 字段）：
+- 用户指明"测试环境" → 选 `env=test`；未指明或指明"生产环境" → 选 `env=prod`
+- 开票/鉴权相关问题 → 选 `domain=开票/鉴权`（cms 库）
+- 运营/订单相关问题 → 选 `domain=运营/订单`（eop 库）
 
 **执行步骤**：
 1. 读取 FAQ 中「数据库验证」标注的数据源和表，从 [references/db-queries.md](references/db-queries.md) 获取对应 SQL 模板
-2. 按模板依次执行查询：
+2. 按数据源选择规则确定实际数据源，按模板依次执行查询：
    ```bash
    python3 .claude/skills/issue-diagnosis/db/db_query.py --source <数据源> --sql "SELECT ..."
    ```
@@ -87,7 +103,7 @@ description: >-
    - 不确定字段名时先执行 `--describe <table>` 确认
 3. 将查询结果纳入最终诊断报告
 
-**注意**：无法确定表名/字段时，跳过此步骤，勿猜测。
+**注意**：无法从 FAQ 找到对应 SQL 模板时，跳过此步骤，不猜测表名/字段。
 
 ---
 
@@ -108,11 +124,14 @@ description: >-
 
 ## Step 3：综合输出
 
-**情况 A：FAQ 命中 + 日志验证**
+**重要**：最终回复中不暴露 Step 0/1/2 的执行过程，只输出结论。格式由"是否命中 FAQ"决定，与是否有 traceId 无关。
+
+**情况 A：FAQ 命中**（无论是否有 traceId）
 
 【FAQ 已知方案】
 {faq_result}
 
+（若有日志验证结果，追加：）
 【日志验证】
 TraceId: {traceId}，时间: {timestamp}
 结论: {与FAQ吻合 / 发现新信息}
