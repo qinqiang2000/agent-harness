@@ -9,7 +9,7 @@
     },
     {
       "id": 2,
-      "prompt": "用户反馈登录报错"未查询到您与该企业的关联关系信息，请确认录入的信息是否正确"，这是什么问题怎么处理？",
+      "prompt": "用户反馈登录报错\"未查询到您与该企业的关联关系信息，请确认录入的信息是否正确\"，这是什么问题怎么处理？",
       "expected_output": "命中鉴权登录 FAQ，输出对应解决方案",
       "files": []
     },
@@ -21,9 +21,137 @@
     },
     {
       "id": 4,
-      "prompt": "老师，客户反馈这个混贴的发票图片上传一直报错"识别异常"\n我在演示环境复现也是一样的报错，演示环境日志trace id：96dd0432359f6717",
+      "prompt": "老师，客户反馈这个混贴的发票图片上传一直报错\"识别异常\"\n我在演示环境复现也是一样的报错，演示环境日志trace id：96dd0432359f6717",
       "expected_output": "通过 traceId 查询演示环境日志，定位到睿琪 OCR 服务超时（私有云超时后降级公有云也超时，Hystrix 熔断），输出根因分析（非系统 bug，OCR 服务不可用）和解决建议（检查睿琪服务状态、调整超时配置）",
       "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "traceid:a23f8ff437c6e675,报错上报服务调用异常，看下什么原因",
+      "expected_output": "通过 traceId 查询日志，发现 NullPointerException 异常堆栈（callChain 不为空），自动触发 GitLab 源码定位，直接用类名构造文件路径拉取源码（不逐层浏览目录树），结合源码给出带 [源码] 前缀的根因分析，不等待用户追问即输出完整诊断报告",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树（没有调用 get_repository_tree）"
+        },
+        {
+          "id": "proactive-conclusion",
+          "text": "无论源码是否找到，都主动输出了完整的诊断结论，没有等待用户追问"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "若源码找到，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "traceid:4a513716b56f5058你看看是什么原因",
+      "expected_output": "通过 traceId 查询日志，定位到 V4 接口参数校验失败（serialNo 不能为空），输出根因分析和解决建议。若日志中存在加密参数，主动用 AskUserQuestion 询问用户是否需要解密以进一步验证，而不是自行猜测加密方式反复尝试。最终回复不出现 Step 0/1/2 等执行过程标题。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "no-step-headers",
+          "text": "最终回复中不出现 'Step 0'、'Step 1'、'Step 2' 等执行过程标题"
+        },
+        {
+          "id": "faq-not-skipped",
+          "text": "即使只有 traceId 没有关键词，也执行了 FAQ 检索，没有跳过"
+        },
+        {
+          "id": "decrypt-ask-user",
+          "text": "若日志中存在加密参数，使用 AskUserQuestion 询问用户是否需要解密及提供密钥，而不是自行猜测加密方式"
+        },
+        {
+          "id": "no-brute-force-decrypt",
+          "text": "没有自行尝试多种 IV、密钥变体、加密模式来暴力破解"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "老师，客户上传数电铁路电子客票，上传以后是正常查验识别到税率的，但是推送给eas的时候没有税率，这个是什么原因啊，traceid：c302b1e388d8a966",
+      "expected_output": "通过 traceId 查询日志，发现查验阶段 taxRate=0.09 正常，但推送 EAS 时 taxRate 被置为 0。由于根因指向代码逻辑（字段映射/数据转换），自动触发 GitLab 源码定位，找到具体赋值代码，输出带 [源码] 前缀的根因分析。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "trigger-source-lookup-on-field-anomaly",
+          "text": "日志中发现字段值异常（taxRate 处理前后不一致），自动触发了 GitLab 源码定位，没有跳过"
+        },
+        {
+          "id": "actual-clone-and-grep",
+          "text": "实际执行了 GitLab clone 或 Grep 操作，而不是仅凭日志推断就输出 [源码] 前缀结论"
+        },
+        {
+          "id": "source-prefix-only-if-found",
+          "text": "若成功找到源码则用 [源码] 前缀；若 clone 失败或未找到目标类，则用 [推断] 前缀并注明未能获取源码"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "测试环境traceid:a43507de22a60a07,邮箱发送一次，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现阿里 MNS 队列不存在（QueueNotExist），异常处理逻辑缺陷导致 NullPointerException。自动 clone api-invoice-create 仓库，定位 AliMailResponseTask.java，输出带 [源码] 前缀的根因分析（队列不存在 + catch 块中 popMsg 可能为 null）和解决建议（检查测试环境队列配置）。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "测试环境，traceid：80534a3c3173348d，报错，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现 FastJSON 解析异常（syntax error, pos 446），原因是前端发送了 Python 字典格式数据（单引号、True/None 等非标准 JSON）。自动 clone bill-wechat-mini-program 仓库，定位 FpwyzsController.java 第 538 行，输出带 [源码] 前缀的根因分析和解决建议（前端改用标准 JSON 格式）。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "测试环境，traceid：3550d9440c4b3658，报错，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现 NullPointerException，原因是 PdfUtil.getXbrl() 返回 null 后 build() 方法未做 null 检查。自动 clone api-invoice-recognition 仓库，定位 XbrlUtilsController.java，输出带 [源码] 前缀的根因分析（PDF 解析返回 null + 缺少 null 检查）和代码修复建议。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
     }
   ]
 }

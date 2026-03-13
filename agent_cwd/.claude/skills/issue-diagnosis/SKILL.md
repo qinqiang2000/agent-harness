@@ -21,6 +21,11 @@ description: >-
 - `service`：用户提及的服务名（可选）
 - `timeRange`：时间范围（可选，如"今天上午"、"2025-03-05 10:00"）
 - `env`: 环境信息，例如生产，测试，演示。用户没指明环境则默认为生产环境
+- `erpSystem`：ERP 系统类型，从以下关键词识别：
+  - `星瀚` / `星空旗舰版` / `天梯` / `monitor` → `xinghan`
+  - `星空企业版` / `EAS` / `金税连接` → `eas`
+  - `发票云公有云` / 未提及 ERP 系统 → `public`
+
 输入为空（无 traceId 也无关键词）→ 回复"请提供报错信息、traceId 或错误关键词"，终止流程。
 
 ---
@@ -59,9 +64,25 @@ description: >-
 参照 [references/log-analysis.md](references/log-analysis.md) 执行查询与分析。
 
 **构建查询参数**：
-- 有 traceId → 仅用 traceId
-- 无 traceId → 用 keywords 构建 searchWordList
+- 有 traceId → 仅用 traceId，直接执行查询
+- 无 traceId → 先执行**关键字引导**流程（见下方），再构建 searchWordList
 - 时间范围：优先使用用户提供的 `timeRange`；未提供时默认查最近 7 天，若查不到结果则自动扩展到最近 30 天再查一次
+
+**无 traceId 时的关键字引导流程**：
+
+1. 读取 [references/elk-search-guide.md](references/elk-search-guide.md)，根据 `erpSystem` 选择对应分类（A/B/C），再根据问题场景匹配最合适的模板
+2. 检查模板所需的"必需信息"是否已从用户输入中获取：
+   - **已知** → 将信息填入模板关键字，构建 searchWordList 执行查询
+   - **缺失** → 用 `AskUserQuestion` 反问用户，例如：
+     - "请提供税号，以便查询短信验证码记录"
+     - "请提供 bxd_key，以便查询报销单附件入库记录"
+     - "请提供发票号码或流水号，以便定位开票请求"
+   - 收到用户回答后，将信息填入模板，再执行查询
+3. **B/C 类系统（`xinghan`/`eas`）且无 traceId**：优先引导用户去 ERP 系统获取 traceId：
+   - `xinghan`：进入 ERP → 相关模块日志 → 找到对应记录 → 复制 traceId
+   - `eas`：财务会计 → 发票管理 → 金税连接设置 → 请求日志 → 筛选"请求返回" → 复制 traceId
+   - 若用户无法获取 traceId，则退回步骤 1 用关键字模板查询
+4. 无法匹配任何场景模板 → 直接用 `keywords` 构建 searchWordList
 
 调用 `mcp__elastic__searchTraceOrKeyWordsLog`，从返回结果提取 `fields.project`（供 Step 2b 使用）。
 
@@ -109,22 +130,30 @@ description: >-
 
 ## Step 2b：GitLab 源码定位（条件触发）
 
-**触发条件**（同时满足）：
-1. 日志分析结果中存在任意一组 `needKnowledgeQuery == true`（该字段由 log-analysis.md 的分析流程生成，表示该问题组需要进一步定位）
-2. 该组至少一条日志的 `callChain` 不为空
+**触发条件**（满足任意一条即触发）：
+1. 日志中存在异常堆栈（callChain 不为空），无论 FAQ 是否命中
+2. 日志分析结果中存在任意一组 `needKnowledgeQuery == true`
+3. 日志中发现**字段值异常**：某字段在处理前后值不一致、被置为默认值/0/null，且根因指向某个具体服务类或方法（如 `XxxService-156`）
 
-**callChain 为空时直接跳过此步骤**，不尝试 GitLab 查询，直接进入 Step 3 输出结论。
+**可跳过的情况**（必须同时满足）：根因是配置问题、外部服务不可用、请求参数缺失等**不涉及代码逻辑**的原因，且日志中没有指向具体类/方法。
+若根因指向代码逻辑（字段映射、数据转换、赋值逻辑），**必须触发源码定位，不得跳过**。
 
 参照 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的定位策略，完成：
-1. 从 callChain 识别**报错类**（最后一条 ERROR）、**调用者类**（其前一步）
-2. 用 `fields.project` 动态查找 GitLab 仓库（最多 3 个类并行拉取）
-3. 结合源码还原调用链，补充 `possibleCause`（加 `[源码]` 前缀）
+1. 从 callChain 或日志中的类名识别**目标类**（报错类、字段赋值类等）
+2. 查映射表获取 `project_id`，未命中时用 `mcp__gitlab__search_repositories` 搜索（`namespace/repo-name` 格式，不能直接用服务名）
+3. 本地已有仓库则 `git pull`，否则完整 clone 到 `/tmp/gitlab/src/{repo-name}`，用 Grep/Read 本地检索目标类
+4. **严禁**使用 GitLab API 逐文件拉取；**严禁**在未实际执行 clone+Grep 的情况下直接凭日志推断源码结论
+5. clone 失败或找不到目标类 → 凭日志给出结论，使用 `[推断]` 前缀，注明"未能获取源码，以下为日志推断"
+6. 成功找到源码 → 结合源码还原调用链，补充 `possibleCause`，使用 `[源码]` 前缀
+7. **`[源码]` 前缀只能在真正读取到对应代码后使用**，凭日志推断一律用 `[推断]` 前缀
 
 ---
 
 ## Step 3：综合输出
 
-**重要**：最终回复中不暴露 Step 0/1/2 的执行过程，只输出结论。格式由"是否命中 FAQ"决定，与是否有 traceId 无关。
+**重要**：
+- 最终回复中不暴露 Step 0/1/2 的执行过程（不出现"Step 0"、"Step 1"等标题），只输出结论。格式由"是否命中 FAQ"决定，与是否有 traceId 无关。
+- **解密辅助**：若日志中存在加密参数且解密有助于验证根因（如确认请求参数是否缺失某字段），可用 `AskUserQuestion` 询问用户："是否需要解密该参数以进一步验证？如需要，请提供加密算法（如 AES-128-ECB，默认也是这个AES-128-ECB）和加密密钥。"收到用户确认和密钥后，用 Bash 执行解密并将结果纳入诊断报告。
 
 **情况 A：FAQ 命中**（无论是否有 traceId）
 
