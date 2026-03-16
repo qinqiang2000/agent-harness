@@ -5,73 +5,40 @@
 - **有 traceId** → 仅传 traceId，不传 searchWordList（精确定位）
 - **无 traceId** → 仅用 searchWordList 关键词查询
 
-## 返回格式（标准 JSON）
+## 工具返回格式
 
-```json
-{
-  "success": true,
-  "groups": [
-    {
-      "groupName": "问题类型（10字内）",
-      "possibleCause": "基于原始日志的具体原因（40-80字，含参数值/错误码/堆栈）",
-      "suggestedSolution": "具体可操作步骤（40-80字）",
-      "needKnowledgeQuery": true,
-      "logs": [
-        {
-          "traceId": "xxx",
-          "timestamp": "2025-03-05 10:30:45",
-          "summary": "[ERROR] 问题简洁描述（50-150字）",
-          "duration": "500毫秒",
-          "service": "fields.project 的值",
-          "callChain": [
-            { "ts": "10:30:45.123", "level": "ERROR", "class": "com.xxx.ClassName", "snippet": "日志核心内容（30字内）" }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
+`mcp__elastic__searchTraceOrKeyWordsLog` 返回原始日志列表，每条包含：
+- `message`：日志内容
+- `time`：时间
+- `id`（即 traceId）
+- `fields.project`（即 project/服务名）
+- `level`：日志级别（ERROR/WARN/INFO 等）
+按时间生序排序
+查不到日志时返回空列表。
 
-查不到日志返回：`{"success": false, "groups": []}`
+**禁止**将日志写入文件后再用脚本解析，必须直接在 tool result 中读取字段。
+**禁止**使用脚本解析返回的json匹配关键字
 
 ---
 
-## 第一步：按 traceId 合并
+## 日志读取规则（日志内容过大时执行）
 
-- 同一 traceId 的多条日志合并为一条，取最早 timestamp
-- `duration`：最早到最晚时间差（<1s 显示毫秒，<60s 显示秒，≥60s 显示分钟）
-- `service`：取该 traceId 任意一条日志的 `fields.project`
-- `callChain`：所有日志按时间排序，逐条映射（`class` 用正则 `(com\.[a-zA-Z0-9_.]+)` 提取，去掉 `-数字` 后缀）
-- ERROR 级别信息优先反映在 summary 中
+工具返回的日志按时间升序排列，报错通常集中在末尾。**正常情况下直接全读**；仅当 tool result 内容过大无法直接分析时，按以下步骤处理：
 
-**summary 规则**：格式 `[级别] 问题描述`，保留关键业务参数（ID、错误码等），忽略冗长请求体，50-150字
-
-**needKnowledgeQuery**：成功场景（summary 含"成功"且无异常）→ `false`，其余 → `true`
-
-**contextInsufficient**：满足以下任一条件时标记为 `true`，否则 `false`：
-- `callChain` 为空
-- `callChain` 只有 1 条且不含 ERROR 级别
-- `summary` 少于 20 字且无错误码/异常类名
-
-`contextInsufficient == true` 时，`suggestedSolution` 末尾追加："⚠️ 日志上下文有限，建议提供 traceId 以获取完整调用链。"
+1. 取**最后 50 条**日志，用下方 ##深度分析 的关键词表按关键字提取（timeout/超时、500、NullPointerException 等）做 Grep 过滤
+2. **Grep 有匹配且足够定位** → 分析匹配结果
+3. **Grep 无匹配，或有匹配但上下文不足** → 直接读这 50 条原始日志（包含报错前后完整序列）
+4. **50 条仍看不出问题** → 扩展到全量日志再 Grep 一次，仍无结果则在结论中注明"日志信息不足，建议联系研发排查"
 
 ---
 
-## 第二步：按问题类型分组
+## 深度分析（直接基于原始日志）
 
-分组优先级：**错误码 > 异常类型 > 业务场景 > 错误特征**
-
-相同/相似的错误归为一组，成功记录单独一组。
-
----
-
-## 第三步：深度分析（必须回到原始日志）
-
-**不能仅依赖 summary**，必须从完整日志中提取细节。
+从返回的日志列表中，按 `time` 排序，优先关注 `level=ERROR` 条目，其次 `level=WARN`，逐条读取 `message`、`level`、`fields.project`，提取关键信息：
 
 | 关键词 | 需提取 | 示例 |
 |---|---|---|
+| 税局登陆超时| 超时，短信，登陆，失败 | 获取短信验证码失败 |
 | timeout / 超时 | 实际耗时、超时阈值、接口名 | 调用XX接口耗时5.2s，超过3s阈值 |
 | 500 / Internal Error | HTTP 状态码、响应内容 | 接口返回500，响应：'数据库连接失败' |
 | 401/403 / 鉴权失败 | clientId、token、错误消息 | clientId为空，实际值：'null' |
@@ -81,4 +48,6 @@
 | 缓存 key 不匹配 | 带下标 key、不带下标 key、tableIndex | checkData:261420000001211879265 vs checkData:26142000000121187926 |
 | 状态不一致 | 缓存状态、DB状态、税局状态、时间差 | 缓存返回正常，税局已红冲，时间差9分钟 |
 
-成功场景：`possibleCause` 填"操作正常完成"，`suggestedSolution` 填"无需处理"
+成功场景（日志无异常、含"成功"等字样）：直接说明操作正常完成，无需处理。
+
+多条日志存在不同问题时，在分析结论中自然描述各个问题，无需强制分组。

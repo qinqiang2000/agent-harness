@@ -8,6 +8,7 @@
 
 | 问题场景 | 必需信息（缺失时反问） | ELK 关键字模板 |
 |---|---|---|
+| 电子税局登陆 | 税号 | `"/newEra/issueLogin" AND "税号"` |
 | 查询开票结果（已知流水号） | 流水号 | `"流水号" AND "查询发票"` |
 | 查询开票请求参数（未知流水号） | 税号 | `"税号" AND "账号" AND "第三方" AND "/fpdk/etax/bill/invoice/create"` |
 | 查询开票请求参数（已知发票号码） | 发票号码 | 先查：`"发票号码" AND "serialNo"`，再查：`"流水号" AND "第三方" AND "/fpdk/etax/bill/invoice/create"` |

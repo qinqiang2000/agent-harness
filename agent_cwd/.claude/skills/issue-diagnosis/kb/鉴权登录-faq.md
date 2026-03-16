@@ -183,3 +183,9 @@ https://jdpiaozone.yuque.com/nbklz3/dn5ehb/oghbn3vph14nz4ss?singleDoc#
 2. 查 `t_ou_company`：确认税号是否与该租户/企业匹配
 
 ---
+
+## Q28: 登录电子税局提示网络超时，请检查网络企业配置信息出现错误
+
+查询日志，关键字`"/newEra/issueLogin" AND "税号"`，找到超时日志的traceid，然后在根据traceid搜索日志，检查日志里是否有"获取到的税号归属来源：2"的记录，如果有则代表该税号配置的app自动登录，该配置不对，需要联系开发人员修改配置，然后再让用户重新登录
+
+---
