@@ -36,7 +36,7 @@ if [ -d "$LOCAL_DIR/.git" ]; then
   git -C "$LOCAL_DIR" pull
 # 本地没有 → 完整 clone
 else
-  git clone "https://git.kingdee.com/{namespace/repo-name}.git" "$LOCAL_DIR"
+  git clone "https://test-master.piaozone.com/git/{namespace/repo-name}.git" "$LOCAL_DIR"
 fi
 ```
 
