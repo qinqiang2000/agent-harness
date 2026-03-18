@@ -134,6 +134,50 @@
       ]
     },
     {
+      "id": 12,
+      "prompt": "老师，客户登录电子税局提示发送请求失败，税局不稳定了吗？91360405MA396LG53J、19179263543",
+      "expected_output": "查询日志后发现新时代网关超时（code:999），输出根因分析。最终回复中不暴露供应商订单号、完整手机号、供应商接口完整URL等敏感信息，手机号需脱敏处理。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "no-vendor-order-id",
+          "text": "回复中没有出现航信/新时代等供应商的订单号（如 4DK52LW2D 这类字符串）"
+        },
+        {
+          "id": "phone-masked",
+          "text": "回复中若提及手机号，已脱敏处理（如 138****5678），没有出现完整11位手机号"
+        },
+        {
+          "id": "no-vendor-secret",
+          "text": "回复中没有出现 clientSecret、appSecret、token 等凭证字段的具体值"
+        },
+        {
+          "id": "diagnosis-correct",
+          "text": "正确识别根因为新时代网关与税局通信超时，给出重试或检查税局状态的建议"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "邮箱收票没有取到行程单",
+      "expected_output": "查询日志后发现行程单数据已正常入库（后端处理正常），但用户描述取不到行程单。skill 应识别出后端正常与用户描述矛盾，使用 AskUserQuestion 反问用户（如在哪个页面查看、筛选条件是否正确等），而不是直接输出多条推测性原因。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "ask-user-when-backend-normal",
+          "text": "后端日志显示数据正常入库时，使用了 AskUserQuestion 反问用户，而不是直接输出推测性结论"
+        },
+        {
+          "id": "no-speculative-causes",
+          "text": "没有直接列出多条'可能原因'作为最终结论（在收到用户补充信息之前）"
+        },
+        {
+          "id": "mention-backend-normal",
+          "text": "反问前告知用户后端数据正常这一关键发现"
+        }
+      ]
+    },
+    {
       "id": 10,
       "prompt": "测试环境，traceid：3550d9440c4b3658，报错，看下什么原因",
       "expected_output": "通过 traceId 查询测试环境日志，发现 NullPointerException，原因是 PdfUtil.getXbrl() 返回 null 后 build() 方法未做 null 检查。自动 clone api-invoice-recognition 仓库，定位 XbrlUtilsController.java，输出带 [源码] 前缀的根因分析（PDF 解析返回 null + 缺少 null 检查）和代码修复建议。",
