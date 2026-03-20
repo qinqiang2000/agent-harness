@@ -111,7 +111,7 @@ class AgentService:
                 # 好处：CLI 升级后自动使用最新默认模型，无需手动维护版本号。
                 # 如需锁定特定版本，可显式传入，如 model="claude-sonnet-4-6"。
                 model="claude-haiku-4-5-20251001",
-                max_turns=30,  # 防止 agent 陷入无限搜索循环
+                max_turns=20,  # 防止 agent 陷入无限搜索循环
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 mcp_servers=self.mcp_servers,
                 setting_sources=["project"],
