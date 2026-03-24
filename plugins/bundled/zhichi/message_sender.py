@@ -1,6 +1,7 @@
 """智齿回调消息发送器."""
 
 import logging
+from typing import Optional
 
 import httpx
 
@@ -30,8 +31,9 @@ class ZhichiMessageSender:
         ai_agent_cid: str,
         llm_answer: str,
         req_stream: bool = False,
-        answer_type: str = "text",
-        third_transfer_flag: bool = False,
+        answer_type: str = "QA_DIRECT",
+        runtimeid: Optional[str] = None,
+        message_end: bool = True,
     ) -> bool:
         """向智齿发送答案.
 
@@ -58,10 +60,10 @@ class ZhichiMessageSender:
         url = self.answer_url_stream if req_stream else self.answer_url_no_stream
 
         resp_vo = ThirdAlgorithmRespVo(
-            ai_agent_cid=ai_agent_cid,
             llm_answer=llm_answer,
             answer_type=answer_type,
-            third_transfer_flag=third_transfer_flag,
+            runtimeid=runtimeid,
+            message_end=message_end,
         )
 
         headers = {
@@ -103,10 +105,12 @@ class ZhichiMessageSender:
         ai_agent_cid: str,
         error_text: str = "抱歉，处理您的问题时出现错误，请稍后再试。",
         req_stream: bool = False,
+        runtimeid: Optional[str] = None,
     ) -> bool:
         """发送错误兜底答案."""
         return await self.send_answer(
             ai_agent_cid=ai_agent_cid,
             llm_answer=error_text,
             req_stream=req_stream,
+            runtimeid=runtimeid,
         )
