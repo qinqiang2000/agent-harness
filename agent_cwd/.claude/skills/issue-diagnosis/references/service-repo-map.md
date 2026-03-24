@@ -14,5 +14,7 @@
 | api-invoice-input-query | piaozone/input/api-invoice-input-query |
 | api-fpzs | piaozone/input/api-fpzs |
 | api-expense | piaozone/input/api-expense |
+| api-elc-digital-invoice | piaozone/elc-integration/api-elc-digital-invoice |
+| api-elc-invoice-lqpt | piaozone/elc-integration/api-elc-invoice-lqpt |
 
 > 如需新增映射，按格式在表格中追加一行即可。

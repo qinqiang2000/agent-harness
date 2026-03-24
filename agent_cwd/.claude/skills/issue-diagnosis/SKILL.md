@@ -1,17 +1,18 @@
 ---
 name: issue-diagnosis
 description: >-
-  通用服务问题诊断与根因定位。通过「FAQ检索 → 日志分析 → 源码定位」三步流程给出定位结论。
-  当用户提供报错信息、异常堆栈、traceId，或询问服务/接口报错原因时，必须使用此 Skill，不要自行猜测原因。
-  即使用户只是粘贴了一段错误日志、一个 traceId、或描述了某个接口异常，也应立即触发此 Skill。
-  触发词：报错排查、问题定位、根因分析、traceId查询、日志分析、异常排查、堆栈分析、NullPointerException、服务异常、接口异常、rpa收票报错、查验失败、影像识别失败、OFD下载失败、PDF下载失败、登录失败、鉴权失败、token失效、clientId错误、验证码失败、二维码异常、参数校验失败、参数格式错误、接口调用失败、字段不合法、接口超时、服务超时、连接失败、响应慢、限流
+  通用服务问题诊断与根因定位，通过「FAQ检索 → 日志分析 → 源码定位」三步流程给出根因结论。
+  当用户提供报错信息、异常堆栈、traceId，或描述服务/接口异常时使用此 Skill。
+  即使用户只是粘贴了一段错误日志、一个 traceId、或描述了某个接口异常，也应触发此 Skill。
+  适用场景：报错排查、问题定位、根因分析、日志分析、异常排查、堆栈分析、服务异常、接口异常、
+  登录失败、鉴权失败、token失效、验证码失败、参数校验失败、接口超时、服务超时、连接失败、限流等。
 ---
 
 # 通用问题诊断
 
 严格按以下步骤执行，不可跳步。
 
-**⚠️ 全局脱敏规则（适用于所有输出，不可跳过）**：最终回复中禁止出现以下内容：
+**⚠️ 全局脱敏规则（适用于整个流程的任意输出节点，包括 AskUserQuestion 的问题内容）**：最终回复中禁止出现以下内容：
 - 外部供应商（航信、新时代、百旺等）的订单号、合同号、账号（如 `4DLW2D124`）
 - 凭证类字段的具体值：clientSecret、entryKey、appSecret、privateKey、password、token（access_token/refresh_token）、secret
 - 完整手机号（保留前3后4，中间用 `****` 替换，如 `138****5678`）
@@ -22,17 +23,27 @@ description: >-
 ## Step 0：解析输入
 
 从用户问题中提取：
-- `traceId`：服务常用的链接追踪的字符串
+- `traceId`：服务链路追踪字符串
 - `keywords`：错误关键词、异常类名、错误码、报错文本
 - `service`：用户提及的服务名（可选）
 - `timeRange`：时间范围（可选，如"今天上午"、"2025-03-05 10:00"）
-- `env`: 环境信息，例如生产，测试，演示。用户没指明环境则默认为生产环境
+- `env`：环境信息，例如生产、测试、演示。用户没指明环境则默认为生产环境
 - `erpSystem`：ERP 系统类型，从以下关键词识别：
   - `星瀚` / `星空旗舰版` / `天梯` / `monitor` → `xinghan`
   - `星空企业版` / `EAS` / `金税连接` → `eas`
   - `发票云公有云` / 未提及 ERP 系统 → `public`
+- `taskType`：任务类型，从以下关键词识别：
+  - 用户提到"进项发票采集任务"、"任务号"、"批次号"、"batchNo"、"任务状态"、"任务失败"、"任务处理中" → `invoice_collection`
+- `batchNo`：任务批次号（当 `taskType=invoice_collection` 时提取）
+- `invoiceNo` / `invoiceCode`：发票号码和发票代码，按以下规则识别：
+  - 用户明确区分了发票代码和发票号码 → 直接使用
+  - 用户只提供一串数字，长度为 **20位** → 数电发票，整串为 `invoiceNo`，无 `invoiceCode`
+  - 用户只提供一串数字，长度**不足20位** → 税控发票号码，`invoiceNo` = 该串数字，`invoiceCode` 未知
+  - 用户提供两串数字（如"代码 XXXX 号码 YYYY"）→ 税控发票，分别赋值
 
 输入为空（无 traceId 也无关键词）→ 回复"请提供报错信息、traceId 或错误关键词"，终止流程。
+
+**`taskType=invoice_collection`** → 在执行 Step 1 前，**必须**先按 [references/invoice-task-diagnosis.md](references/invoice-task-diagnosis.md) 完成进项任务专项诊断，完成后返回主流程 Step 1。
 
 ---
 
@@ -42,10 +53,11 @@ description: >-
 
 | 领域 | 触发关键词 | 文件 |
 |---|---|---|
-| 开票 | 开票、开具、发票、红冲、票种 | [kb/开票-faq.md](kb/开票-faq.md) |
-| 收票 | 收票、查验、影像、OFD、PDF、邮箱取票、合规校验、发票助手、台账、重构版 | [kb/收票-faq.md](kb/收票-faq.md) |
+| 开票 | 开票、开具、红冲、票种 | [kb/开票-faq.md](kb/开票-faq.md) |
+| 收票 | 收票、查验、OFD、PDF、邮箱取票、合规校验、发票助手、台账、重构版、导入发票、重复报销、已被报销、发票已关联、个人发票、个人抬头、个人票、抬头不一致、税号不一致、查验不通过、红冲、作废、超期、跨年、未上传源文件、黑名单、敏感词、连号 | [kb/收票-faq.md](kb/收票-faq.md) |
 | 鉴权登录 | 登录、鉴权、token、clientId、验证码、二维码 | [kb/鉴权登录-faq.md](kb/鉴权登录-faq.md) |
 | 接口参数 | 参数、字段、格式、必填、校验、不合法 | [kb/接口参数-faq.md](kb/接口参数-faq.md) |
+| 进项发票采集 | 进项、采集、下票、全量查询、表头、抵扣勾选、退税勾选、入账、海关缴款书、版式文件下载 | [kb/进项发票采集-faq.md](kb/进项发票采集-faq.md) |
 | 性能超时 | 超时、timeout、慢、连接失败、积压 | [kb/性能超时-faq.md](kb/性能超时-faq.md) |
 
 无法判断领域时 → 并行读取全部文件。
@@ -67,78 +79,58 @@ description: >-
 
 ## Step 2：ELK 日志查询与分析
 
-参照 [references/log-analysis.md](references/log-analysis.md) 执行查询与分析。
+按 [references/query-strategy.md](references/query-strategy.md) 构建参数，调用 `mcp__elastic__searchTraceOrKeyWordsLog`，从返回日志的 `fields.project` 字段获取服务名（供源码定位使用）。
 
-**构建查询参数**：
-- 有 traceId → 仅用 traceId，直接执行查询
-- 无 traceId → 先执行**关键字引导**流程（见下方），再构建 searchWordList
-- **强制要求**时间范围：优先解析用户提供的时间；未提供时默认查最近 7 天，若查不到结果则自动扩展到最近 30 天再查一次
+**合规校验场景（Q5～Q14）无 traceId 时**：用户通常只提供发票号码，需先定位 traceId，详见 [references/log-analysis.md](references/log-analysis.md) 的「合规校验：通过发票号码定位 traceId」章节。找到含发票信息的日志后，提取该条日志的 traceId，再用 traceId 查完整链路。
 
-**无 traceId 时的关键字引导流程**：
+查询返回后，若日志条数较多、无法直接分析，先用以下脚本将 tool result 文件转为 JSONL（每条日志占一行）再处理；日志条数少时直接读取即可：
+```bash
+python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
+  --input <tool_result_文件路径> \
+  --output <tool_result_文件夹路径>/随机且唯一文件名.jsonl (文件名不能固定)
+```
 
-1. 读取 [references/elk-search-guide.md](references/elk-search-guide.md)，根据 `erpSystem` 选择对应分类（A/B/C），再根据问题场景匹配最合适的模板
-2. 检查模板所需的"必需信息"是否已从用户输入中获取：
-   - **已知** → 将信息填入模板关键字，构建 searchWordList 执行查询
-   - **缺失** → 用 `AskUserQuestion` 反问用户，例如：
-     - "请提供税号，以便查询短信验证码记录"
-     - "请提供 bxd_key，以便查询报销单附件入库记录"
-     - "请提供发票号码或流水号，以便定位开票请求"
-   - 收到用户回答后，将信息填入模板，再执行查询
-3. **B/C 类系统（`xinghan`/`eas`）且无 traceId**：优先引导用户去 ERP 系统获取 traceId：
-   - `xinghan`：进入 ERP → 相关模块日志 → 找到对应记录 → 复制 traceId
-   - `eas`：财务会计 → 发票管理 → 金税连接设置 → 请求日志 → 筛选"请求返回" → 复制 traceId
-   - 若用户无法获取 traceId，则退回步骤 1 用关键字模板查询
-4. 无法匹配任何场景模板 → 直接用 `keywords` 构建 searchWordList
+转换后按 [references/log-analysis.md](references/log-analysis.md) 的"查询后处理"规则决定是否扩展查询，再按"深度分析"规则分析日志内容。
 
-调用 `mcp__elastic__searchTraceOrKeyWordsLog`，从返回日志的 `fields.project` 字段获取服务名（供 Step 2b 使用）。
+日志连接异常时重试一次，重试时不要修改查询参数。
 
-**⚠️ 参数使用规则（必须严格遵守）**：
-- 有 traceId → 仅传 `traceId` 字段，**禁止**将 traceId 放入 `searchWordList`
-- 无 traceId → 仅传 `searchWordList` 关键词，不传 `traceId`
+**所有查询默认设置 `filterSqlLog=false`**，确保返回结果包含实际执行的 SQL 语句，纳入后续分析。SQL 日志分析重点：实际执行的 SQL 语句、查询参数是否正确、是否存在全表扫描或缺少索引。若发现 SQL 层面问题，结论在【根因分析】中加 `[SQL]` 前缀。
 
-**⚠️ 强制检查（收到查询结果后，分析前必须执行，不可跳过）**：统计所有返回日志条目的 traceId，按以下规则处理：
-- 返回结果恰好只有 1 条，且有 traceId并且有报错信息 → **必须**自动用该 traceId 再查一次，直接分析 traceId 查询结果
-- 返回结果的日志的 traceId 全部相同 ，且日志里有报错信息→ **必须**自动用该 traceId 再查一次，直接分析 traceId 查询结果
-- 返回结果的日志存在多个不同 traceId 且最新一条日志有报错信息 → **必须**用最新一条有报错的日志的 traceId 再查一次，直接分析 traceId 查询结果
-- 返回结果只有 1 条，且无 traceId → 继续分析，在输出结论中注明"日志上下文有限，建议提供 traceId 以获取完整调用链"
-- 返回结果很多条且 traceId 各不相同 → 直接分析，无需扩展查询
+**然后根据以下情况决定下一步**：
 
-**⚠️ 日志分析后立即执行 Step 2b 触发判断（不可跳过，不可推迟到输出前）**：
-日志中是否出现以下任意一项？
-- A. 异常类名（含 Exception、Error 等，如 StringIndexOutOfBoundsException、NullPointerException、SocketTimeoutException）
-- B. 具体类名+行号（如 `HoliTaxDownloadService.java:87`、`KingdeeSsoClientImpl-124`）
-- C. 字段值异常（某字段被置为 0/null/默认值，或处理前后值不一致）
-- D. 根因指向代码逻辑（字段映射、数据转换、赋值逻辑等）
-
-→ **出现任意一项：必须立即执行 Step 2b 源码定位，在源码定位完成之前，禁止输出任何诊断结论、禁止输出任何"根因分析"或"解决建议"文字**
-→ 全部不符合：继续输出结论
-
-**⚠️ 自检（输出结论前）**：结论中是否使用了 `[源码]` 前缀？
-- 是 → 确认是否实际执行了 clone+Grep 并读到对应代码；未执行则**必须**改为 `[推断]` 前缀，并先完成源码定位
-- 否且日志有异常类名/行号 → **禁止输出**，必须先完成 Step 2b
-
-**日志查不到**：
-1. 尝试截取核心词（去掉修饰词、保留异常类名/错误码/核心业务词）重新构建 searchWordList，再查一次
-2. 仍查不到 → 用原始问题重新检索 FAQ，输出结论后终止
-
-**日志连接异常**：重试一次。
+- **日志查不到**（重试后仍无结果）→ 用 `AskUserQuestion` 反问用户，告知未找到相关日志，请求更多信息（如 traceId、准确报错文本、发生时间），收到回答后重新执行本步骤
+- **日志显示后端处理成功**（无异常、含"成功"字样），但与用户描述的问题不符 → 用 `AskUserQuestion` 反问用户，告知后端正常这一发现，询问具体操作路径/页面/筛选条件，等收到回答后再继续，不直接输出推测性原因
+- **多次数据库查询结果矛盾**（如：按条件 A 查到记录，按条件 A+B 查不到）→ 对比两次查询的 WHERE 条件差异，找出导致结果不同的字段：
+  - 若该字段值来自用户传参（如税号、发票代码等），用 `AskUserQuestion` 反问用户确认该参数是否正确，不得自行推断
+  - 不得在未经数据库验证的情况下断言"该记录存在于数据库中"
+- **日志含以下任意一项** → 执行 Step 3 源码定位，完成后再输出结论：
+  - 异常类名（含 Exception、Error 等）
+  - 具体类名+行号（如 `HoliTaxDownloadService.java:87`）
+  - 字段值异常（某字段被置为 0/null/默认值，或处理前后值不一致）
+  - 根因指向代码逻辑（字段映射、数据转换、赋值逻辑，枚举转化等）
+- **日志无异常信号** → 直接进入 Step 4 输出结论
 
 ---
 
-## Step 2a：数据库辅助查询（条件触发）
+## Step 3：源码定位
 
-**触发条件**（必须同时满足）：
-- FAQ 条目中明确标注「数据库验证」标签
+按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 执行源码定位。在源码定位完成之前，不输出任何诊断结论。
 
-**不触发的情况**：
-- FAQ 未命中
-- FAQ 命中但无「数据库验证」标签
-- 仅凭日志信号（如 clientId 无效、租户不存在）自行推断 → 跳过，不猜测表名
+收票服务源码定位时，先查 [references/invoice-collection-context.md](references/invoice-collection-context.md) 中的调用链速查和错误码表，再定位目标类。
 
-**数据源选择规则**（参照 `db/db_config.json` 中各数据源的 `env` 和 `domain` 字段）：
+完成后进入 Step 4 输出结论。
+
+---
+
+## Step 4：数据库辅助查询
+
+仅当 FAQ 命中且条目中标注「数据库验证」标签时执行，其余情况跳过。不得根据日志信号自行推断表名或字段。
+
+**数据源选择规则**（参照 `db/db_config.json` 中各数据源的 `env` 和 `database` 字段）：
 - 用户指明"测试环境" → 选 `env=test`；未指明或指明"生产环境" → 选 `env=prod`
-- 开票/鉴权相关问题 → 选 `domain=开票/鉴权`（cms 库）
-- 运营/订单相关问题 → 选 `domain=运营/订单`（eop 库）
+- 开票/鉴权相关问题 → 选 `database=cms`
+- 运营/订单相关问题 → 选 `database=eop`
+- 收票合规校验相关问题（重复报销、个人发票等）→ 选 `prod-invoice`（生产）或 `test-invoice`（测试）
 
 **执行步骤**：
 1. 读取 FAQ 中「数据库验证」标注的数据源和表，从 [references/db-queries.md](references/db-queries.md) 获取对应 SQL 模板
@@ -150,34 +142,19 @@ description: >-
    - 不确定字段名时先执行 `--describe <table>` 确认
 3. 将查询结果纳入最终诊断报告
 
-**注意**：无法从 FAQ 找到对应 SQL 模板时，跳过此步骤，不猜测表名/字段。
+无法从 FAQ 找到对应 SQL 模板时，跳过此步骤。
 
 ---
 
-## Step 2b：GitLab 源码定位
+## Step 5：综合输出
 
-**注意**：即使根因看起来是"外部服务不可用"或"网络超时"，只要日志中出现了异常类名或类名+行号，也必须定位该类的异常捕获逻辑。
+最终回复中不暴露 Step 0～4 的执行过程（不出现"Step 0"、"Step 1"等标题），只输出结论。格式由"是否命中 FAQ"决定，与是否有 traceId 无关。
 
-收票服务源码定位时，先查 [references/invoice-collection-context.md](references/invoice-collection-context.md) 中的调用链速查和错误码表，再定位目标类。
+**输出约束**：根因结论必须有明确的日志行或源码行作为证据支撑。若某个结论依赖推断而非直接证据，必须明确标注"（推测）"，并建议用户进一步验证，不得以确定性语气陈述未经验证的事实。
 
-参照 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的定位策略，完成：
-1. 从 callChain 或日志中的类名识别**目标类**（报错类、字段赋值类等）
-2. 查映射表获取 `project_id`，未命中时用 `mcp__gitlab__search_repositories` 搜索（`namespace/repo-name` 格式，不能直接用服务名）
-3. 本地已有仓库则 `git pull`，否则完整 clone 到 `/tmp/gitlab/src/{repo-name}`，用 Grep/Read 本地检索目标类
-4. **严禁**使用 GitLab API 逐文件拉取；**严禁**在未实际执行 clone+Grep 的情况下直接凭日志推断源码结论
-5. clone 失败或找不到目标类 → 凭日志给出结论，使用 `[推断]` 前缀，注明"未能获取源码，以下为日志推断"
-6. 成功找到源码 → 结合源码还原调用链，补充 `possibleCause`，使用 `[源码]` 前缀
-7. **`[源码]` 前缀只能在真正读取到对应代码后使用**，凭日志推断一律用 `[推断]` 前缀
-8. **禁止跟进服务名称推断服务的产品线归属**源码定位只用于/还原调用链和定位报错逻辑，不要在报告中声明某个外部服务"属于"某个产品线
+**解密辅助**：若日志中存在加密参数且解密有助于验证根因，可用 `AskUserQuestion` 询问用户："是否需要解密该参数以进一步验证？如需要，请提供加密算法（如 AES-128-ECB）和加密密钥。"收到用户确认和密钥后，用 Bash 执行解密并将结果纳入诊断报告。
 
 ---
-
-## Step 3：综合输出
-
-**重要**：
-- 最终回复中不暴露 Step 0/1/2 的执行过程（不出现"Step 0"、"Step 1"等标题），只输出结论。格式由"是否命中 FAQ"决定，与是否有 traceId 无关。
-- **解密辅助**：若日志中存在加密参数且解密有助于验证根因（如确认请求参数是否缺失某字段），可用 `AskUserQuestion` 询问用户："是否需要解密该参数以进一步验证？如需要，请提供加密算法（如 AES-128-ECB，默认也是这个AES-128-ECB）和加密密钥。"收到用户确认和密钥后，用 Bash 执行解密并将结果纳入诊断报告。
-- **敏感信息**：严格遵守顶部全局脱敏规则，所有情况（A/B/C）均适用。
 
 **情况 A：FAQ 命中**（无论是否有 traceId）
 
@@ -188,6 +165,10 @@ description: >-
 【日志验证】
 TraceId: {traceId}，时间: {timestamp}
 结论: {与FAQ吻合 / 发现新信息}
+
+（若有数据库查询结果，追加：）
+【数据库验证】
+{db_query_result}
 
 ---
 
@@ -204,13 +185,35 @@ TraceId: {traceId}，时间: {timestamp}
 
 ---
 
-**情况 C：通过前面的所有工具定位分析和用户描述问题不符**
+**情况 C：日志显示后端正常，但与用户描述的问题不符**
 
-【建议排查】
- 排查1:..
- 排查2:..
+先用 `AskUserQuestion` 反问用户，告知后端数据正常这一关键发现，再询问具体操作路径/页面/筛选条件等，收到回答后再输出结论。不在收到用户补充信息之前列出推测性原因。
 
-【需要更多信息】
-（通过 AskUserQuestion 反问用户，收到回答后补充结论）
+示例格式：
+后端日志显示数据已正常处理（{关键发现}），但您反映取不到数据。请问：
+1. 您是在哪个页面/功能查看的？
+2. 使用了哪些筛选条件？
+
+---
+
+**情况 D：日志查不到**
+
+先用 `AskUserQuestion` 反问用户，告知未找到相关日志记录，请求补充信息。
+
+示例格式：
+日志中未找到相关记录。请提供以下信息以便进一步排查：
+1. traceId 或准确的报错文本
+2. 问题发生的时间（精确到分钟）
+3. 涉及的服务名或接口名（如已知）
+
+---
+
+**情况 F：进项发票采集任务（taskType=invoice_collection）**
+
+在情况 A 或 B 的基础上，在报告开头追加任务状态信息：
+
+【任务状态】
+批次号: {batchNo}，状态: {ftask_status_desc}
+{ferr_desc}（若有错误描述）
 
 回答简洁明了，不超过 500 字。

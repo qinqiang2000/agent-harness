@@ -2,7 +2,7 @@
 
 ## 数据源
 
-可用数据源定义在 `db/db_config.json`，每个数据源有 `env`（prod/test）和 `domain`（开票/鉴权、运营/订单）字段。
+可用数据源定义在 `db/db_config.json`，禁止自行推导生气了执行，必须是该文档里的sql
 
 **选择规则**：
 - 用户指明"测试环境" → 选 `env=test`；未指明或指明"生产环境" → 选 `env=prod`
@@ -64,6 +64,60 @@ WHERE ftax_no = '<税号>';
 ```
 
 > `fcity_name` 即系统中配置的城市，与企查查等网站的实际注册城市比对，确认是否有误。
+
+---
+
+### 进项采集任务状态查询
+
+查询任务批次号对应的任务状态及错误描述。
+
+```sql
+-- 查询进项采集任务状态
+SELECT fbatch_no, ftask_status, ferr_desc, fcreate_time, fupdate_time
+FROM t_elc_sync_task
+WHERE fbatch_no = '{batchNo}';
+```
+
+> `ftask_status` 含义：
+> - 1=待处理，2=已入队列，3=处理中，4=处理完成
+> - 5=处理失败，6=处理失败待重试，7=部分成功，8=全部失败
+> - 9=未登录等待重试，-1=异常请求不入队列，-2=文件下载单独处理任务
+>
+> `ferr_desc`：最新结果描述，失败时包含具体错误信息。
+> 数据源：`prod-invoice`（生产）或 `test-invoice`（测试）
+
+---
+
+### 合规校验-重复报销查询
+
+查询发票流水号对应的报销单占用情况。
+
+```sql
+SELECT fexpense_num, fexpense_id, fclient_id, fstatus, fcreate_time
+FROM t_bill_expense_relation
+WHERE fserial_no = '{serial_no}'
+  AND fstatus IN (30, 60, 65)
+ORDER BY fstatus;
+```
+
+> `fstatus` 含义：30=审批中，60=已通过，65=已入账
+> 数据源：`prod-invoice`（生产）或 `test-invoice`（测试）
+> 若返回多条记录，说明该发票被多个报销单占用（跨企业重复报销时 `fclient_id` 不同）。
+
+---
+
+### 重复报销-企业名称查询
+
+根据 fclient_id 查询企业名称和税号，用于在结论中替代 clientId 展示。
+
+```sql
+SELECT fclient_id, fname, ftax_no, fstatus
+FROM t_ou_company
+WHERE fclient_id = '{fclient_id}';
+```
+
+> 数据源：`prod-main`（生产）或 `test-main`（测试），即 cms 库
+> `fname` 为企业名称，`ftax_no` 为税号，在结论中用企业名称替代 clientId 展示。
 
 ---
 
