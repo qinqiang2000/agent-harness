@@ -5,7 +5,7 @@ from typing import Optional
 
 import httpx
 
-from plugins.bundled.zhichi.models import ThirdAlgorithmRespVo
+from plugins.bundled.zhichi.models import ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
 from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
@@ -60,24 +60,27 @@ class ZhichiMessageSender:
         url = self.answer_url_stream if req_stream else self.answer_url_no_stream
 
         resp_vo = ThirdAlgorithmRespVo(
+            ai_agent_cid=ai_agent_cid,
             llm_answer=llm_answer,
             answer_type=answer_type,
             runtimeid=runtimeid,
             message_end=message_end,
         )
+        wrapper = ThirdAlgorithmRespWrapper(data=resp_vo)
 
         headers = {
             "Content-Type": "application/json",
             "token": token,
         }
 
-        logger.info(f"[Zhichi] Sending response: url={url}, body={resp_vo.model_dump_json()}")
+        body = wrapper.model_dump_json(exclude_none=True)
+        logger.info(f"[Zhichi] Sending response: url={url}, body={body}")
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.post(
                     url,
-                    content=resp_vo.model_dump_json(),
+                    content=body,
                     headers=headers,
                 )
                 response.raise_for_status()

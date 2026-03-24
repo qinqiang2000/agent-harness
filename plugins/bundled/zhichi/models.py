@@ -24,9 +24,18 @@ class ThirdAlgorithmReqVo(BaseModel):
     runtimeid: Optional[str] = None
 
 
+class ThirdAlgorithmRespWrapper(BaseModel):
+    """智齿第三方算法响应外层包装."""
+
+    ret_code: str = "000000"
+    ret_msg: str = "success"
+    data: Optional["ThirdAlgorithmRespVo"] = None
+
+
 class ThirdAlgorithmRespVo(BaseModel):
     """智齿第三方算法响应体."""
 
+    ai_agent_cid: str
     llm_answer: str
     answer_type: str = "QA_DIRECT"
     robot_answer_message_type: str = "MESSAGE"
