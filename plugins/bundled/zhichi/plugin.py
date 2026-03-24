@@ -11,7 +11,7 @@ from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
 from plugins.bundled.zhichi.handler import ZhichiHandler
 from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
-from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
+from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespWrapper
 from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,10 @@ class ZhichiChannelPlugin(ChannelPlugin):
                 f"[Zhichi] Received request: {req.model_dump_json()}"
             )
             background_tasks.add_task(handler.process_message, req)
-            return JSONResponse(content={"code": 0, "message": "ok"})
+            ack = ThirdAlgorithmRespWrapper()
+            ack_body = ack.model_dump(exclude_none=True)
+            logger.info(f"[Zhichi] Immediate response: {ack_body}")
+            return JSONResponse(content=ack_body)
 
         @router.get("/zhichi/stats")
         async def zhichi_stats():
