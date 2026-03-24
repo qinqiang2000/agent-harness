@@ -64,10 +64,9 @@ class ZhichiMessageSender:
             third_transfer_flag=third_transfer_flag,
         )
 
-        # Authorization header 格式待与智齿文档确认
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
+            "token": token,
         }
 
         try:
