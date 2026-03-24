@@ -12,6 +12,9 @@ class ThirdAlgorithmReqVo(BaseModel):
     ai_agent_cid: str
     uid: Optional[str] = None
     user_name: Optional[str] = None
+    show_question: Optional[str] = None
+    robotid: Optional[str] = None
+    msg_type: Optional[str] = None
     req_stream: bool = False
     copilot: bool = False
     robot_model: Optional[str] = "THIRD_STANDARD"
@@ -27,5 +30,7 @@ class ThirdAlgorithmRespVo(BaseModel):
     ai_agent_cid: str
     llm_answer: str
     answer_type: str = "text"
+    robot_answer_message_type: str = "THIRD_ANSWER_INFO"
+    roundid: Optional[str] = None
     third_transfer_flag: bool = False
     third_interface_info: Optional[dict] = None
