@@ -89,12 +89,17 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 ### 搜索策略（按优先级）
 
-**策略1：搜索合规校验入口**（最精准，必须同时传两个词）
+**策略1：搜索合规校验结果**（最精准，必须同时传至少两个词）
+- 数电发票（invoiceNo 为20位，无 invoiceCode）：searchWordList：`["InvoiceVerifyService - 发票", "<invoiceNo>"]`
+- 税控发票（有 invoiceCode）：searchWordList：`["InvoiceVerifyService - 发票", "<invoiceCode>","<invoiceNo>"]`
+- 出现位置：`api-expense` 服务
+
+**策略2：搜索合规校验入口**（必须同时传至少两个词）
 - 数电发票（invoiceNo 为20位，无 invoiceCode）：searchWordList：`["根据流水号校验发票", "<invoiceNo>"]`
 - 税控发票（有 invoiceCode）：searchWordList：`["根据流水号校验发票", "<invoiceCode>","<invoiceNo>"]`
 - 出现位置：`api-fpzs` 服务
 
-**策略2：搜索合规管控入口**（策略1无结果时使用，必须同时传两个词）
+**策略3：搜索合规管控入口**（策略1无结果时使用，必须同时传两个词）
 - searchWordList：`["合规管控配置", "<发票流水号或clientId>"]`（两个词必须同时出现）
 - 出现位置：`api-expense` 服务
 
