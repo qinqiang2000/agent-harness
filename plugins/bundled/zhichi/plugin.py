@@ -87,8 +87,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
                 return JSONResponse(content={"code": 1, "message": "ai_agent_cid 不能为空"})
 
             logger.info(
-                f"[Zhichi] Received: cid={req.ai_agent_cid}, "
-                f"question={req.question[:30]}..."
+                f"[Zhichi] Received request: {req.model_dump_json()}"
             )
             background_tasks.add_task(handler.process_message, req)
             return JSONResponse(content={"code": 0, "message": "ok"})

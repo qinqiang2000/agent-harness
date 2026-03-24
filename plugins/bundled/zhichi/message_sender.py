@@ -69,6 +69,8 @@ class ZhichiMessageSender:
             "token": token,
         }
 
+        logger.info(f"[Zhichi] Sending response: url={url}, body={resp_vo.model_dump_json()}")
+
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.post(
@@ -78,6 +80,7 @@ class ZhichiMessageSender:
                 )
                 response.raise_for_status()
                 data = response.json()
+                logger.info(f"[Zhichi] Callback response: status={response.status_code}, body={response.text}")
                 ret_code = data.get("ret_code", -1)
                 if ret_code != 0:
                     logger.error(
