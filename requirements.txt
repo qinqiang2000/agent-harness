@@ -10,6 +10,7 @@ httpx[socks]>=0.27.0      # HTTP client with SOCKS proxy support (for Zhichi)
 # Claude Agent SDK
 anyio>=4.0.0
 claude-agent-sdk
+anthropic>=0.40.0            # LLM judge for score_results.py and analyze_bad_cases.py
 
 # Database (for context data access if needed)
 pymysql>=1.0.0

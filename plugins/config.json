@@ -1,5 +1,5 @@
 {
-  "enabled": ["yunzhijia"],
+  "enabled": ["yunzhijia", "zhichi"],
   "plugins": {
     "yunzhijia": {
       "session_timeout": 1800,
@@ -7,6 +7,14 @@
       "card_template_id": "64d08cb4e4b07ba2b112b395",
       "max_img_per_card": 5,
       "verbose": false
+    },
+    "zhichi": {
+      "app_id": "your_app_id",
+      "app_key": "your_app_key",
+      "session_timeout": 3600,
+      "default_skill": "customer-service",
+      "token_refresh_buffer_seconds": 300,
+      "mock_send": true
     }
   }
 }
