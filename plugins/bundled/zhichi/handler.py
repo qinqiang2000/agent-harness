@@ -53,6 +53,8 @@ class ZhichiHandler:
             f"question={req.question[:50]}..."
         )
 
+        runtimeid = req.runtimeid
+
         try:
             # 0. 清理过期会话
             self.session_mapper.cleanup_expired()
@@ -87,17 +89,18 @@ class ZhichiHandler:
             )
 
             # 5. 处理 Agent 消息流
-            await self._process_agent_stream(request, cid, req.req_stream)
+            await self._process_agent_stream(request, cid, req.req_stream, runtimeid)
 
         except Exception as e:
             logger.error(f"[Zhichi] Error processing message: {e}", exc_info=True)
-            await self.message_sender.send_error_answer(cid, req_stream=req.req_stream)
+            await self.message_sender.send_error_answer(cid, req_stream=req.req_stream, runtimeid=runtimeid)
 
     async def _process_agent_stream(
         self,
         request: QueryRequest,
         cid: str,
         req_stream: bool,
+        runtimeid: Optional[str] = None,
     ) -> None:
         """处理 Agent 消息流."""
         agent_session_id = request.session_id
@@ -127,6 +130,8 @@ class ZhichiHandler:
                         ai_agent_cid=cid,
                         llm_answer=question_text,
                         req_stream=req_stream,
+                        runtimeid=runtimeid,
+                        message_end=False,
                     )
                     answer_sent = True
 
@@ -148,6 +153,7 @@ class ZhichiHandler:
                         ai_agent_cid=cid,
                         llm_answer=final_result,
                         req_stream=req_stream,
+                        runtimeid=runtimeid,
                     )
                     answer_sent = True
                     logger.info(
@@ -166,12 +172,13 @@ class ZhichiHandler:
                     cid,
                     error_text=f"抱歉，处理时出现错误：{error_msg}",
                     req_stream=req_stream,
+                    runtimeid=runtimeid,
                 )
                 answer_sent = True
 
         if not answer_sent:
             logger.warning(f"[Zhichi] No answer sent for cid={cid}, sending fallback")
-            await self.message_sender.send_error_answer(cid, req_stream=req_stream)
+            await self.message_sender.send_error_answer(cid, req_stream=req_stream, runtimeid=runtimeid)
 
     async def _handle_stop_command(self, cid: str, req_stream: bool) -> None:
         """处理停止命令."""
