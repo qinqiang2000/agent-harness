@@ -310,34 +310,8 @@ class ZhichiHandler:
         return False, ""
 
     async def _should_transfer_ai(self, answer: str) -> tuple[bool, str]:
-        """调用 LLM 判断回复是否建议转人工，组名暂时固定返回"测试技能组".
-
-        返回格式: (should_transfer, group_name)
-        """
-        api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN", "")
-        base_url = os.getenv("ANTHROPIC_BASE_URL") or None
-        try:
-            client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
-            msg = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=5,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "判断以下客服回复是否在建议用户转接人工客服。"
-                        "只回答'是'或'否'，不要加其他内容。\n\n"
-                        f"{answer}"
-                    ),
-                }],
-            )
-            result = msg.content[0].text.strip()
-            logger.info(f"[Zhichi] Transfer AI judgment: result={result}, answer={answer[:50]}")
-            if result.startswith("是"):
-                return True, "测试技能组"
-            return False, ""
-        except Exception as e:
-            logger.error(f"[Zhichi] Transfer AI judgment failed: {e}", exc_info=True)
-            return False, ""
+        """调用 LLM 判断回复是否建议转人工，组名暂时固定返回"测试技能组"."""
+        return False, "测试技能组"
 
     def get_session_stats(self) -> dict:
         """获取会话统计信息."""

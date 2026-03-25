@@ -114,7 +114,14 @@ class ZhichiChannelPlugin(ChannelPlugin):
                         logger.info(f"[Zhichi] Stream chunk: {chunk_json}")
                         yield chunk_json + "\n"
 
-                return StreamingResponse(generate(), media_type="application/x-ndjson")
+                return StreamingResponse(
+                    generate(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
 
             else:
                 llm_answer, transfer, group_name = await handler.get_answer(req)
