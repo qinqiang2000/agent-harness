@@ -4,7 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
@@ -85,16 +85,50 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
             logger.info(f"[Zhichi] Received request: {req.model_dump_json()}")
 
-            llm_answer = await handler.get_answer(req)
-            resp = ThirdAlgorithmRespWrapper(
-                data=ThirdAlgorithmRespVo(
-                    llm_answer=llm_answer,
-                    runtimeid=req.runtimeid,
+            if req.req_stream:
+                async def generate():
+                    # 先推送等待提示
+                    waiting = ThirdAlgorithmRespWrapper(
+                        data=ThirdAlgorithmRespVo(
+                            llm_answer="您好，感谢您的咨询！我正在为您查找相关信息，请稍候片刻～",
+                            runtimeid=req.runtimeid,
+                            message_end=False,
+                        )
+                    )
+                    waiting_json = waiting.model_dump_json(exclude_none=True)
+                    logger.info(f"[Zhichi] Stream chunk: {waiting_json}")
+                    yield waiting_json + "\n"
+
+                    # 再推送 AI 实际答案
+                    async for llm_answer, message_end, transfer, group_name in handler.stream_answer(req):
+                        chunk = ThirdAlgorithmRespWrapper(
+                            data=ThirdAlgorithmRespVo(
+                                llm_answer=llm_answer,
+                                runtimeid=req.runtimeid,
+                                message_end=message_end,
+                                third_transfer_flag=transfer or None,
+                                third_transfer_groupName=group_name or None,
+                            )
+                        )
+                        chunk_json = chunk.model_dump_json(exclude_none=True)
+                        logger.info(f"[Zhichi] Stream chunk: {chunk_json}")
+                        yield chunk_json + "\n"
+
+                return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+            else:
+                llm_answer, transfer, group_name = await handler.get_answer(req)
+                resp = ThirdAlgorithmRespWrapper(
+                    data=ThirdAlgorithmRespVo(
+                        llm_answer=llm_answer,
+                        runtimeid=req.runtimeid,
+                        third_transfer_flag=transfer or None,
+                        third_transfer_groupName=group_name or None,
+                    )
                 )
-            )
-            resp_json = resp.model_dump_json(exclude_none=True)
-            logger.info(f"[Zhichi] Synchronous response: {resp_json}")
-            return JSONResponse(content=resp.model_dump(exclude_none=True))
+                resp_json = resp.model_dump_json(exclude_none=True)
+                logger.info(f"[Zhichi] Synchronous response: {resp_json}")
+                return JSONResponse(content=resp.model_dump(exclude_none=True))
 
         @router.get("/zhichi/stats")
         async def zhichi_stats():

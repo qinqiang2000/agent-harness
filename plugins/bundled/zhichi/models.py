@@ -37,7 +37,7 @@ class ThirdAlgorithmRespVo(BaseModel):
 
     llm_answer: str
     answer_type: str = "QA_DIRECT"
-    robot_answer_message_type: str = "MESSAGE"
+    robot_answer_message_type: str = "THIRD_ANSWER_INFO"
     success: bool = True
     message_end: bool = True
     hit_sensitive_word: bool = False
@@ -51,3 +51,5 @@ class ThirdAlgorithmRespVo(BaseModel):
     third_nodeid: Optional[str] = None
     third_variable_value_enums: Optional[List[str]] = None
     third_variable_id: Optional[str] = None
+    third_transfer_flag: Optional[bool] = None
+    third_transfer_groupName: Optional[str] = None

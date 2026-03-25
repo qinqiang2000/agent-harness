@@ -2,7 +2,10 @@
 
 import json
 import logging
+import os
 from typing import Optional
+
+import anthropic
 
 from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
@@ -39,6 +42,7 @@ class ZhichiHandler:
             timeout_seconds=session_timeout,
             channel_id="zhichi",
         )
+        self._transfer_counts: dict[str, int] = {}
 
     async def process_message(
         self,
@@ -233,8 +237,8 @@ class ZhichiHandler:
                 lines.append(f"{i}. {label}")
         return "\n".join(lines)
 
-    async def get_answer(self, req: ThirdAlgorithmReqVo) -> str:
-        """同步处理消息，返回答案字符串（不回调）."""
+    async def stream_answer(self, req: ThirdAlgorithmReqVo):
+        """流式处理消息，yield (llm_answer, message_end) 元组."""
         cid = req.ai_agent_cid
         self.session_mapper.cleanup_expired()
 
@@ -266,17 +270,74 @@ class ZhichiHandler:
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
                 if questions:
-                    return self._format_question(questions[0])
+                    answer = self._format_question(questions[0])
+                    transfer, group_name = await self._check_transfer(cid, answer)
+                    yield answer, True, transfer, group_name
+                return
 
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
-                return result_data.get("result", "")
+                answer = result_data.get("result", "抱歉，处理您的问题时出现错误，请稍后再试。")
+                transfer, group_name = await self._check_transfer(cid, answer)
+                yield answer, True, transfer, group_name
+                return
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
-                return f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}"
+                yield f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}", True, False, ""
+                return
 
-        return "抱歉，处理您的问题时出现错误，请稍后再试。"
+        yield "抱歉，处理您的问题时出现错误，请稍后再试。", True, False, ""
+
+    async def get_answer(self, req: ThirdAlgorithmReqVo) -> tuple[str, bool, str]:
+        """同步处理消息，返回 (llm_answer, third_transfer_flag, group_name)."""
+        async for llm_answer, _, transfer, group_name in self.stream_answer(req):
+            return llm_answer, transfer, group_name
+        return "抱歉，处理您的问题时出现错误，请稍后再试。", False, ""
+
+    async def _check_transfer(self, cid: str, answer: str) -> tuple[bool, str]:
+        """用 AI 判断答案是否建议转人工，累计 2 次则触发，同时返回目标技能组名."""
+        should_transfer, group_name = await self._should_transfer_ai(answer)
+        if not should_transfer:
+            return False, ""
+        self._transfer_counts[cid] = self._transfer_counts.get(cid, 0) + 1
+        count = self._transfer_counts[cid]
+        logger.info(f"[Zhichi] Transfer intent detected: cid={cid}, count={count}, group={group_name}")
+        if count >= 2:
+            self._transfer_counts.pop(cid, None)
+            logger.info(f"[Zhichi] Transfer to human triggered: cid={cid}, group={group_name}")
+            return True, group_name
+        return False, ""
+
+    async def _should_transfer_ai(self, answer: str) -> tuple[bool, str]:
+        """调用 LLM 判断回复是否建议转人工，组名暂时固定返回"测试技能组".
+
+        返回格式: (should_transfer, group_name)
+        """
+        api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN", "")
+        base_url = os.getenv("ANTHROPIC_BASE_URL") or None
+        try:
+            client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
+            msg = await client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=5,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "判断以下客服回复是否在建议用户转接人工客服。"
+                        "只回答'是'或'否'，不要加其他内容。\n\n"
+                        f"{answer}"
+                    ),
+                }],
+            )
+            result = msg.content[0].text.strip()
+            logger.info(f"[Zhichi] Transfer AI judgment: result={result}, answer={answer[:50]}")
+            if result.startswith("是"):
+                return True, "测试技能组"
+            return False, ""
+        except Exception as e:
+            logger.error(f"[Zhichi] Transfer AI judgment failed: {e}", exc_info=True)
+            return False, ""
 
     def get_session_stats(self) -> dict:
         """获取会话统计信息."""
