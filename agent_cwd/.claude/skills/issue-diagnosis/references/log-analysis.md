@@ -29,7 +29,7 @@
 - `id`（即 traceId）
 - `fields.project`（即 project/服务名）
 - `level`：日志级别（ERROR/WARN/INFO 等）
-按时间生序排序
+按时间倒序排序
 查不到日志时返回空列表。
 
 ---
@@ -43,7 +43,7 @@
 ```bash
 python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
   --input <tool_result_文件路径> \
-  --output /tmp/issue_logs.jsonl
+  --output <tool_result_文件夹路径>/随机且唯一文件名.jsonl (文件名不能固定)
 ```
 
 转换完成后，自行决定如何检索分析。关键搜索词参考：`timeout`、`超时`、`Exception`、`Error`、`500`、`401`、`403`、`NullPointer`、`连接失败`、`校验失败`
