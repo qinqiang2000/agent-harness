@@ -35,7 +35,6 @@ class ThirdAlgorithmRespWrapper(BaseModel):
 class ThirdAlgorithmRespVo(BaseModel):
     """智齿第三方算法响应体."""
 
-    ai_agent_cid: str
     llm_answer: str
     answer_type: str = "QA_DIRECT"
     robot_answer_message_type: str = "MESSAGE"

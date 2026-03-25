@@ -5,7 +5,7 @@ from typing import Optional
 
 import httpx
 
-from plugins.bundled.zhichi.models import ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
+from plugins.bundled.zhichi.models import ThirdAlgorithmRespVo
 from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
@@ -66,14 +66,13 @@ class ZhichiMessageSender:
             runtimeid=runtimeid,
             message_end=message_end,
         )
-        wrapper = ThirdAlgorithmRespWrapper(data=resp_vo)
 
         headers = {
             "Content-Type": "application/json",
             "token": token,
         }
 
-        body = wrapper.model_dump_json(exclude_none=True)
+        body = resp_vo.model_dump_json(exclude_none=True)
         logger.info(f"[Zhichi] Sending response: url={url}, body={body}")
 
         try:
