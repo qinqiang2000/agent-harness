@@ -53,6 +53,8 @@ class ZhichiHandler:
             f"question={req.question[:50]}..."
         )
 
+        runtimeid = req.runtimeid
+
         try:
             # 0. 清理过期会话
             self.session_mapper.cleanup_expired()
@@ -87,17 +89,18 @@ class ZhichiHandler:
             )
 
             # 5. 处理 Agent 消息流
-            await self._process_agent_stream(request, cid, req.req_stream)
+            await self._process_agent_stream(request, cid, req.req_stream, runtimeid)
 
         except Exception as e:
             logger.error(f"[Zhichi] Error processing message: {e}", exc_info=True)
-            await self.message_sender.send_error_answer(cid, req_stream=req.req_stream)
+            await self.message_sender.send_error_answer(cid, req_stream=req.req_stream, runtimeid=runtimeid)
 
     async def _process_agent_stream(
         self,
         request: QueryRequest,
         cid: str,
         req_stream: bool,
+        runtimeid: Optional[str] = None,
     ) -> None:
         """处理 Agent 消息流."""
         agent_session_id = request.session_id
@@ -127,6 +130,8 @@ class ZhichiHandler:
                         ai_agent_cid=cid,
                         llm_answer=question_text,
                         req_stream=req_stream,
+                        runtimeid=runtimeid,
+                        message_end=False,
                     )
                     answer_sent = True
 
@@ -148,6 +153,7 @@ class ZhichiHandler:
                         ai_agent_cid=cid,
                         llm_answer=final_result,
                         req_stream=req_stream,
+                        runtimeid=runtimeid,
                     )
                     answer_sent = True
                     logger.info(
@@ -166,12 +172,13 @@ class ZhichiHandler:
                     cid,
                     error_text=f"抱歉，处理时出现错误：{error_msg}",
                     req_stream=req_stream,
+                    runtimeid=runtimeid,
                 )
                 answer_sent = True
 
         if not answer_sent:
             logger.warning(f"[Zhichi] No answer sent for cid={cid}, sending fallback")
-            await self.message_sender.send_error_answer(cid, req_stream=req_stream)
+            await self.message_sender.send_error_answer(cid, req_stream=req_stream, runtimeid=runtimeid)
 
     async def _handle_stop_command(self, cid: str, req_stream: bool) -> None:
         """处理停止命令."""
@@ -225,6 +232,51 @@ class ZhichiHandler:
             else:
                 lines.append(f"{i}. {label}")
         return "\n".join(lines)
+
+    async def get_answer(self, req: ThirdAlgorithmReqVo) -> str:
+        """同步处理消息，返回答案字符串（不回调）."""
+        cid = req.ai_agent_cid
+        self.session_mapper.cleanup_expired()
+
+        agent_session_id = self.session_mapper.get_or_create(cid)
+        prompt = req.question
+        if agent_session_id:
+            pending_questions = self.session_mapper.get_and_clear_pending_questions(cid)
+            if pending_questions:
+                prompt = self._build_answer_prompt(req.question, pending_questions)
+
+        request = QueryRequest(
+            prompt=prompt,
+            skill=self.default_skill,
+            tenant_id="zhichi",
+            language="中文",
+            session_id=agent_session_id,
+        )
+
+        async for event in self.agent_service.process_query(request):
+            event_type = event.get("event")
+
+            if event_type == "session_created":
+                data = json.loads(event["data"])
+                new_session_id = data["session_id"]
+                self.session_mapper.update_activity(cid, new_session_id)
+
+            elif event_type == "ask_user_question":
+                data = json.loads(event["data"])
+                questions = data.get("questions", [])
+                self.session_mapper.set_pending_questions(cid, questions)
+                if questions:
+                    return self._format_question(questions[0])
+
+            elif event_type == "result":
+                result_data = json.loads(event.get("data", "{}"))
+                return result_data.get("result", "")
+
+            elif event_type == "error":
+                error_data = json.loads(event.get("data", "{}"))
+                return f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}"
+
+        return "抱歉，处理您的问题时出现错误，请稍后再试。"
 
     def get_session_stats(self) -> dict:
         """获取会话统计信息."""

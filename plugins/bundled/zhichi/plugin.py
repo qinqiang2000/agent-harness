@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from api.plugins.api import PluginAPI
@@ -11,7 +11,7 @@ from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
 from plugins.bundled.zhichi.handler import ZhichiHandler
 from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
-from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
+from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
 from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
@@ -75,23 +75,26 @@ class ZhichiChannelPlugin(ChannelPlugin):
         handler = self.handler
 
         @router.post("/zhichi/ask")
-        async def zhichi_ask(
-            req: ThirdAlgorithmReqVo,
-            background_tasks: BackgroundTasks,
-        ):
-            """智齿消息接收端点，立即返回 200，后台处理."""
+        async def zhichi_ask(req: ThirdAlgorithmReqVo):
+            """智齿消息接收端点，同步处理后直接返回结果."""
             if not req.question or not req.question.strip():
                 return JSONResponse(content={"code": 1, "message": "question 不能为空"})
 
             if not req.ai_agent_cid or not req.ai_agent_cid.strip():
                 return JSONResponse(content={"code": 1, "message": "ai_agent_cid 不能为空"})
 
-            logger.info(
-                f"[Zhichi] Received: cid={req.ai_agent_cid}, "
-                f"question={req.question[:30]}..."
+            logger.info(f"[Zhichi] Received request: {req.model_dump_json()}")
+
+            llm_answer = await handler.get_answer(req)
+            resp = ThirdAlgorithmRespWrapper(
+                data=ThirdAlgorithmRespVo(
+                    llm_answer=llm_answer,
+                    runtimeid=req.runtimeid,
+                )
             )
-            background_tasks.add_task(handler.process_message, req)
-            return JSONResponse(content={"code": 0, "message": "ok"})
+            resp_json = resp.model_dump_json(exclude_none=True)
+            logger.info(f"[Zhichi] Synchronous response: {resp_json}")
+            return JSONResponse(content=resp.model_dump(exclude_none=True))
 
         @router.get("/zhichi/stats")
         async def zhichi_stats():

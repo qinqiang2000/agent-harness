@@ -1,6 +1,7 @@
 """智齿回调消息发送器."""
 
 import logging
+from typing import Optional
 
 import httpx
 
@@ -30,8 +31,9 @@ class ZhichiMessageSender:
         ai_agent_cid: str,
         llm_answer: str,
         req_stream: bool = False,
-        answer_type: str = "text",
-        third_transfer_flag: bool = False,
+        answer_type: str = "QA_DIRECT",
+        runtimeid: Optional[str] = None,
+        message_end: bool = True,
     ) -> bool:
         """向智齿发送答案.
 
@@ -61,24 +63,28 @@ class ZhichiMessageSender:
             ai_agent_cid=ai_agent_cid,
             llm_answer=llm_answer,
             answer_type=answer_type,
-            third_transfer_flag=third_transfer_flag,
+            runtimeid=runtimeid,
+            message_end=message_end,
         )
 
-        # Authorization header 格式待与智齿文档确认
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
+            "token": token,
         }
+
+        body = resp_vo.model_dump_json(exclude_none=True)
+        logger.info(f"[Zhichi] Sending response: url={url}, body={body}")
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.post(
                     url,
-                    content=resp_vo.model_dump_json(),
+                    content=body,
                     headers=headers,
                 )
                 response.raise_for_status()
                 data = response.json()
+                logger.info(f"[Zhichi] Callback response: status={response.status_code}, body={response.text}")
                 ret_code = data.get("ret_code", -1)
                 if ret_code != 0:
                     logger.error(
@@ -101,10 +107,12 @@ class ZhichiMessageSender:
         ai_agent_cid: str,
         error_text: str = "抱歉，处理您的问题时出现错误，请稍后再试。",
         req_stream: bool = False,
+        runtimeid: Optional[str] = None,
     ) -> bool:
         """发送错误兜底答案."""
         return await self.send_answer(
             ai_agent_cid=ai_agent_cid,
             llm_answer=error_text,
             req_stream=req_stream,
+            runtimeid=runtimeid,
         )
