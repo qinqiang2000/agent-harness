@@ -4,7 +4,10 @@
 
 - 有 traceId → 仅传 `traceId` 字段，**禁止**将 traceId 放入 `searchWordList`
 - 无 traceId → 仅传 `searchWordList` 关键词，不传 `traceId`
-- **强制要求**时间范围：优先解析用户提供的时间；未提供时默认查最近 7 天，若查不到结果则自动扩展到最近 30 天再查一次
+- **时间范围（必须传）**：每次查询都必须传 `startTime` 和 `endTime`，不得省略：
+  - 用户提供了时间 → 理解并传入用户说的时间范围
+  - 用户未提供时间 → 默认 `startTime` = 当前时间 - 7天，`endTime` = 当前时间
+  - 查不到结果时 → 自动扩展到最近 30 天再查一次（更新 `startTime` = 当前时间 - 30天）
 
 ## 无 traceId 时的关键字引导流程
 

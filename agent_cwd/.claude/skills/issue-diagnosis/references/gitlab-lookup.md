@@ -2,7 +2,7 @@
 
 ## 一、从 fields.project 推断仓库
 
-日志中 `fields.project` 即服务名（如 `smkp`）。按以下顺序查找仓库：
+日志中 `project` 即服务名（如 `smkp`）。按以下顺序查找仓库：
 
 **方式 A（优先）：查映射表**
 
@@ -13,7 +13,7 @@
 
 映射表未命中时，调用搜索：
 ```
-mcp__gitlab__search_repositories(search="{fields.project}")
+mcp__gitlab__search_repositories(search="{project}")
 ```
 取名称最接近的结果，获得完整 `project_id`（格式：`namespace/repo-name`）。
 **注意**：`project_id` 必须使用搜索结果中的完整路径，不能直接用服务名。
