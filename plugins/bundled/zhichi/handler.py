@@ -5,7 +5,6 @@ import logging
 import os
 from typing import Optional
 
-import anthropic
 
 from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
