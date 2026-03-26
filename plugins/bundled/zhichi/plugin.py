@@ -81,7 +81,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
                     )
                     waiting_json = waiting.model_dump_json(exclude_none=True)
                     logger.info(f"[Zhichi] Stream chunk: {waiting_json}")
-                    yield waiting_json + "\n"
+                    yield f"data:{waiting_json}\n\n"
 
                     # 再推送 AI 实际答案
                     async for llm_answer, message_end, transfer, group_name in handler.stream_answer(req):
@@ -96,7 +96,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
                         )
                         chunk_json = chunk.model_dump_json(exclude_none=True)
                         logger.info(f"[Zhichi] Stream chunk: {chunk_json}")
-                        yield chunk_json + "\n"
+                        yield f"data:{chunk_json}\n\n"
 
                 return StreamingResponse(
                     generate(),
