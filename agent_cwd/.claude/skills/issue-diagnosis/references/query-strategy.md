@@ -2,8 +2,12 @@
 
 ## 参数构建规则
 
-- 有 traceId → 仅传 `traceId` 字段，**禁止**将 traceId 放入 `searchWordList`
+- 有 traceId → 仅传 `traceId` 字段，**禁止**将 traceId 放入 `searchWordList`，**禁止**同时传 `searchWordList`
+  - traceId 查询返回结果后，必须先完整分析返回的所有日志条目，再决定下一步
+  - **严禁**在未充分分析 traceId 查询结果的情况下发起扩展查询或关键词查询
 - 无 traceId → 仅传 `searchWordList` 关键词，不传 `traceId`
+- **FAQ 命中且标注了「日志关键字」时（最高优先级）**：必须将 FAQ 中的关键字数组原样复制到 searchWordList，将 `<占位符>` 替换为用户提供的实际值，**严禁替换、增删或自行猜测关键词**。例：FAQ 写 `["发送邮件验证码sendVerifyCode param", "<邮箱地址>"]`，则 searchWordList 必须是 `["发送邮件验证码sendVerifyCode param", "qwe@163.com"]`，不得改为 `["sendVerifyCode", "邮箱绑定"]` 等变体
+- **禁止自行添加 `projectList` 参数**：`projectList` 仅在 [invoice-task-log-keywords.md](invoice-task-log-keywords.md) 中明确指定时才可使用，其他场景一律不传
 - **时间范围（必须传）**：每次查询都必须传 `startTime` 和 `endTime`，不得省略：
   - 用户提供了时间 → 理解并传入用户说的时间范围
   - 用户未提供时间 → 默认 `startTime` = 当前时间 - 7天，`endTime` = 当前时间

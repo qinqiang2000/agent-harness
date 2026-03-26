@@ -196,3 +196,37 @@ https://jdpiaozone.yuque.com/nbklz3/dn5ehb/oghbn3vph14nz4ss?singleDoc#
 税局不稳定导致的，建议稍后重试
 
 ---
+
+## Q30: 调用接口提示 token 失效 / 401 未授权
+
+> 相似问题: token失效、token无效、401、未授权、accessToken失效、token过期
+
+**现象**：
+- 调用业务接口时返回 HTTP 401，提示 token 失效或未授权
+
+**根因**：三类常见原因，按以下顺序排查：
+
+**1. token 参数名错误**（最常见）
+- 网关期望的参数名为 `access_token`（带下划线）
+- 常见错误写法：`accesstoken`（无下划线）、`token`、`accessToken`（驼峰）
+- 日志特征：请求 URL 中能看到参数名，如 `?accesstoken=xxx`
+
+**2. token 传入方式错误**
+- 支持的传入方式：URL 查询参数（`?access_token=xxx`）或 Header（`Authorization: Bearer xxx`）
+- 不支持放在请求 Body 中
+
+**3. token 已过期**
+- accessToken 有效期通常为 36 小时，超期需重新获取
+- 日志特征：参数名和传入方式均正确，但仍返回 401
+
+**诊断步骤**：
+1. 从日志中提取完整请求 URL，检查参数名是否为 `access_token`
+2. 确认 token 是通过 URL 参数还是 Header 传入
+3. 若参数名和传入方式均正确，检查 token 获取时间是否超过 36 小时
+
+**日志关键字**：完整请求 URL（含参数名）、HTTP 状态码 401
+
+**结论示例**：
+> 请求 URL 中 token 参数名为 `accesstoken`，网关期望 `access_token`（带下划线），参数名不匹配导致网关无法识别 token，返回 401。
+
+---

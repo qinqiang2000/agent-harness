@@ -13,10 +13,10 @@
 
 映射表未命中时，调用搜索：
 ```
-mcp__gitlab__search_repositories(search="{project}")
+mcp__gitlab__search_repositories(search="{fields.project 的值}")
 ```
+**注意**：search 参数必须传 `fields.project` 的值（服务名），禁止传类名、方法名或其他关键词。
 取名称最接近的结果，获得完整 `project_id`（格式：`namespace/repo-name`）。
-**注意**：`project_id` 必须使用搜索结果中的完整路径，不能直接用服务名。
 
 **无法定位时**：跳过本步骤，不影响日志分析结论输出。
 

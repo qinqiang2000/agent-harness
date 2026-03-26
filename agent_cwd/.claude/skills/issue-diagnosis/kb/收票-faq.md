@@ -8,7 +8,7 @@
 > 适用于 Q7～Q14 所有合规校验类型
 
 1. 通过日志定位 traceId（参考 [references/log-analysis.md](../references/log-analysis.md) 的「合规校验：通过发票号码定位 traceId」）
-2. 用 traceId 查完整链路日志，提取该校验类型的特有关键字和字段（见各 FAQ），如过日志和FQA描述对不上，可直接分析源码重新定位
+2. 用 traceId 查完整链路日志，在链路日志中按各 FAQ 的「链路日志分析关键字」提取字段（这些关键字仅用于分析已查到的日志内容，**不用于构建 searchWordList 搜索**）
 3. 根据提取字段输出结论
 
 ---
@@ -78,7 +78,7 @@
 **根因**：
 系统在收票合规校验阶段，查询 `t_bill_expense_relation` 表，发现该发票流水号（`fserial_no`）已关联到状态为审批中（30）、已通过（60）或已入账（65）的报销单。
 
-**日志关键字**：`重复报销msg`
+**链路日志分析关键字**：`重复报销msg`
 **提取字段**：`serialNo`/`fserial_no`（发票流水号）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -125,7 +125,7 @@
 - 财政电子票据（票种=25）：**不参与**个人发票判断，直接跳过
 - 非可查验票种：跳过校验
 
-**日志关键字**：`buyerName[`、`通用机打发票、电子发票参与个票校验`、`财政电子票据不参与个票判断`、`非可查验票种不参与个票判断`
+**链路日志分析关键字**：`buyerName[`、`通用机打发票、电子发票参与个票校验`、`财政电子票据不参与个票判断`、`非可查验票种不参与个票判断`
 **提取字段**：`buyerName`（购方名称）、`buyerTaxNo`（购方税号）、`invoiceType`（票种）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -143,7 +143,7 @@
 
 **根因**：`VerifyBuyerNameImpl` 比对发票 `buyerName` 与企业配置 `ghfmc`，不一致且不在白名单或曾用名列表中则拦截（errorLevel=4）。
 
-**日志关键字**：`校验购方抬头--不通过`、`校验购方抬头--抬头校验与传入的参数一致`
+**链路日志分析关键字**：`校验购方抬头--不通过`、`校验购方抬头--抬头校验与传入的参数一致`
 **提取字段**：`buyerName`（票面购方名称）、`ghfmc`（企业配置名称）、`buyerTaxNo`
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -158,7 +158,7 @@
 
 **根因**：`VerifyBuyerTaxNoImpl` 比对发票 `buyerTaxNo` 与企业配置 `taxNo`，不一致且不在白名单则拦截（errorLevel=5）。
 
-**日志关键字**：`校验购方税号--不通过`、`校验购方税号--税号校验与传入的参数一致`
+**链路日志分析关键字**：`校验购方税号--不通过`、`校验购方税号--税号校验与传入的参数一致`
 **提取字段**：`buyerTaxNo`（发票税号）、`taxNo`（企业税号）、`buyerName`、`ghfmc`
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -173,7 +173,7 @@
 
 **根因**：`CheckStatusImpl` 检查发票查验状态，非成功状态（非"0"/"0000"）则拦截（errorLevel=1）。常见原因：发票信息有误、税局接口异常、发票不存在。
 
-**日志关键字**：`errKey:`、`checkDescription:`（来自 `CheckStatusImpl` 的 `log.info`）
+**链路日志分析关键字**：`errKey:`、`checkDescription:`（来自 `CheckStatusImpl` 的 `log.info`）
 **提取字段**：`errKey`（错误码）、`checkDescription`（错误描述）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -189,7 +189,7 @@
 **根因**：`RedInvoiceImpl` / `InvalidInvoiceImpl` 检查 `invoiceStatus` 字段：
 - 全额红冲 → errorLevel=8；部分红冲 → errorLevel=26；红冲待确认 → errorLevel=27；作废 → errorLevel=7
 
-**日志关键字**：合规性校验日志中无专属日志，通过 `errorLevel` 值（7/8/26/27）和 `verifyResult` 字段判断
+**链路日志分析关键字**：合规性校验日志中无专属日志，通过 `errorLevel` 值（7/8/26/27）和 `verifyResult` 字段判断
 **提取字段**：`invoiceStatus`（发票状态，从 `verifyResult` 或查验结果中提取）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -206,7 +206,7 @@
 - 超过跨年期限（`twoYearMon` 配置，通常24个月）→ errorLevel=15
 - 超过报销期限（`expenseDeadline` 配置，企业自定义天数）→ errorLevel=14
 
-**日志关键字**：合规性校验日志中无专属日志，通过 `errorLevel` 值（14/15）和 `verifyResult` 字段判断；可搜索 `根据发票流水号数组查询发票信息` 获取 `invoiceDate`
+**链路日志分析关键字**：合规性校验日志中无专属日志，通过 `errorLevel` 值（14/15）和 `verifyResult` 字段判断；可搜索 `根据发票流水号数组查询发票信息` 获取 `invoiceDate`
 **提取字段**：`invoiceDate`（开票日期，从发票信息中提取）、`twoYearMon`/`expenseDeadline`（从合规配置日志 `覆写后的合规性校验 config` 中提取）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -221,7 +221,7 @@
 
 **根因**：`WithoutFileImpl` 检查电子发票是否有原始文件（`fileType=1`），无则拦截（errorLevel=3）。仅对电子发票生效，通用机打发票（票种=23）和区块链发票不参与此校验。
 
-**日志关键字**：`标记新逻辑，非原件 state`、`标记旧逻辑，非原件`、`已经是原文件，不做校验`
+**链路日志分析关键字**：`标记新逻辑，非原件 state`、`标记旧逻辑，非原件`、`已经是原文件，不做校验`
 **提取字段**：`state`（originalState）、`serialNo`、`fileType`
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -239,7 +239,7 @@
 - **发票明细敏感词**（`VerifyKeyImpl`）：`goodsName` 含配置敏感词 → errorLevel=12
 - **税局违法纳税人**（`VerifyCompanyBlacklistImpl`）：`salerTaxNo` 在税局公示违法纳税人名单中 → errorLevel=19
 
-**日志关键字**：`销方名称黑名单发票校验-`、`校验敏感词--不通过`、`校验销方黑名单`
+**链路日志分析关键字**：`销方名称黑名单发票校验-`、`校验敏感词--不通过`、`校验销方黑名单`
 **提取字段**：`salerName`（销方名称）、`salerTaxNo`（销方税号）、`filterKey`（匹配的关键词/敏感词）
 
 > 诊断流程见「合规校验通用诊断步骤」
@@ -254,9 +254,31 @@
 
 **根因**：`SequenceNumImpl` 检查同批次或历史发票中是否存在连号（`invoiceNo` ± range 范围内存在其他发票），触发则拦截（errorLevel=16）。
 
-**日志关键字**：`校验票种[`、`同批次连号情况：`、`发票连号[`、`new连号校验结果->没有关联报销单`
+**链路日志分析关键字**：`校验票种[`、`同批次连号情况：`、`发票连号[`、`new连号校验结果->没有关联报销单`
 **提取字段**：`invoiceNo`（发票号码）、`invoiceCode`（发票代码）、`invoiceType`（票种）、连号范围列表
 
 > 诊断流程见「合规校验通用诊断步骤」
 
 **结论示例**：发票号码 01093447 与同批次发票号码 01093448 相差 1，在连号检测范围（range=5）内，触发发票连号校验拦截。
+
+---
+
+## Q15: 绑定邮箱提示"邮箱已被绑定"
+
+> 相似问题: 邮箱已绑定、邮箱重复绑定、邮箱绑定失败
+
+**根因**：该邮箱在 `t_mail_user_relation` 表中已存在绑定记录，但记录中的 `fopen_id` 与当前用户的 openId 不匹配，即同一邮箱被其他账号绑定过。
+
+**日志关键字**：`["发送邮件验证码sendVerifyCode param", "<邮箱地址>"]`
+**提取字段**：邮箱地址、当前用户 openId
+
+**数据库验证**（数据源：prod-invoice）：
+```sql
+SELECT fid, fmail_user, fopen_id, fclient_id, fcreate_time, fupdate_time, fclient_type
+FROM t_mail_user_relation
+WHERE fmail_user = '{邮箱}'
+```
+对比 `fopen_id` 与当前用户 openId，判断是否为同一用户绑定。
+
+**结论示例**：
+> 邮箱 xxx@xxx.com 已被 openId 为 `abc123` 的账号绑定（fclient_id=xxx），与当前用户 openId `def456` 不一致，提示"邮箱已被绑定"。

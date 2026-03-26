@@ -27,7 +27,7 @@
 - `message`：日志内容
 - `time`：时间
 - `id`（即 traceId）
-- `fields.project`（即 project/服务名）
+- `project`（即 fields.project/服务名）
 - `level`：日志级别（ERROR/WARN/INFO 等）
 按时间倒序排序
 查不到日志时返回空列表。
@@ -61,7 +61,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 | 税局登陆超时| 超时，短信，登陆，失败 | 获取短信验证码失败 |
 | timeout / 超时 | 实际耗时、超时阈值、接口名 | 调用XX接口耗时5.2s，超过3s阈值 |
 | 500 / Internal Error | HTTP 状态码、响应内容 | 接口返回500，响应：'数据库连接失败' |
-| 401/403 / 鉴权失败 | clientId、token、错误消息 | clientId为空，实际值：'null' |
+| 401/403 / 鉴权失败 | 完整请求 URL（含所有查询参数名和值）、实际传入的 token 参数名（如 `accesstoken` vs `access_token`）、clientId、错误消息 | **必须提取完整 URL 中的参数名**，与源码中期望的参数名对比，参数名不一致是常见根因，需进入 Step 3 源码定位验证 |
 | 参数校验 / 不合法 | 参数名、实际值、期望格式 | 字段值含空格导致校验失败 |
 | NullPointerException | 堆栈、出错类和方法 | Service.process()中对象为null |
 | 连接失败 | 连接目标、地址、错误详情 | 连接Redis失败，地址127.0.0.1:6379 |
