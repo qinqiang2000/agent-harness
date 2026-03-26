@@ -4,15 +4,15 @@ import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
 from plugins.bundled.zhichi.handler import ZhichiHandler
-from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
-from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
+# from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
+# from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,32 +24,15 @@ class ZhichiChannelPlugin(ChannelPlugin):
         self.api = api
         self.config = api.config
 
-        self.token_manager = ZhichiTokenManager(
-            app_id=self.config.get("app_id", ""),
-            app_key=self.config.get("app_key", ""),
-            token_api_url=self.config.get(
-                "token_api_url", "https://www.sobot.com/api/get_token"
-            ),
-            refresh_buffer_seconds=self.config.get("token_refresh_buffer_seconds", 300),
-        )
-
-        self.message_sender = ZhichiMessageSender(
-            token_manager=self.token_manager,
-            answer_url_stream=self.config.get(
-                "answer_url_stream",
-                "https://www.sobot.com/api/robot/third_algorithm/stream/answer",
-            ),
-            answer_url_no_stream=self.config.get(
-                "answer_url_no_stream",
-                "https://www.sobot.com/api/robot/third_algorithm/answer",
-            ),
-            mock_send=self.config.get("mock_send", False),
-        )
+        # self.token_manager = ZhichiTokenManager(
+        #     app_id=self.config.get("app_id", ""),
+        #     app_key=self.config.get("app_key", ""),
+        # )
+        # self.message_sender = ZhichiMessageSender(token_manager=self.token_manager)
 
         self.handler = ZhichiHandler(
             agent_service=api.agent_service,
             session_service=api.session_service,
-            message_sender=self.message_sender,
             config=self.config,
         )
 
@@ -63,7 +46,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
     def get_capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
-            send_text=True,
+            send_text=False,
             send_images=False,
             send_cards=False,
             receive_webhook=True,
@@ -85,16 +68,58 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
             logger.info(f"[Zhichi] Received request: {req.model_dump_json()}")
 
-            llm_answer = await handler.get_answer(req)
-            resp = ThirdAlgorithmRespWrapper(
-                data=ThirdAlgorithmRespVo(
-                    llm_answer=llm_answer,
-                    runtimeid=req.runtimeid,
+            if req.req_stream:
+                async def generate():
+                    # 先推送等待提示（MESSAGE 类型，智齿流式显示）
+                    waiting = ThirdAlgorithmRespWrapper(
+                        data=ThirdAlgorithmRespVo(
+                            llm_answer="您好，感谢您的咨询！我正在为您查找相关信息，请稍候片刻～",
+                            robot_answer_message_type="MESSAGE",
+                            runtimeid=req.runtimeid,
+                            message_end=False,
+                        )
+                    )
+                    waiting_json = waiting.model_dump_json(exclude_none=True)
+                    logger.info(f"[Zhichi] Stream chunk: {waiting_json}")
+                    yield f"data:{waiting_json}\n\n"
+
+                    # 再推送 AI 实际答案
+                    async for llm_answer, message_end, transfer, group_name in handler.stream_answer(req):
+                        chunk = ThirdAlgorithmRespWrapper(
+                            data=ThirdAlgorithmRespVo(
+                                llm_answer=llm_answer,
+                                runtimeid=req.runtimeid,
+                                message_end=message_end,
+                                third_transfer_flag=transfer or None,
+                                third_transfer_groupName=group_name or None,
+                            )
+                        )
+                        chunk_json = chunk.model_dump_json(exclude_none=True)
+                        logger.info(f"[Zhichi] Stream chunk: {chunk_json}")
+                        yield f"data:{chunk_json}\n\n"
+
+                return StreamingResponse(
+                    generate(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                    },
                 )
-            )
-            resp_json = resp.model_dump_json(exclude_none=True)
-            logger.info(f"[Zhichi] Synchronous response: {resp_json}")
-            return JSONResponse(content=resp.model_dump(exclude_none=True))
+
+            else:
+                llm_answer, transfer, group_name = await handler.get_answer(req)
+                resp = ThirdAlgorithmRespWrapper(
+                    data=ThirdAlgorithmRespVo(
+                        llm_answer=llm_answer,
+                        runtimeid=req.runtimeid,
+                        third_transfer_flag=transfer or None,
+                        third_transfer_groupName=group_name or None,
+                    )
+                )
+                resp_json = resp.model_dump_json(exclude_none=True)
+                logger.info(f"[Zhichi] Synchronous response: {resp_json}")
+                return JSONResponse(content=resp.model_dump(exclude_none=True))
 
         @router.get("/zhichi/stats")
         async def zhichi_stats():
@@ -109,19 +134,12 @@ class ZhichiChannelPlugin(ChannelPlugin):
         text: str,
         context: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        req_stream = (context or {}).get("req_stream", False)
-        return await self.message_sender.send_answer(
-            ai_agent_cid=recipient_id,
-            llm_answer=text,
-            req_stream=req_stream,
-        )
+        return False
 
     async def on_start(self) -> None:
-        self.token_manager.start_background_refresh()
-        logger.info("[Zhichi] Plugin started, background token refresh running")
+        logger.info("[Zhichi] Plugin started")
 
     async def on_stop(self) -> None:
-        self.token_manager.stop_background_refresh()
         logger.info("[Zhichi] Plugin stopped")
 
 
