@@ -10,9 +10,9 @@ from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
 from plugins.bundled.zhichi.handler import ZhichiHandler
-from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
-from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
+# from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
+# from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,32 +24,15 @@ class ZhichiChannelPlugin(ChannelPlugin):
         self.api = api
         self.config = api.config
 
-        self.token_manager = ZhichiTokenManager(
-            app_id=self.config.get("app_id", ""),
-            app_key=self.config.get("app_key", ""),
-            token_api_url=self.config.get(
-                "token_api_url", "https://www.sobot.com/api/get_token"
-            ),
-            refresh_buffer_seconds=self.config.get("token_refresh_buffer_seconds", 300),
-        )
-
-        self.message_sender = ZhichiMessageSender(
-            token_manager=self.token_manager,
-            answer_url_stream=self.config.get(
-                "answer_url_stream",
-                "https://www.sobot.com/api/robot/third_algorithm/stream/answer",
-            ),
-            answer_url_no_stream=self.config.get(
-                "answer_url_no_stream",
-                "https://www.sobot.com/api/robot/third_algorithm/answer",
-            ),
-            mock_send=self.config.get("mock_send", False),
-        )
+        # self.token_manager = ZhichiTokenManager(
+        #     app_id=self.config.get("app_id", ""),
+        #     app_key=self.config.get("app_key", ""),
+        # )
+        # self.message_sender = ZhichiMessageSender(token_manager=self.token_manager)
 
         self.handler = ZhichiHandler(
             agent_service=api.agent_service,
             session_service=api.session_service,
-            message_sender=self.message_sender,
             config=self.config,
         )
 
@@ -63,7 +46,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
     def get_capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
-            send_text=True,
+            send_text=False,
             send_images=False,
             send_cards=False,
             receive_webhook=True,
@@ -151,19 +134,12 @@ class ZhichiChannelPlugin(ChannelPlugin):
         text: str,
         context: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        req_stream = (context or {}).get("req_stream", False)
-        return await self.message_sender.send_answer(
-            ai_agent_cid=recipient_id,
-            llm_answer=text,
-            req_stream=req_stream,
-        )
+        return False
 
     async def on_start(self) -> None:
-        self.token_manager.start_background_refresh()
-        logger.info("[Zhichi] Plugin started, background token refresh running")
+        logger.info("[Zhichi] Plugin started")
 
     async def on_stop(self) -> None:
-        self.token_manager.stop_background_refresh()
         logger.info("[Zhichi] Plugin stopped")
 
 
