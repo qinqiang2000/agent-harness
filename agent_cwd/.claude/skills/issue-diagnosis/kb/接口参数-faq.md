@@ -26,7 +26,10 @@
 ## Q2: 受票方纳税人识别号不合法，请重新输入
 
 1. 报错是局端校验返回的，可能是局端波动导致，麻烦客户再重试看看。
-2. 值班群有特殊字符检测工具"不可见字符.html"，将请求报文复制进去看看是否有乱码。
+2. 检查请求报文中是否含有不可见字符：
+   ```bash
+   python3 .claude/skills/issue-diagnosis/scripts/check_invisible_chars.py --json '<开票请求JSON>'
+   ```
 
 ---
 

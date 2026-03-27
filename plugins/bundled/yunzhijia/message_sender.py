@@ -71,6 +71,7 @@ class YunzhijiaMessageSender:
 
     async def _send_request(self, url: str, data: dict) -> bool:
         """发送 HTTP 请求到云之家"""
+        logger.debug(f"[MessageSender] POST {url} payload={data}")
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=data) as response:
@@ -78,7 +79,10 @@ class YunzhijiaMessageSender:
                         return True
                     else:
                         response_text = await response.text()
-                        logger.error(f"[MessageSender] HTTP {response.status}: {response_text}")
+                        logger.error(
+                            f"[MessageSender] HTTP {response.status}: {response_text} "
+                            f"| url={url} payload={data}"
+                        )
                         return False
         except Exception as e:
             logger.error(f"[MessageSender] Request error: {e}", exc_info=True)
