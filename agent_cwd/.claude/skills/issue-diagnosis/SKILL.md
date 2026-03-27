@@ -147,6 +147,8 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 ## Step 6：综合输出
 
+按一定格式以纯文本的方式输出总结
+**⚠️ 禁止使用任何 Markdown 代码格式**
 **⚠️ 脱敏规则（仅适用于最终输出，工具调用参数必须使用原始值）**：
 - 外部供应商订单号、合同号、账号（如 `4DLW2D124`）→ 脱敏
 - 凭证类字段值：clientSecret、entryKey、appSecret、privateKey、password、token、secret → 脱敏
@@ -154,8 +156,6 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - 完整身份证号 → 保留前6后4
 
 最终回复不暴露执行步骤（不出现"Step 1"等标题），只输出结论，不超过 500 字。
-
-**⚠️ 禁止使用任何 Markdown 代码格式**：最终输出中不得出现反引号（` ``` ` 代码块或 `` ` `` 内联代码），日志行、堆栈、代码示例均以纯文本输出。
 
 **解密辅助**：若日志中存在加密参数且解密有助于验证根因，可用 `AskUserQuestion` 询问用户是否需要解密，收到确认和密钥后用 Bash 执行解密。
 
