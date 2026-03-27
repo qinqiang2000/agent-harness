@@ -1,5 +1,6 @@
 """Audit channel plugin entry point."""
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -272,17 +273,24 @@ class AuditChannelPlugin(ChannelPlugin):
             if not path or not filename.lower().endswith(".pdf"):
                 return JSONResponse({"error": "PDF not found"}, status_code=404)
             try:
-                import fitz
-                doc = fitz.open(str(path))
-                if page < 1 or page > len(doc):
+                def _render():
+                    import fitz
+                    doc = fitz.open(str(path))
+                    if page < 1 or page > len(doc):
+                        doc.close()
+                        raise ValueError(f"Page {page} out of range (1-{len(doc)})")
+                    pg = doc[page - 1]
+                    pix = pg.get_pixmap(dpi=150)
+                    png_bytes = pix.tobytes("png")
                     doc.close()
-                    return JSONResponse({"error": f"Page {page} out of range (1-{len(doc)})"}, status_code=400)
-                pg = doc[page - 1]
-                pix = pg.get_pixmap(dpi=150)
-                png_bytes = pix.tobytes("png")
-                doc.close()
+                    return png_bytes
+
+                loop = asyncio.get_event_loop()
+                png_bytes = await loop.run_in_executor(None, _render)
                 from fastapi.responses import Response
                 return Response(content=png_bytes, media_type="image/png")
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=400)
             except ImportError:
                 return JSONResponse({"error": "PyMuPDF not installed"}, status_code=501)
             except Exception as e:
@@ -299,57 +307,58 @@ class AuditChannelPlugin(ChannelPlugin):
             if not path or not filename.lower().endswith(".pdf"):
                 return JSONResponse({"error": "PDF not found"}, status_code=404)
             try:
-                import fitz
-                import re as _re
-                doc = fitz.open(str(path))
-                if page < 1 or page > len(doc):
+                def _render_highlighted():
+                    import fitz
+                    doc = fitz.open(str(path))
+                    if page < 1 or page > len(doc):
+                        doc.close()
+                        raise ValueError(f"Page {page} out of range (1-{len(doc)})")
+                    pg = doc[page - 1]
+
+                    try:
+                        hl_list = json.loads(highlights)
+                    except Exception:
+                        hl_list = []
+
+                    misses = []
+                    ocr_cache = {}
+                    for hl in hl_list:
+                        value = hl.get("value", "")
+                        label = hl.get("label", "")
+                        color_hex = hl.get("color", "#FBBF24")
+                        if not value:
+                            continue
+
+                        rects = _find_field_rect(pg, value, label, ocr_cache)
+                        if not rects:
+                            misses.append(value)
+                            continue
+
+                        ch = color_hex.lstrip("#")
+                        r, g, b = int(ch[0:2], 16) / 255, int(ch[2:4], 16) / 255, int(ch[4:6], 16) / 255
+
+                        for rect in rects:
+                            padded = fitz.Rect(rect.x0 - 2, rect.y0 - 2, rect.x1 + 2, rect.y1 + 2)
+                            pg.draw_rect(padded, color=(r, g, b), width=1.5, overlay=True)
+                            if label:
+                                label_pt = fitz.Point(rect.x0, rect.y0 - 4)
+                                pg.insert_text(label_pt, label, fontsize=6, color=(r, g, b),
+                                               fontname="china-s", overlay=True)
+
+                    pix = pg.get_pixmap(dpi=150)
+                    png_bytes = pix.tobytes("png")
                     doc.close()
-                    return JSONResponse({"error": f"Page {page} out of range (1-{len(doc)})"}, status_code=400)
-                pg = doc[page - 1]
+                    return png_bytes, misses
 
-                import json as _json
-                try:
-                    hl_list = _json.loads(highlights)
-                except Exception:
-                    hl_list = []
-
-                misses = []
-                ocr_cache = {}  # Cache OCR results per page to avoid re-OCR
-                for hl in hl_list:
-                    value = hl.get("value", "")
-                    label = hl.get("label", "")
-                    color_hex = hl.get("color", "#FBBF24")
-                    if not value:
-                        continue
-
-                    rects = _find_field_rect(pg, value, label, ocr_cache)
-                    if not rects:
-                        misses.append(value)
-                        continue
-
-                    # Parse hex color to RGB floats
-                    ch = color_hex.lstrip("#")
-                    r, g, b = int(ch[0:2], 16) / 255, int(ch[2:4], 16) / 255, int(ch[4:6], 16) / 255
-
-                    for rect in rects:
-                        # Draw border rectangle (no fill) with padding
-                        import fitz as _fitz
-                        padded = _fitz.Rect(rect.x0 - 2, rect.y0 - 2, rect.x1 + 2, rect.y1 + 2)
-                        pg.draw_rect(padded, color=(r, g, b), width=1.5, overlay=True)
-                        # Draw label above the rect
-                        if label:
-                            label_pt = _fitz.Point(rect.x0, rect.y0 - 4)
-                            pg.insert_text(label_pt, label, fontsize=6, color=(r, g, b),
-                                           fontname="china-s", overlay=True)
-
-                pix = pg.get_pixmap(dpi=150)
-                png_bytes = pix.tobytes("png")
-                doc.close()
+                loop = asyncio.get_event_loop()
+                png_bytes, misses = await loop.run_in_executor(None, _render_highlighted)
                 from fastapi.responses import Response
                 headers = {}
                 if misses:
                     headers["X-Highlight-Misses"] = ",".join(misses)
                 return Response(content=png_bytes, media_type="image/png", headers=headers)
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=400)
             except ImportError:
                 return JSONResponse({"error": "PyMuPDF not installed"}, status_code=501)
             except Exception as e:
@@ -363,10 +372,15 @@ class AuditChannelPlugin(ChannelPlugin):
             if not path or not filename.lower().endswith(".pdf"):
                 return JSONResponse({"error": "PDF not found"}, status_code=404)
             try:
-                import fitz
-                doc = fitz.open(str(path))
-                count = len(doc)
-                doc.close()
+                def _count():
+                    import fitz
+                    doc = fitz.open(str(path))
+                    count = len(doc)
+                    doc.close()
+                    return count
+
+                loop = asyncio.get_event_loop()
+                count = await loop.run_in_executor(None, _count)
                 return {"pages": count}
             except ImportError:
                 return {"pages": -1, "error": "PyMuPDF not installed"}
