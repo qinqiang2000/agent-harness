@@ -20,3 +20,9 @@ else:
 
 DATA_DIR = AGENT_CWD / "data"                         # /agents/data (unified data directory)
 TENANTS_DIR = DATA_DIR / "tenants"                    # /agents/data/tenants (tenant-specific data)
+
+# Plugin directories
+PLUGINS_DIR = AGENTS_ROOT / "plugins"                  # /agents/plugins
+BUNDLED_PLUGINS_DIR = PLUGINS_DIR / "bundled"          # /agents/plugins/bundled
+INSTALLED_PLUGINS_DIR = PLUGINS_DIR / "installed"      # /agents/plugins/installed
+PLUGIN_CONFIG_FILE = PLUGINS_DIR / "config.json"       # /agents/plugins/config.json

@@ -1,0 +1,52 @@
+{
+  "id": "zhichi",
+  "name": "智齿客服机器人",
+  "version": "1.0.0",
+  "description": "智齿客服机器人 Channel 插件，通过 ThirdAlgorithmReqVo/RespVo 接口集成",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "app_id": {
+        "type": "string",
+        "description": "智齿应用 AppId，用于 MD5 签名获取 Token（必填）"
+      },
+      "app_key": {
+        "type": "string",
+        "description": "智齿应用 AppKey，用于 MD5 签名获取 Token（必填）"
+      },
+      "session_timeout": {
+        "type": "integer",
+        "description": "会话超时秒数",
+        "default": 3600
+      },
+      "default_skill": {
+        "type": "string",
+        "description": "默认使用的 Skill 名称",
+        "default": "customer-service"
+      },
+      "token_refresh_buffer_seconds": {
+        "type": "integer",
+        "description": "Token 到期前提前刷新的缓冲秒数",
+        "default": 300
+      },
+      "token_api_url": {
+        "type": "string",
+        "description": "获取 Token 的 API URL",
+        "default": "https://www.sobot.com/api/get_token"
+      },
+      "answer_url_stream": {
+        "type": "string",
+        "description": "流式回调 URL（req_stream=true 时使用）",
+        "default": "https://www.sobot.com/api/robot/third_algorithm/stream/answer"
+      },
+      "answer_url_no_stream": {
+        "type": "string",
+        "description": "非流式回调 URL（req_stream=false 时使用）",
+        "default": "https://www.sobot.com/api/robot/third_algorithm/answer"
+      }
+    },
+    "required": ["app_id", "app_key"]
+  }
+}

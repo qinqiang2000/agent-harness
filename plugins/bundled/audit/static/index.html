@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 财务审核助手</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .drag-over { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .chat-scroll { scroll-behavior: smooth; }
+    .comparison-line { position: relative; }
+    .comparison-line::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: -12px;
+      right: -12px;
+      height: 2px;
+      z-index: 0;
+    }
+    .status-pass .comparison-line::before { background: #22c55e; }
+    .status-fail .comparison-line::before { background: #ef4444; }
+    .status-unknown .comparison-line::before { background: #eab308; }
+    .markdown-body h1 { font-size: 1.25rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+    .markdown-body h2 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.5rem; }
+    .markdown-body h3 { font-size: 1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+    .markdown-body table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.875rem; }
+    .markdown-body th, .markdown-body td { border: 1px solid #e5e7eb; padding: 0.375rem 0.5rem; text-align: left; }
+    .markdown-body th { background: #f9fafb; font-weight: 600; }
+    .markdown-body ul, .markdown-body ol { padding-left: 1.5rem; margin: 0.25rem 0; }
+    .markdown-body li { margin: 0.125rem 0; }
+    .markdown-body hr { margin: 0.75rem 0; border-color: #e5e7eb; }
+    .markdown-body p { margin: 0.25rem 0; }
+    .markdown-body strong { font-weight: 600; }
+  </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden" x-data="auditApp()" x-init="init()">
+
+  <!-- Header -->
+  <header class="bg-white border-b px-4 py-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <h1 class="text-lg font-semibold text-gray-800">AI 财务审核助手</h1>
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="text-gray-500">租户:</span>
+      <span class="font-medium text-gray-700" x-text="tenantId"></span>
+      <button @click="showTenantModal = true" class="text-blue-600 hover:text-blue-800 ml-1">切换</button>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Left sidebar: Rules -->
+    <aside class="bg-white border-r flex flex-col shrink-0 transition-all duration-300"
+      :class="rulesCollapsed ? 'w-10' : 'w-72'">
+      <!-- Collapsed state: just an expand button -->
+      <div x-show="rulesCollapsed" class="flex flex-col items-center py-3">
+        <button @click="rulesCollapsed = false" class="text-gray-400 hover:text-blue-600 transition" title="展开规则">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <!-- Expanded state -->
+      <template x-if="!rulesCollapsed">
+        <div class="flex flex-col flex-1 overflow-hidden">
+      <div class="px-4 py-3 border-b flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-700">审核规则</h2>
+        <button @click="rulesCollapsed = true" class="text-gray-400 hover:text-gray-600" title="收起">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
+        <template x-for="(rule, idx) in rules" :key="rule.id">
+          <div class="group relative bg-gray-50 rounded-lg p-2.5 hover:bg-gray-100 transition">
+            <div class="flex items-start gap-2">
+              <input type="checkbox" :checked="rule.enabled" @change="rule.enabled = $el.checked; saveRules()"
+                class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <div class="flex-1 min-w-0">
+                <template x-if="editingRuleId !== rule.id">
+                  <p class="text-xs text-gray-700 leading-relaxed cursor-pointer" @click="editingRuleId = rule.id" x-text="rule.text"></p>
+                </template>
+                <template x-if="editingRuleId === rule.id">
+                  <div>
+                    <textarea x-model="rule.text" @keydown.escape="editingRuleId = null" @blur="editingRuleId = null; saveRules()"
+                      class="w-full text-xs border rounded p-1.5 focus:ring-1 focus:ring-blue-500" rows="3" x-ref="ruleEditor"></textarea>
+                  </div>
+                </template>
+              </div>
+              <button @click="removeRule(idx)" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="px-3 py-2 border-t space-y-2">
+        <button @click="addRule()" class="w-full text-xs text-blue-600 hover:text-blue-800 py-1.5 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 transition">
+          + 添加规则
+        </button>
+      </div>
+        </div>
+      </template>
+    </aside>
+
+    <!-- Main content area -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Upload zone -->
+      <div class="shrink-0 p-4 border-b bg-white">
+        <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center transition-all"
+          :class="{'drag-over': isDragging}"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="handleDrop($event)"
+          @paste.prevent="handlePaste($event)">
+
+          <template x-if="files.length === 0">
+            <div>
+              <svg class="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              <p class="text-sm text-gray-500">拖拽文件到此处，或 <label class="text-blue-600 hover:text-blue-800 cursor-pointer">点击上传<input type="file" class="hidden" multiple accept=".pdf,.png,.jpg,.jpeg" @change="handleFileSelect($event)"></label></p>
+              <p class="text-xs text-gray-400 mt-1">支持 PDF、PNG、JPG（也可粘贴截图）</p>
+            </div>
+          </template>
+
+          <template x-if="files.length > 0">
+            <div class="flex flex-wrap gap-2 justify-center">
+              <template x-for="f in files" :key="f.name">
+                <div class="flex items-center gap-1.5 bg-white border rounded-lg px-2.5 py-1.5 text-xs shadow-sm">
+                  <svg x-show="f.type === 'pdf'" class="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/></svg>
+                  <svg x-show="f.type === 'image'" class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2zM8.5 13.5l2.5 3L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                  <span class="text-gray-700 max-w-[120px] truncate" x-text="f.name"></span>
+                  <span class="text-gray-400" x-text="formatSize(f.size)"></span>
+                  <button @click="deleteFile(f.name)" class="text-gray-400 hover:text-red-500 ml-0.5">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </template>
+              <label class="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 cursor-pointer border border-dashed border-blue-300 rounded-lg px-2.5 py-1.5">
+                + 添加
+                <input type="file" class="hidden" multiple accept=".pdf,.png,.jpg,.jpeg" @change="handleFileSelect($event)">
+              </label>
+            </div>
+          </template>
+        </div>
+        <!-- Upload progress -->
+        <div x-show="uploading" class="mt-2 text-xs text-gray-500 text-center" x-text="uploadStatus"></div>
+      </div>
+
+      <!-- Chat + Report area -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Chat messages -->
+        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-3 chat-scroll" x-ref="chatContainer">
+          <template x-for="(msg, idx) in messages" :key="idx">
+            <div class="fade-in" :class="msg.role === 'user' ? 'flex justify-end' : ''">
+              <div :class="msg.role === 'user'
+                ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm px-3 py-2 max-w-[80%] text-sm'
+                : 'bg-white border rounded-2xl rounded-bl-sm px-3 py-2 max-w-[90%] text-sm text-gray-700'">
+                <div x-show="msg.type === 'markdown'" class="markdown-body" x-html="renderMarkdown(msg.content)"></div>
+                <div x-show="msg.type !== 'markdown'" x-text="msg.content"></div>
+              </div>
+            </div>
+          </template>
+          <!-- Streaming indicator -->
+          <div x-show="isStreaming" class="flex items-center gap-2 text-sm text-gray-500">
+            <div class="flex gap-1">
+              <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+              <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+              <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+            </div>
+            <span x-text="streamingStatus">处理中...</span>
+          </div>
+        </div>
+
+        <!-- Audit Report (parsed from JSON) -->
+        <div x-show="auditResult" x-cloak class="shrink-0 border-t bg-white max-h-[45vh] overflow-y-auto">
+          <div class="px-4 py-3">
+            <!-- Summary bar -->
+            <div class="flex items-center gap-4 mb-3" x-show="auditResult?.summary">
+              <h3 class="text-sm font-semibold text-gray-700">审核结果</h3>
+              <div class="flex gap-3 text-xs">
+                <span class="flex items-center gap-1 text-green-600">
+                  <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                  通过 <span class="font-semibold" x-text="auditResult?.summary?.pass || 0"></span>
+                </span>
+                <span class="flex items-center gap-1 text-red-600">
+                  <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                  未通过 <span class="font-semibold" x-text="auditResult?.summary?.fail || 0"></span>
+                </span>
+                <span class="flex items-center gap-1 text-yellow-600">
+                  <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                  待定 <span class="font-semibold" x-text="auditResult?.summary?.unknown || 0"></span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Rule cards -->
+            <div class="space-y-3">
+              <template x-for="rule in (auditResult?.rules || [])" :key="rule.id">
+                <div class="border rounded-xl p-3 transition"
+                  :class="{
+                    'border-green-200 bg-green-50/50': rule.status === 'PASS',
+                    'border-red-200 bg-red-50/50': rule.status === 'FAIL',
+                    'border-yellow-200 bg-yellow-50/50': rule.status === 'UNABLE_TO_DETERMINE'
+                  }">
+                  <!-- Rule header -->
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-base" x-text="rule.status === 'PASS' ? '✅' : rule.status === 'FAIL' ? '❌' : '⚠️'"></span>
+                    <span class="text-xs font-medium text-gray-500" x-text="'规则 ' + rule.id"></span>
+                    <span class="text-sm text-gray-700 flex-1" x-text="rule.text"></span>
+                  </div>
+                  <!-- Comparison cards -->
+                  <div class="flex flex-wrap items-center gap-2 ml-7"
+                    :class="{
+                      'status-pass': rule.status === 'PASS',
+                      'status-fail': rule.status === 'FAIL',
+                      'status-unknown': rule.status === 'UNABLE_TO_DETERMINE'
+                    }">
+                    <template x-for="(comp, ci) in rule.comparisons" :key="ci">
+                      <div class="flex items-center gap-2">
+                        <div class="border rounded-lg px-2.5 py-1.5 bg-white text-xs min-w-[120px]"
+                          :class="{
+                            'border-green-300': rule.status === 'PASS',
+                            'border-red-300': rule.status === 'FAIL',
+                            'border-yellow-300': rule.status === 'UNABLE_TO_DETERMINE'
+                          }">
+                          <div class="text-gray-400 text-[10px]" x-text="comp.source"></div>
+                          <div class="text-gray-500 text-[10px]" x-text="comp.field_name"></div>
+                          <div class="font-medium text-gray-800 mt-0.5 break-all" x-text="comp.value"></div>
+                          <div x-show="comp.page" class="text-[10px] text-gray-400 mt-0.5">
+                            <a href="#" @click.prevent="showComparison(rule)" class="text-blue-500 hover:underline" x-text="'P' + comp.page"></a>
+                          </div>
+                        </div>
+                        <span x-show="ci < rule.comparisons.length - 1" class="text-gray-300 text-xs"
+                          x-text="rule.status === 'PASS' ? '═' : rule.status === 'FAIL' ? '≠' : '?'"></span>
+                      </div>
+                    </template>
+                  </div>
+                  <!-- Compare button + Explanation -->
+                  <div class="flex items-center gap-3 mt-2 ml-7">
+                    <button x-show="rule.comparisons.length >= 2"
+                      @click="showComparison(rule)"
+                      class="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-0.5 border border-blue-200 rounded hover:bg-blue-50 transition shrink-0">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/></svg>
+                      对比查看
+                    </button>
+                    <p class="text-xs text-gray-500 flex-1" x-text="rule.explanation"></p>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Input bar -->
+      <div class="shrink-0 border-t bg-white px-4 py-3">
+        <div class="flex gap-2">
+          <button @click="startAudit()"
+            :disabled="isStreaming || files.length === 0"
+            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shrink-0">
+            <span x-show="!isStreaming">开始审核</span>
+            <span x-show="isStreaming">审核中...</span>
+          </button>
+          <input type="text" x-model="userInput"
+            @keydown.enter="sendMessage()"
+            :disabled="isStreaming"
+            placeholder="输入追问，如"规则3为什么不通过？""
+            class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50">
+          <button @click="sendMessage()" :disabled="isStreaming || !userInput.trim()"
+            class="px-3 py-2 text-blue-600 hover:text-blue-800 disabled:opacity-30 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right side: Compare Panel -->
+    <aside x-show="comparePanel.show" x-cloak
+      class="bg-white border-l flex flex-col shrink-0 transition-all duration-300"
+      :class="comparePanel.maximized ? 'fixed inset-0 z-50' : 'w-[45%]'">
+      <!-- Toolbar -->
+      <div class="flex items-center justify-between px-3 py-2 border-b bg-gray-50 shrink-0">
+        <span class="text-xs font-medium text-gray-600">文档对比</span>
+        <div class="flex items-center gap-1.5">
+          <!-- Zoom controls -->
+          <button @click="comparePanel.zoom = Math.max(0.3, comparePanel.zoom - 0.2)"
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs font-bold">−</button>
+          <span class="text-[10px] text-gray-400 w-8 text-center" x-text="Math.round(comparePanel.zoom * 100) + '%'"></span>
+          <button @click="comparePanel.zoom = Math.min(3, comparePanel.zoom + 0.2)"
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs font-bold">+</button>
+          <div class="w-px h-4 bg-gray-300 mx-1"></div>
+          <!-- Maximize toggle -->
+          <button @click="comparePanel.maximized = !comparePanel.maximized"
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500" title="最大化/还原">
+            <svg x-show="!comparePanel.maximized" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+            <svg x-show="comparePanel.maximized" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M15 15h4.5m-4.5 0v4.5m0-4.5l5.5 5.5"/></svg>
+          </button>
+          <!-- Close -->
+          <button @click="comparePanel.show = false; comparePanel.maximized = false"
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- Panels (stacked vertically) -->
+      <div class="flex-1 overflow-hidden flex flex-col divide-y">
+        <template x-for="(panel, pi) in comparePanel.panels" :key="pi">
+          <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+            <!-- Panel header: filename + legend -->
+            <div class="px-3 py-1.5 bg-gray-50 border-b shrink-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[11px] font-medium text-gray-600" x-text="panel.filename + ' · 第' + panel.page + '页'"></span>
+                <template x-for="h in panel.highlights" :key="h.label">
+                  <span class="flex items-center gap-1 text-[10px]">
+                    <span class="w-2 h-2 rounded-sm shrink-0" :style="'background:' + h.color"></span>
+                    <span class="text-gray-500" x-text="h.label"></span>
+                  </span>
+                </template>
+              </div>
+            </div>
+            <!-- Scrollable image with zoom -->
+            <div class="flex-1 overflow-auto bg-gray-100">
+              <div class="p-3 flex justify-center" :style="'transform-origin: top center; transform: scale(' + comparePanel.zoom + ')'">
+                <img :src="panel.url" class="shadow-lg rounded max-w-full" alt="Highlighted PDF page">
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Tenant modal -->
+  <div x-show="showTenantModal" x-cloak class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showTenantModal = false">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-80">
+      <h3 class="text-base font-semibold text-gray-800 mb-3">设置租户</h3>
+      <input type="text" x-model="tenantInput" placeholder="输入公司名或租户ID"
+        @keydown.enter="setTenant()"
+        class="w-full border rounded-lg px-3 py-2 text-sm mb-3 focus:ring-1 focus:ring-blue-500">
+      <div class="flex gap-2 justify-end">
+        <button @click="showTenantModal = false" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">取消</button>
+        <button @click="setTenant()" class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function auditApp() {
+      return {
+        // State
+        tenantId: '',
+        tenantInput: '',
+        showTenantModal: false,
+        rules: [],
+        editingRuleId: null,
+        files: [],
+        messages: [],
+        userInput: '',
+        isStreaming: false,
+        streamingStatus: '处理中...',
+        isDragging: false,
+        uploading: false,
+        uploadStatus: '',
+        sessionId: null,
+        auditResult: null,
+        rulesCollapsed: false,
+        comparePanel: {
+          show: false,
+          maximized: false,
+          zoom: 1,
+          panels: [],
+        },
+
+        // Base URL (same origin)
+        get baseUrl() { return window.location.origin; },
+
+        // Init
+        async init() {
+          this.tenantId = localStorage.getItem('audit_tenant_id') || '';
+          if (!this.tenantId) {
+            this.showTenantModal = true;
+            return;
+          }
+          await this.loadData();
+        },
+
+        async loadData() {
+          await Promise.all([this.loadRules(), this.loadFiles()]);
+        },
+
+        // Tenant
+        async setTenant() {
+          const id = this.tenantInput.trim();
+          if (!id) return;
+          // Normalize: lowercase, replace spaces with hyphens
+          this.tenantId = id.toLowerCase().replace(/\s+/g, '-');
+          localStorage.setItem('audit_tenant_id', this.tenantId);
+          this.showTenantModal = false;
+          this.messages = [];
+          this.auditResult = null;
+          this.sessionId = null;
+          await this.loadData();
+        },
+
+        // Rules
+        async loadRules() {
+          try {
+            const res = await fetch(`${this.baseUrl}/audit/rules/${this.tenantId}`);
+            this.rules = await res.json();
+          } catch (e) { console.error('Load rules failed:', e); }
+        },
+
+        async saveRules() {
+          try {
+            await fetch(`${this.baseUrl}/audit/rules/${this.tenantId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rules: this.rules }),
+            });
+          } catch (e) { console.error('Save rules failed:', e); }
+        },
+
+        addRule() {
+          const id = 'rule-' + Date.now();
+          this.rules.push({ id, text: '新规则（点击编辑）', enabled: true, category: null });
+          this.editingRuleId = id;
+          this.saveRules();
+        },
+
+        removeRule(idx) {
+          this.rules.splice(idx, 1);
+          this.saveRules();
+        },
+
+        // Files
+        async loadFiles() {
+          try {
+            const res = await fetch(`${this.baseUrl}/audit/files/${this.tenantId}`);
+            this.files = await res.json();
+          } catch (e) { console.error('Load files failed:', e); }
+        },
+
+        async uploadFiles(fileList) {
+          this.uploading = true;
+          let uploaded = 0;
+          for (const file of fileList) {
+            this.uploadStatus = `上传中 ${++uploaded}/${fileList.length}: ${file.name}`;
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('tenant_id', this.tenantId);
+            try {
+              const res = await fetch(`${this.baseUrl}/audit/upload`, { method: 'POST', body: fd });
+              if (!res.ok) {
+                const err = await res.json();
+                this.addMessage('system', `上传失败: ${err.error || '未知错误'}`);
+              }
+            } catch (e) {
+              this.addMessage('system', `上传失败: ${e.message}`);
+            }
+          }
+          this.uploading = false;
+          this.uploadStatus = '';
+          await this.loadFiles();
+        },
+
+        handleFileSelect(e) { if (e.target.files.length) this.uploadFiles(e.target.files); },
+        handleDrop(e) {
+          this.isDragging = false;
+          if (e.dataTransfer.files.length) this.uploadFiles(e.dataTransfer.files);
+        },
+        handlePaste(e) {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          const files = [];
+          for (const item of items) {
+            if (item.kind === 'file') files.push(item.getAsFile());
+          }
+          if (files.length) this.uploadFiles(files);
+        },
+
+        async deleteFile(name) {
+          await fetch(`${this.baseUrl}/audit/files/${this.tenantId}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+          await this.loadFiles();
+        },
+
+        formatSize(bytes) {
+          if (bytes < 1024) return bytes + 'B';
+          if (bytes < 1048576) return (bytes / 1024).toFixed(0) + 'K';
+          return (bytes / 1048576).toFixed(1) + 'M';
+        },
+
+        // Chat
+        addMessage(role, content, type = 'text') {
+          this.messages.push({ role, content, type });
+          this.$nextTick(() => {
+            const c = this.$refs.chatContainer;
+            if (c) c.scrollTop = c.scrollHeight;
+          });
+        },
+
+        updateLastAssistant(content) {
+          for (let i = this.messages.length - 1; i >= 0; i--) {
+            if (this.messages[i].role === 'assistant') {
+              this.messages[i].content = content;
+              this.messages[i].type = 'markdown';
+              break;
+            }
+          }
+          this.$nextTick(() => {
+            const c = this.$refs.chatContainer;
+            if (c) c.scrollTop = c.scrollHeight;
+          });
+        },
+
+        renderMarkdown(text) {
+          try { return marked.parse(text || ''); } catch { return text; }
+        },
+
+        // Audit
+        async startAudit() {
+          if (this.files.length === 0) return;
+          this.auditResult = null;
+          this.sessionId = null;
+          this.rulesCollapsed = true;
+          this.comparePanel.show = false;
+          this.addMessage('user', '开始审核');
+          await this.runQuery({ tenant_id: this.tenantId });
+        },
+
+        async sendMessage() {
+          const text = this.userInput.trim();
+          if (!text) return;
+          this.userInput = '';
+          this.addMessage('user', text);
+          await this.runQuery({
+            tenant_id: this.tenantId,
+            prompt: text,
+            session_id: this.sessionId,
+          });
+        },
+
+        async runQuery(body) {
+          this.isStreaming = true;
+          this.streamingStatus = '连接中...';
+          this.addMessage('assistant', '', 'markdown');
+
+          let fullText = '';
+
+          try {
+            const res = await fetch(`${this.baseUrl}/audit/query`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('event:')) {
+                  var eventType = line.slice(6).trim();
+                } else if (line.startsWith('data:')) {
+                  const dataStr = line.slice(5).trim();
+                  if (!dataStr) continue;
+                  try {
+                    const data = JSON.parse(dataStr);
+                    this.handleSSEEvent(eventType, data);
+                    if (eventType === 'assistant_message' && data.content) {
+                      fullText += data.content;
+                      this.updateLastAssistant(fullText);
+                    }
+                  } catch {}
+                }
+              }
+            }
+          } catch (e) {
+            this.addMessage('system', `错误: ${e.message}`);
+          }
+
+          // Try to parse audit JSON from full text (skip if already parsed from result event)
+          if (!this.auditResult) {
+            this.tryParseAuditResult(fullText);
+          }
+          this.isStreaming = false;
+        },
+
+        handleSSEEvent(type, data) {
+          switch (type) {
+            case 'heartbeat':
+              this.streamingStatus = data.status === 'processing' ? '正在分析文档...' : '连接中...';
+              break;
+            case 'session_created':
+              this.sessionId = data.session_id;
+              break;
+            case 'result':
+              if (data.result) {
+                this.updateLastAssistant(data.result);
+                this.tryParseAuditResult(data.result);
+              }
+              this.streamingStatus = '完成';
+              break;
+            case 'error':
+              this.addMessage('system', `错误: ${data.message || '未知错误'}`);
+              break;
+          }
+        },
+
+        tryParseAuditResult(text) {
+          if (!text) return;
+          // Try multiple patterns — Claude may format the block slightly differently
+          const patterns = [
+            /<!-- AUDIT_RESULT_JSON\s*\n?([\s\S]*?)\n?\s*AUDIT_RESULT_JSON -->/,
+            /```json\s*\n?\s*\/\/ AUDIT_RESULT_JSON\s*\n?([\s\S]*?)\n?\s*\/\/ AUDIT_RESULT_JSON\s*\n?\s*```/,
+            /AUDIT_RESULT_JSON\s*\n?([\s\S]*?)\n?\s*AUDIT_RESULT_JSON/,
+          ];
+          let jsonStr = null;
+          for (const pat of patterns) {
+            const m = text.match(pat);
+            if (m) { jsonStr = m[1]; break; }
+          }
+          // Fallback: try to find a large JSON block with "rules" and "summary" keys
+          if (!jsonStr) {
+            const m = text.match(/(\{[\s\S]*?"rules"\s*:\s*\[[\s\S]*?"summary"\s*:\s*\{[\s\S]*?\}\s*\})/);
+            if (m) jsonStr = m[1];
+          }
+          if (!jsonStr) return;
+
+          try {
+            // Clean common LLM JSON issues before parsing
+            const cleaned = this.cleanJson(jsonStr);
+            console.log('Attempting to parse audit JSON (' + cleaned.length + ' chars)');
+            this.auditResult = JSON.parse(cleaned);
+            // Remove JSON block from display text
+            const clean = text
+              .replace(/<!-- AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON -->/, '')
+              .replace(/```json\s*\/\/ AUDIT_RESULT_JSON[\s\S]*?\/\/ AUDIT_RESULT_JSON\s*```/, '')
+              .trim();
+            if (clean) this.updateLastAssistant(clean);
+          } catch (e) {
+            console.warn('Failed to parse audit JSON, trying relaxed parse:', e.message);
+            // Last resort: try extracting just the rules array
+            try {
+              const relaxed = this.relaxedJsonParse(jsonStr);
+              if (relaxed) {
+                this.auditResult = relaxed;
+                const clean = text.replace(/AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON/, '').trim();
+                if (clean) this.updateLastAssistant(clean);
+              }
+            } catch (e2) {
+              console.error('All JSON parse attempts failed:', e2.message);
+            }
+          }
+        },
+
+        cleanJson(str) {
+          let s = str.trim();
+          // Fix smart/fullwidth quotes and punctuation
+          s = s.replace(/\u201c/g, '\\"').replace(/\u201d/g, '\\"'); // "" → escaped
+          s = s.replace(/\u2018/g, "'").replace(/\u2019/g, "'");
+          // Remove trailing commas before } or ]
+          s = s.replace(/,\s*([}\]])/g, '$1');
+          // Try as-is first
+          try { JSON.parse(s); return s; } catch {}
+          // Collapse to single line
+          s = s.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ');
+          try { JSON.parse(s); return s; } catch {}
+          // Fix unescaped double quotes inside string values:
+          // Walk char by char, detect quotes inside already-open strings
+          s = this.fixUnescapedQuotes(s);
+          return s;
+        },
+
+        fixUnescapedQuotes(json) {
+          // State machine: track if we're inside a JSON string value
+          const chars = [...json];
+          const out = [];
+          let inString = false;
+          let afterColon = false; // true when we just saw "key": and are in the value string
+          let depth = 0; // track how deep inside the value string we are
+
+          for (let i = 0; i < chars.length; i++) {
+            const c = chars[i];
+            const prev = i > 0 ? chars[i-1] : '';
+
+            if (!inString) {
+              out.push(c);
+              if (c === '"') {
+                inString = true;
+                depth = 0;
+              }
+            } else {
+              // We're inside a string
+              if (c === '"' && prev !== '\\') {
+                // Is this the closing quote? Check what follows
+                // Look ahead: if next non-space char is : , } ] or end → structural quote
+                let j = i + 1;
+                while (j < chars.length && chars[j] === ' ') j++;
+                const next = j < chars.length ? chars[j] : '';
+                if (next === ':' || next === ',' || next === '}' || next === ']' || next === '') {
+                  // This is a structural closing quote
+                  out.push(c);
+                  inString = false;
+                } else {
+                  // This is an unescaped quote inside a value — escape it
+                  out.push('\\', '"');
+                }
+              } else {
+                out.push(c);
+              }
+            }
+          }
+          return out.join('');
+        },
+
+        relaxedJsonParse(str) {
+          // Try to extract structured data even from malformed JSON
+          // Split by rule blocks (each starts with "id":)
+          const ruleBlocks = str.split(/(?="id"\s*:)/g).filter(b => b.includes('"status"'));
+          const rules = [];
+          for (const block of ruleBlocks) {
+            const id = block.match(/"id"\s*:\s*(\d+)/);
+            const status = block.match(/"status"\s*:\s*"(PASS|FAIL|UNABLE_TO_DETERMINE)"/);
+            const text = block.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            if (!id || !status) continue;
+
+            // Try to extract comparisons
+            const comps = [];
+            const compPattern = /"source"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"field_name"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"value"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+            let cm;
+            while ((cm = compPattern.exec(block)) !== null) {
+              comps.push({ source: cm[1], field_name: cm[2], value: cm[3], page: null });
+            }
+
+            const expl = block.match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            rules.push({
+              id: parseInt(id[1]),
+              text: text ? text[1] : '',
+              status: status[1],
+              comparisons: comps,
+              explanation: expl ? expl[1] : '',
+            });
+          }
+          if (rules.length === 0) return null;
+          const pass = rules.filter(r => r.status === 'PASS').length;
+          const fail = rules.filter(r => r.status === 'FAIL').length;
+          return {
+            documents: [],
+            rules,
+            summary: { pass, fail, unknown: rules.length - pass - fail },
+          };
+        },
+
+        // Compare View
+        showComparison(rule) {
+          const palette = ['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#F97316'];
+          // Single color for the entire rule
+          const ruleColor = palette[(rule.id - 1) % palette.length] || palette[0];
+          // Group comparisons by source document
+          const bySource = {};
+          rule.comparisons.forEach((comp) => {
+            if (!comp.page) return;
+            const key = comp.source;
+            if (!bySource[key]) bySource[key] = { comps: [], page: comp.page };
+            bySource[key].comps.push({ ...comp, color: ruleColor });
+          });
+
+          const panels = [];
+          for (const [source, group] of Object.entries(bySource)) {
+            const doc = this.auditResult?.documents?.find(d => d.identified_as === source);
+            if (!doc) continue;
+            const filename = doc.file;
+            const highlights = group.comps.map(c => ({
+              value: c.value, label: c.field_name, color: c.color,
+            }));
+            const hlParam = encodeURIComponent(JSON.stringify(highlights));
+            const url = `${this.baseUrl}/audit/files/${this.tenantId}/${encodeURIComponent(filename)}/pages/${group.page}/highlighted?highlights=${hlParam}`;
+            panels.push({ filename, page: group.page, url, highlights, color: ruleColor });
+          }
+          if (panels.length > 0) {
+            this.comparePanel = { show: true, maximized: false, zoom: 1, panels: panels.slice(0, 2) };
+            this.rulesCollapsed = true;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

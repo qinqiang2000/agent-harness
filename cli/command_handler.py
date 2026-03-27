@@ -195,6 +195,7 @@ class CommandHandler:
             ("ANTHROPIC_AUTH_TOKEN", self._mask_token(os.getenv("ANTHROPIC_AUTH_TOKEN"))),
             ("GLM_AUTH_TOKEN", self._mask_token(os.getenv("GLM_AUTH_TOKEN"))),
             ("CLAUDE_ROUTER_AUTH_TOKEN", self._mask_token(os.getenv("CLAUDE_ROUTER_AUTH_TOKEN"))),
+            ("LITELLM_API_KEY", self._mask_token(os.getenv("LITELLM_API_KEY"))),
         ]
 
         # Proxy settings

@@ -28,6 +28,7 @@ class AgentService:
     """
 
     SETTINGS_FILE_NAME = ".custom-settings.json"
+    CLAUDE_SETTINGS_FILE = AGENT_CWD / ".claude" / "settings.json"
 
     def __init__(self, session_service=None):
         """
@@ -35,6 +36,18 @@ class AgentService:
             session_service: Session service (dependency injection, default None = not used)
         """
         self.session_service = session_service
+
+        # 从项目 settings.json 加载 MCP 服务器配置
+        self.mcp_servers: dict = {}
+        if self.CLAUDE_SETTINGS_FILE.exists():
+            try:
+                with open(self.CLAUDE_SETTINGS_FILE, encoding="utf-8") as f:
+                    claude_settings = json.load(f)
+                self.mcp_servers = claude_settings.get("mcpServers", {})
+                if self.mcp_servers:
+                    logger.info(f"Loaded MCP servers: {list(self.mcp_servers.keys())}")
+            except Exception:
+                logger.warning("Failed to load MCP server config from settings.json", exc_info=True)
 
         # 创建安全配置文件
         security_settings = {
@@ -92,9 +105,19 @@ class AgentService:
                 logger.info(f"Starting new session")
 
             # Configure Claude SDK
+            # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
+            _meta = request.metadata or {}
+            model = _meta.get("model", "claude-haiku-4-5-20251001")
+            max_turns = int(_meta.get("max_turns", 20))
             options = ClaudeAgentOptions(
-                model="claude-sonnet-4-5",
+                # model 参数不传（默认 None），由 Claude Code CLI 自动决定模型版本。
+                # SDK 源码（subprocess_cli.py）：仅当 model 非空时才追加 --model 参数。
+                # 好处：CLI 升级后自动使用最新默认模型，无需手动维护版本号。
+                # 如需锁定特定版本，可显式传入，如 model="claude-sonnet-4-6"。
+                model=model,
+                max_turns=max_turns,  # 防止 agent 陷入无限搜索循环
                 system_prompt={"type": "preset", "preset": "claude_code"},
+                mcp_servers=self.mcp_servers,
                 setting_sources=["project"],
                 settings=str(self.settings_file),
                 allowed_tools=[
@@ -106,6 +129,20 @@ class AgentService:
                     "WebFetch",
                     "WebSearch",
                     "AskUserQuestion",
+                    "mcp__elastic__searchTraceOrKeyWordsLog",
+                    "mcp__gitlab__get_file_contents",
+                    "mcp__gitlab__get_repository_tree",
+                    "mcp__gitlab__get_project",
+                    "mcp__gitlab__list_issues",
+                    "mcp__gitlab__get_issue",
+                    "mcp__gitlab__list_merge_requests",
+                    "mcp__gitlab__get_merge_request",
+                    "mcp__gitlab__get_merge_request_diffs",
+                    "mcp__gitlab__list_commits",
+                    "mcp__gitlab__get_commit",
+                    "mcp__gitlab__get_commit_diff",
+                    "mcp__gitlab__get_branch_diffs",
+                    "mcp__gitlab__search_repositories",
                 ],
                 resume=request.session_id,
                 max_buffer_size=10 * 1024 * 1024,

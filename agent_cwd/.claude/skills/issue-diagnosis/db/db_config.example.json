@@ -1,0 +1,95 @@
+{
+  "datasources": [
+    {
+      "name": "prod-main",
+      "env": "prod",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 23306,
+      "database": "cms",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-main",
+      "env": "test",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 23306,
+      "database": "cms",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "prod-ops",
+      "env": "prod",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 3306,
+      "database": "eop",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-ops",
+      "env": "test",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 3306,
+      "database": "eop",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "prod-invoice",
+      "env": "prod",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 23306,
+      "database": "invoice",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-invoice",
+      "env": "test",
+      "type": "mysql",
+      "host": "YOUR_HOST",
+      "port": 23306,
+      "database": "invoice",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    },
+    {
+      "name": "test-pg",
+      "env": "test",
+      "type": "postgresql",
+      "host": "YOUR_HOST",
+      "port": 5432,
+      "database": "analytics",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "pool_min": 1,
+      "pool_max": 3,
+      "timeout": 30
+    }
+  ]
+}

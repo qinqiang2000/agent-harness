@@ -3,7 +3,7 @@
 这是一个使用 FastAPI 和 Claude Agent SDK 构建的 AI Agent 服务。它提供了一个基于 Skill 的可扩展 Agent 系统，具有两个主要集成点：
 
 1. 通用的 `/api/query` 接口，用于程序化访问
-2. 云之家 (Yunzhijia) 消息集成，用于企业聊天
+2. 插件化的 Channel 集成（如云之家），通过插件系统无需修改核心代码即可接入新平台
 
 系统采用多租户架构，并支持动态模型供应商切换 (GLM-4, Claude Router)。
 
@@ -95,35 +95,13 @@ python cli.py
 
 CLI 日志保存在 `log/cli.log`。
 
-### 批量测试
-
-用于批量测试 customer-service agent 的功能：
-
-```bash
-source .venv/bin/activate
-
-# 从文件运行批量测试
-python tests/batch_test.py tests/dataset/test_set_1.md
-
-# 测试单个问题
-python tests/batch_test.py -p "星空旗舰版如何配置开票人员？"
-
-# 控制并发数（默认 1，建议 ≤3）
-python tests/batch_test.py tests/dataset/test_set_1.md --concurrency 3
-
-# 指定默认产品（用于自动回答）
-python tests/batch_test.py -p "如何配置开票人员？" --default-product "星瀚旗舰版"
-```
-
-测试结果以 Markdown 和 JSON 格式保存在 `tests/results/` 中。
-
 ## 项目架构
 
 ### 核心组件
 
 **API 层** (`api/`)
 - `routers/agent.py` - 通用 `/api/query` 接口 (SSE streaming)
-- `routers/yunzhijia.py` - 云之家 webhook 集成 (`/yzj/chat`)
+- `routers/plugins.py` - 插件管理 API (`/api/plugins/`)
 - `dependencies.py` - 单例服务注入容器
 
 **服务层** (`api/services/`)
@@ -134,11 +112,14 @@ python tests/batch_test.py -p "如何配置开票人员？" --default-product "�
 **核心处理** (`api/core/`)
 - `StreamProcessor` - 处理 Claude SDK 消息流，发送 SSE 事件
 
-**处理器** (`api/handlers/`)
-- `yunzhijia/handler.py` - 带有会话映射的云之家消息处理
-- `yunzhijia/message_sender.py` - 通过 webhook 将消息发回云之家
-- `yunzhijia/card_builder.py` - 构建包含图片的富卡片消息
-- `yunzhijia/session_mapper.py` - 将云之家会话 ID 映射到 Agent 会话
+**插件系统** (`api/plugins/`)
+- `manager.py` - 插件编排器（发现→加载→注册→启动）
+- `channel.py` - Channel 插件抽象基类
+- `config.py` - 插件配置服务（`plugins/config.json`）
+- `session_mapper.py` - 通用会话映射器，供所有 Channel 插件复用
+
+**内置插件** (`plugins/bundled/`)
+- `yunzhijia/` - 云之家 Channel 插件（webhook 接收、消息发送、图片卡片）
 
 **CLI** (`cli/`)
 - `repl.py` - 带有 SSE 流式显示的交互式 REPL
@@ -167,39 +148,7 @@ Skills 是从 `agent_cwd/.claude/skills/` 加载的 [Agent Skills](https://platf
   - `agent_cwd/data/kb/产品与交付知识/` - 默认搜索路径，覆盖 80%+ 售后场景
   - `agent_cwd/data/kb/营销知识库/` - 当检测到售前信号（能力、功能、方案等）时搜索
   - `agent_cwd/data/kb/API文档/` - 当检测到 API 信号（接口、参数、集成等）时搜索
-- **引用机制**: Skill 使用 `kb_link.py` 工具将 KB 文件路径转换为可点击的 markdown 链接
-
-### 知识库管理
-
-知识库内容通过 [yuque-exporter](https://github.com/vannvan/yuque-exporter) 从语雀导出获得。
-
-**更新知识库步骤**：
-
-```bash
-# 1. 克隆或更新 yuque-exporter
-git clone https://github.com/vannvan/yuque-exporter.git
-cd yuque-exporter
-npm install
-npm run build
-
-# 2. 设置语雀 Token（从 https://www.yuque.com/settings/tokens 获取）
-export YUQUE_TOKEN=your_yuque_token_here
-
-# 3. 导出知识库（以产品与交付知识为例）
-# 格式：node dist/bin/cli.js {namespace}/{book} -o {output_path} --repo .
-node dist/bin/cli.js nbklz3/tadboa -o /path/to/agent-harness/agent_cwd/data/kb/产品与交付知识 --repo .
-
-# 4. 对其他知识库重复步骤 3
-node dist/bin/cli.js nbklz3/xxx -o /path/to/agent-harness/agent_cwd/data/kb/营销知识库 --repo .
-node dist/bin/cli.js nbklz3/yyy -o /path/to/agent-harness/agent_cwd/data/kb/API文档 --repo .
-```
-
-**参数说明**：
-- `{namespace}/{book}` - 语雀知识库路径（从 URL 中获取）
-- `-o {output_path}` - 导出到本地的目标路径
-- `--repo .` - 相对路径模式，保留原始目录结构
-
-导出后的 Markdown 文件会包含 frontmatter（title、url 等），Skill 在引用时会提取这些元数据。
+- **引用机制**: Skill 通过 Read 工具读取 KB 文件第 1 行的 markdown 链接并原样引用（`kb_link.py` 仅作可选辅助脚本）
 
 ## API 使用示例
 
@@ -235,18 +184,43 @@ curl -X POST "http://localhost:9090/api/query" \
 curl -X POST "http://localhost:9090/api/interrupt/{session_id}"
 ```
 
-## 云之家集成
+## 插件系统
 
-云之家接口接收来自企业聊天的消息并通过 webhook 响应：
+Channel（如云之家）等外部集成通过插件方式管理，无需修改核心代码。
+
+```bash
+# 管理插件
+python manage_plugins.py list              # 列出所有插件
+python manage_plugins.py info yunzhijia    # 查看插件详情
+python manage_plugins.py enable <id>       # 启用插件
+python manage_plugins.py disable <id>      # 禁用插件
+python manage_plugins.py install <path>    # 安装本地插件
+python manage_plugins.py doctor            # 健康检查
+```
+
+插件配置集中在 `plugins/config.json`：
+
+```json
+{
+  "enabled": ["yunzhijia"],
+  "plugins": {
+    "yunzhijia": {
+      "session_timeout": 1800,
+      "default_skill": "customer-service"
+    }
+  }
+}
+```
+
+### 云之家插件
+
+云之家插件（`plugins/bundled/yunzhijia/`）接收企业聊天消息并通过 webhook 响应：
 
 1. **Receive**: `POST /yzj/chat?yzj_token=xxx`（立即返回 200 响应）
 2. **Process**: 后台任务处理 Agent 查询
 3. **Reply**: 通过云之家 webhook 发送 markdown/卡片消息
-4. **Interrupts**: 检测到同一会话的新消息 → 中断之前的查询
 
-会话管理：
-- 映射云之家 `sessionId` → Agent `session_id`
-- 默认 30 分钟不活跃超时（可配置）
+会话管理：映射云之家 `sessionId` → Agent `session_id`，默认 30 分钟不活跃超时（可配置）
 
 ## 环境变量说明
 
@@ -268,12 +242,8 @@ CLAUDE_ROUTER_PROXY=http://127.0.0.1:7890  # 可选
 PORT=9090
 LOG_LEVEL=INFO
 
-# 云之家集成
-YZJ_CARD_TEMPLATE_ID=xxx
-YZJ_MAX_IMG_PER_CARD=5
-SERVICE_BASE_URL=http://your-public-ip:9090
-YZJ_SESSION_TIMEOUT=1800  # 30 分钟
-YZJ_VERBOSE=true  # false 为简洁模式
+# 插件额外搜索路径（可选，冒号分隔）
+# PLUGIN_PATHS=/path/to/plugins1:/path/to/plugins2
 ```
 
 ## 开发指南
@@ -291,6 +261,10 @@ YZJ_VERBOSE=true  # false 为简洁模式
   - `agent_cwd/.claude/skills/` - Skills 定义
   - `agent_cwd/data/kb/` - 知识库文件
   - `agent_cwd/data/tenants/` - 租户数据
+- `plugins/` - 插件目录
+  - `plugins/bundled/` - 内置插件
+  - `plugins/installed/` - 用户安装的插件
+  - `plugins/config.json` - 插件配置（启用列表 + 各插件参数）
 - 日志位于 `log/app.log`（重启时轮转）
 - CLI 日志位于 `log/cli.log`
 - 测试结果位于 `tests/results/`

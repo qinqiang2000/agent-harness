@@ -45,4 +45,11 @@ logs/
 *.temp
 *.backup
 *.backup*
+
+# Audit plugin temp files (screenshots, debug outputs)
+plugins/bundled/audit/tmp/*
+!plugins/bundled/audit/tmp/.gitkeep
 .claude/settings.local.json
+
+# Skill sensitive config
+agent_cwd/.claude/skills/issue-diagnosis/db/db_config.json

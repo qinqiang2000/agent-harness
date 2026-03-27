@@ -42,11 +42,6 @@
 | 旗舰版（星瀚/星空） | `发票云(旗舰版)API文档.apifox.json` |
 | 标准版 | `发票云(标准版)API文档.apifox.json` |
 
-**搜索示例**：
-```bash
-# 按功能名称搜索
-Grep '"name".*开票' data/kb/API文档/发票云(旗舰版)API文档.apifox.json
-
-# 按接口路径搜索
-Grep '"/api/.*invoice' data/kb/API文档/发票云(旗舰版)API文档.apifox.json
-```
+**搜索策略**：
+- 按功能名搜索：匹配 `"name"` 字段（如 `"name".*开票`）
+- 按接口路径搜索：匹配 URL 路径（如 `/api/.*invoice`）

@@ -3,6 +3,7 @@
 import logging
 import os
 from functools import lru_cache
+from typing import Optional
 
 from api.services.agent_service import AgentService
 from api.services.session_service import InMemorySessionService
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 _session_service_instance = None
 _config_service_instance = None
 _agent_service_instance = None
-_yunzhijia_handler_instance = None
+_plugin_manager_instance = None
 
 
 def get_session_service() -> InMemorySessionService:
@@ -48,26 +49,42 @@ def get_agent_service() -> AgentService:
     return _agent_service_instance
 
 
-def get_yunzhijia_handler():
-    """Get Yunzhijia handler (singleton)."""
-    global _yunzhijia_handler_instance
-    if _yunzhijia_handler_instance is None:
-        from api.handlers.yunzhijia import YunzhijiaHandler
+def get_plugin_manager():
+    """Get plugin manager (singleton)."""
+    global _plugin_manager_instance
+    if _plugin_manager_instance is None:
+        from pathlib import Path
+        from api.plugins.manager import PluginManager
+        from api.constants import BUNDLED_PLUGINS_DIR, INSTALLED_PLUGINS_DIR, PLUGIN_CONFIG_FILE
+
         agent_service = get_agent_service()
         session_service = get_session_service()
-        default_skill = os.getenv("YZJ_DEFAULT_SKILL", "customer-service")
-        _yunzhijia_handler_instance = YunzhijiaHandler(agent_service, session_service, default_skill)
-        logger.info(f"Created YunzhijiaHandler instance with default_skill={default_skill}")
-    return _yunzhijia_handler_instance
+
+        # Parse extra plugin paths from environment
+        extra_paths = None
+        plugin_paths_env = os.getenv("PLUGIN_PATHS", "")
+        if plugin_paths_env:
+            extra_paths = [Path(p.strip()) for p in plugin_paths_env.split(":") if p.strip()]
+
+        _plugin_manager_instance = PluginManager(
+            bundled_dir=BUNDLED_PLUGINS_DIR,
+            installed_dir=INSTALLED_PLUGINS_DIR,
+            config_file=PLUGIN_CONFIG_FILE,
+            agent_service=agent_service,
+            session_service=session_service,
+            extra_paths=extra_paths,
+        )
+        logger.info("Created PluginManager instance")
+    return _plugin_manager_instance
 
 
 # Test utility function (for unit testing - resets all singletons)
 def reset_services():
     """Reset all service instances (only for testing)."""
-    global _session_service_instance, _config_service_instance, _agent_service_instance, _yunzhijia_handler_instance
+    global _session_service_instance, _config_service_instance, _agent_service_instance, _plugin_manager_instance
 
     _session_service_instance = None
     _config_service_instance = None
     _agent_service_instance = None
-    _yunzhijia_handler_instance = None
+    _plugin_manager_instance = None
     logger.info("Reset all service instances")

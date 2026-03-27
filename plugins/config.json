@@ -1,0 +1,25 @@
+{
+  "enabled": ["yunzhijia", "zhichi", "audit"],
+  "plugins": {
+    "yunzhijia": {
+      "session_timeout": 1800,
+      "default_skill": "customer-service",
+      "card_template_id": "64d08cb4e4b07ba2b112b395",
+      "max_img_per_card": 5,
+      "verbose": false
+    },
+    "zhichi": {
+      "app_id": "6b22d5877a7a43f4aadff27405395c14",
+      "app_key": "s04bC0Z82pmS",
+      "session_timeout": 3600,
+      "default_skill": "customer-service",
+      "token_refresh_buffer_seconds": 300,
+      "mock_send": true
+    },
+    "audit": {
+      "max_upload_size_mb": 20,
+      "default_skill": "financial-audit",
+      "session_timeout": 3600
+    }
+  }
+}

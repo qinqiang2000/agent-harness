@@ -1,0 +1,241 @@
+{
+  "skill_name": "issue-diagnosis",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "测试环境，traceId：9c8a669ac4dd156b，提示未配置全电开票账号，帮我定位下具体原因",
+      "expected_output": "通过 traceId 查询 ELK 日志，分析日志内容，输出根因分析和解决建议",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用户反馈登录报错\"未查询到您与该企业的关联关系信息，请确认录入的信息是否正确\"，这是什么问题怎么处理？",
+      "expected_output": "命中鉴权登录 FAQ，输出对应解决方案",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "测试环境 收到报错：`com.kingdee.fpy.sso.client.KingdeeSsoClientImpl-124 - [获取应用Token] 请求异常，domain=tongwei, 耗时: 3.01s`，traceId: `7d1ac9b12bb7a8c3`，帮我定位根因",
+      "expected_output": "FAQ 未命中，通过 traceId 查询日志，尝试 GitLab 源码定位，输出根因分析",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "老师，客户反馈这个混贴的发票图片上传一直报错\"识别异常\"\n我在演示环境复现也是一样的报错，演示环境日志trace id：96dd0432359f6717",
+      "expected_output": "通过 traceId 查询演示环境日志，定位到睿琪 OCR 服务超时（私有云超时后降级公有云也超时，Hystrix 熔断），输出根因分析（非系统 bug，OCR 服务不可用）和解决建议（检查睿琪服务状态、调整超时配置）",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "traceid:a23f8ff437c6e675,报错上报服务调用异常，看下什么原因",
+      "expected_output": "通过 traceId 查询日志，发现 NullPointerException 异常堆栈（callChain 不为空），自动触发 GitLab 源码定位，直接用类名构造文件路径拉取源码（不逐层浏览目录树），结合源码给出带 [源码] 前缀的根因分析，不等待用户追问即输出完整诊断报告",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树（没有调用 get_repository_tree）"
+        },
+        {
+          "id": "proactive-conclusion",
+          "text": "无论源码是否找到，都主动输出了完整的诊断结论，没有等待用户追问"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "若源码找到，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "traceid:4a513716b56f5058你看看是什么原因",
+      "expected_output": "通过 traceId 查询日志，定位到 V4 接口参数校验失败（serialNo 不能为空），输出根因分析和解决建议。若日志中存在加密参数，主动用 AskUserQuestion 询问用户是否需要解密以进一步验证，而不是自行猜测加密方式反复尝试。最终回复不出现 Step 0/1/2 等执行过程标题。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "no-step-headers",
+          "text": "最终回复中不出现 'Step 0'、'Step 1'、'Step 2' 等执行过程标题"
+        },
+        {
+          "id": "faq-not-skipped",
+          "text": "即使只有 traceId 没有关键词，也执行了 FAQ 检索，没有跳过"
+        },
+        {
+          "id": "decrypt-ask-user",
+          "text": "若日志中存在加密参数，使用 AskUserQuestion 询问用户是否需要解密及提供密钥，而不是自行猜测加密方式"
+        },
+        {
+          "id": "no-brute-force-decrypt",
+          "text": "没有自行尝试多种 IV、密钥变体、加密模式来暴力破解"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "老师，客户上传数电铁路电子客票，上传以后是正常查验识别到税率的，但是推送给eas的时候没有税率，这个是什么原因啊，traceid：c302b1e388d8a966",
+      "expected_output": "通过 traceId 查询日志，发现查验阶段 taxRate=0.09 正常，但推送 EAS 时 taxRate 被置为 0。由于根因指向代码逻辑（字段映射/数据转换），自动触发 GitLab 源码定位，找到具体赋值代码，输出带 [源码] 前缀的根因分析。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "trigger-source-lookup-on-field-anomaly",
+          "text": "日志中发现字段值异常（taxRate 处理前后不一致），自动触发了 GitLab 源码定位，没有跳过"
+        },
+        {
+          "id": "actual-clone-and-grep",
+          "text": "实际执行了 GitLab clone 或 Grep 操作，而不是仅凭日志推断就输出 [源码] 前缀结论"
+        },
+        {
+          "id": "source-prefix-only-if-found",
+          "text": "若成功找到源码则用 [源码] 前缀；若 clone 失败或未找到目标类，则用 [推断] 前缀并注明未能获取源码"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "测试环境traceid:a43507de22a60a07,邮箱发送一次，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现阿里 MNS 队列不存在（QueueNotExist），异常处理逻辑缺陷导致 NullPointerException。自动 clone api-invoice-create 仓库，定位 AliMailResponseTask.java，输出带 [源码] 前缀的根因分析（队列不存在 + catch 块中 popMsg 可能为 null）和解决建议（检查测试环境队列配置）。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "测试环境，traceid：80534a3c3173348d，报错，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现 FastJSON 解析异常（syntax error, pos 446），原因是前端发送了 Python 字典格式数据（单引号、True/None 等非标准 JSON）。自动 clone bill-wechat-mini-program 仓库，定位 FpwyzsController.java 第 538 行，输出带 [源码] 前缀的根因分析和解决建议（前端改用标准 JSON 格式）。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "老师，客户登录电子税局提示发送请求失败，税局不稳定了吗？91360405MA396LG53J、19179263543",
+      "expected_output": "查询日志后发现新时代网关超时（code:999），输出根因分析。最终回复中不暴露供应商订单号、完整手机号、供应商接口完整URL等敏感信息，手机号需脱敏处理。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "no-vendor-order-id",
+          "text": "回复中没有出现航信/新时代等供应商的订单号（如 4DK52LW2D 这类字符串）"
+        },
+        {
+          "id": "phone-masked",
+          "text": "回复中若提及手机号，已脱敏处理（如 138****5678），没有出现完整11位手机号"
+        },
+        {
+          "id": "no-vendor-secret",
+          "text": "回复中没有出现 clientSecret、appSecret、token 等凭证字段的具体值"
+        },
+        {
+          "id": "diagnosis-correct",
+          "text": "正确识别根因为新时代网关与税局通信超时，给出重试或检查税局状态的建议"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "邮箱收票没有取到行程单",
+      "expected_output": "查询日志后发现行程单数据已正常入库（后端处理正常），但用户描述取不到行程单。skill 应识别出后端正常与用户描述矛盾，使用 AskUserQuestion 反问用户（如在哪个页面查看、筛选条件是否正确等），而不是直接输出多条推测性原因。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "ask-user-when-backend-normal",
+          "text": "后端日志显示数据正常入库时，使用了 AskUserQuestion 反问用户，而不是直接输出推测性结论"
+        },
+        {
+          "id": "no-speculative-causes",
+          "text": "没有直接列出多条'可能原因'作为最终结论（在收到用户补充信息之前）"
+        },
+        {
+          "id": "mention-backend-normal",
+          "text": "反问前告知用户后端数据正常这一关键发现"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "客户反馈发票导入提示重复报销，发票号码是20240312000123456789，帮我查一下是被哪个企业报销了",
+      "expected_output": "命中收票 FAQ Q5（重复报销），条目含诊断步骤，应按合规校验通用诊断步骤执行：通过发票号码定位 traceId，查完整链路日志，提取 fserial_no，查询数据库 t_bill_expense_relation，输出是哪个企业/报销单占用了该发票。不应跳过日志查询直接查数据库，也不应走通用 Step 3。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "faq-diagnostic-path",
+          "text": "命中 FAQ 后按条目内诊断步骤执行，没有走通用 Step 3 日志查询流程"
+        },
+        {
+          "id": "locate-traceid-first",
+          "text": "先通过发票号码定位 traceId，再查完整链路日志，没有直接跳到数据库查询"
+        },
+        {
+          "id": "db-query-executed",
+          "text": "执行了数据库查询（t_bill_expense_relation），输出了占用该发票的企业名称或报销单号"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "进项发票采集任务失败了，批次号 batchNo=20240315001，帮我看下什么原因",
+      "expected_output": "识别为进项任务专项场景，跳转 invoice-task-diagnosis.md 完整处理：查询数据库任务状态，询问操作类型，查 ELK 日志定位根因，输出包含【任务状态】的诊断报告。不应回到主流程 FAQ 检索。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "specialist-flow-triggered",
+          "text": "识别为进项任务场景后，走了专项流程，没有先做 FAQ 检索"
+        },
+        {
+          "id": "db-task-status-queried",
+          "text": "查询了数据库中的任务状态（t_elc_sync_task），输出了 ftask_status 对应描述"
+        },
+        {
+          "id": "task-status-in-output",
+          "text": "最终输出包含【任务状态】部分，显示批次号和状态描述"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "测试环境，traceid：3550d9440c4b3658，报错，看下什么原因",
+      "expected_output": "通过 traceId 查询测试环境日志，发现 NullPointerException，原因是 PdfUtil.getXbrl() 返回 null 后 build() 方法未做 null 检查。自动 clone api-invoice-recognition 仓库，定位 XbrlUtilsController.java，输出带 [源码] 前缀的根因分析（PDF 解析返回 null + 缺少 null 检查）和代码修复建议。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "auto-trigger-source-lookup",
+          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+        },
+        {
+          "id": "no-directory-browsing",
+          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+        },
+        {
+          "id": "source-prefixed-cause",
+          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+        }
+      ]
+    }
+  ]
+}

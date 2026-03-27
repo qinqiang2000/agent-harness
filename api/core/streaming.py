@@ -129,6 +129,10 @@ class StreamProcessor:
 
     async def _handle_assistant_message(self, msg: AssistantMessage) -> AsyncGenerator[dict, None]:
         """Handle assistant message."""
+        tool_blocks = [b for b in msg.content if isinstance(b, ToolUseBlock)]
+        if len(tool_blocks) > 1:
+            tool_names = [b.name for b in tool_blocks]
+            logger.info(f"[Turn] {len(tool_blocks)} parallel tool calls: {tool_names}")
         for block in msg.content:
             if isinstance(block, TextBlock):
                 self.sdk_logger.log_text_block(block)

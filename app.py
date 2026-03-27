@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from api.routers.agent import router
-from api.routers.yunzhijia import router as yunzhijia_router
+from api.routers.plugins import router as plugins_router
 from api.constants import DATA_DIR, AGENT_CWD
 
 # Create FastAPI app
@@ -53,7 +53,8 @@ if kb_assets_path.exists():
 
 # Include API routers
 app.include_router(router)  # Generic /api endpoints
-app.include_router(yunzhijia_router)  # /yzj/* endpoints (云之家集成)
+app.include_router(plugins_router)  # Plugin management API
+# Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 
 @app.get("/")
@@ -66,7 +67,7 @@ async def root():
         "endpoints": {
             "docs": "/docs",
             "health": "/api/health",
-            "yunzhijia": "/yzj/chat"
+            "plugins": "/api/plugins/"
         }
     }
 
@@ -74,7 +75,7 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     """Application startup event."""
-    from api.dependencies import get_config_service
+    from api.dependencies import get_config_service, get_plugin_manager
 
     logger.info("Starting AI Agent Service")
     logger.info(f"Python process directory: {Path.cwd()}")
@@ -86,11 +87,20 @@ async def startup_event():
     logger.info(f"  - Base URL: {current_config.base_url}")
     logger.info(f"  - Model: {current_config.model or 'Default'}")
 
+    # Initialize plugin system
+    plugin_manager = get_plugin_manager()
+    await plugin_manager.load_all(app)
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event."""
+    from api.dependencies import get_plugin_manager
+
     logger.info("Shutting down AI Agent Service")
+
+    plugin_manager = get_plugin_manager()
+    await plugin_manager.stop_all()
 
 
 if __name__ == "__main__":
