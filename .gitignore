@@ -46,3 +46,6 @@ logs/
 *.backup
 *.backup*
 .claude/settings.local.json
+
+# Skill sensitive config
+agent_cwd/.claude/skills/issue-diagnosis/db/db_config.json
