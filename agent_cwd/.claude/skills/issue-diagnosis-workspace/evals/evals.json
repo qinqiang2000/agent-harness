@@ -178,6 +178,46 @@
       ]
     },
     {
+      "id": 13,
+      "prompt": "客户反馈发票导入提示重复报销，发票号码是20240312000123456789，帮我查一下是被哪个企业报销了",
+      "expected_output": "命中收票 FAQ Q5（重复报销），条目含诊断步骤，应按合规校验通用诊断步骤执行：通过发票号码定位 traceId，查完整链路日志，提取 fserial_no，查询数据库 t_bill_expense_relation，输出是哪个企业/报销单占用了该发票。不应跳过日志查询直接查数据库，也不应走通用 Step 3。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "faq-diagnostic-path",
+          "text": "命中 FAQ 后按条目内诊断步骤执行，没有走通用 Step 3 日志查询流程"
+        },
+        {
+          "id": "locate-traceid-first",
+          "text": "先通过发票号码定位 traceId，再查完整链路日志，没有直接跳到数据库查询"
+        },
+        {
+          "id": "db-query-executed",
+          "text": "执行了数据库查询（t_bill_expense_relation），输出了占用该发票的企业名称或报销单号"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "进项发票采集任务失败了，批次号 batchNo=20240315001，帮我看下什么原因",
+      "expected_output": "识别为进项任务专项场景，跳转 invoice-task-diagnosis.md 完整处理：查询数据库任务状态，询问操作类型，查 ELK 日志定位根因，输出包含【任务状态】的诊断报告。不应回到主流程 FAQ 检索。",
+      "files": [],
+      "assertions": [
+        {
+          "id": "specialist-flow-triggered",
+          "text": "识别为进项任务场景后，走了专项流程，没有先做 FAQ 检索"
+        },
+        {
+          "id": "db-task-status-queried",
+          "text": "查询了数据库中的任务状态（t_elc_sync_task），输出了 ftask_status 对应描述"
+        },
+        {
+          "id": "task-status-in-output",
+          "text": "最终输出包含【任务状态】部分，显示批次号和状态描述"
+        }
+      ]
+    },
+    {
       "id": 10,
       "prompt": "测试环境，traceid：3550d9440c4b3658，报错，看下什么原因",
       "expected_output": "通过 traceId 查询测试环境日志，发现 NullPointerException，原因是 PdfUtil.getXbrl() 返回 null 后 build() 方法未做 null 检查。自动 clone api-invoice-recognition 仓库，定位 XbrlUtilsController.java，输出带 [源码] 前缀的根因分析（PDF 解析返回 null + 缺少 null 检查）和代码修复建议。",
