@@ -1,0 +1,28 @@
+{
+  "id": "audit",
+  "name": "Financial Audit Demo",
+  "version": "1.0.0",
+  "description": "AI-native financial document audit with natural language rules",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "max_upload_size_mb": {
+        "type": "integer",
+        "default": 20,
+        "description": "Maximum file upload size in MB"
+      },
+      "allowed_extensions": {
+        "type": "array",
+        "default": ["pdf", "png", "jpg", "jpeg"],
+        "description": "Allowed file extensions for upload"
+      },
+      "default_skill": {
+        "type": "string",
+        "default": "financial-audit",
+        "description": "Default skill name for audit queries"
+      }
+    }
+  }
+}

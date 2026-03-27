@@ -105,13 +105,17 @@ class AgentService:
                 logger.info(f"Starting new session")
 
             # Configure Claude SDK
+            # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
+            _meta = request.metadata or {}
+            model = _meta.get("model", "claude-haiku-4-5-20251001")
+            max_turns = int(_meta.get("max_turns", 20))
             options = ClaudeAgentOptions(
                 # model 参数不传（默认 None），由 Claude Code CLI 自动决定模型版本。
                 # SDK 源码（subprocess_cli.py）：仅当 model 非空时才追加 --model 参数。
                 # 好处：CLI 升级后自动使用最新默认模型，无需手动维护版本号。
                 # 如需锁定特定版本，可显式传入，如 model="claude-sonnet-4-6"。
-                model="claude-haiku-4-5-20251001",
-                max_turns=20,  # 防止 agent 陷入无限搜索循环
+                model=model,
+                max_turns=max_turns,  # 防止 agent 陷入无限搜索循环
                 system_prompt={"type": "preset", "preset": "claude_code"},
                 mcp_servers=self.mcp_servers,
                 setting_sources=["project"],
