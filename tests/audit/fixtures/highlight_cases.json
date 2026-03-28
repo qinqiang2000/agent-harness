@@ -1,0 +1,240 @@
+{
+  "description": "报价单+收货单 审核标注回归测试（覆盖默认规则场景）",
+  "pdf_files": {
+    "报价单": "../../../../audit_demo/报价单.pdf",
+    "收货单": "../../../../audit_demo/收货单.pdf"
+  },
+  "fuzzy_match_cases": [
+    {
+      "name": "OCR文本无空格 vs 有空格的target应匹配",
+      "ocr_text": "KFCY252月疯狂星期四social项目",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": true
+    },
+    {
+      "name": "日期文本不应匹配项目名称(数字子串误匹配)",
+      "ocr_text": "报价日期：2025.2.26",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "项目周期不应匹配项目名称",
+      "ocr_text": "项目周期：2025.1.15-2025.2.28",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "单字符5不应匹配项目名称",
+      "ocr_text": "5",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "单字符2不应匹配项目名称",
+      "ocr_text": "2",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "费用合计行不应匹配项目名称",
+      "ocr_text": "22679.76Y25 2月疯四 social Plan*1",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "金额OCR(无小数点)匹配含逗号金额",
+      "ocr_text": "370815456",
+      "target": "370,815.56",
+      "expected": true
+    },
+    {
+      "name": "金额OCR(有小数点)匹配含逗号金额",
+      "ocr_text": "370815.56",
+      "target": "370,815.56",
+      "expected": true
+    },
+    {
+      "name": "完全不相关文本不应匹配",
+      "ocr_text": "JasminePan",
+      "target": "KFC Y25 2月疯狂星期四social项目",
+      "expected": false
+    },
+    {
+      "name": "备注文本精确匹配",
+      "ocr_text": "2月疯四全套social物料",
+      "target": "2月疯四全套social物料",
+      "expected": true
+    },
+    {
+      "name": "rule1-甲方公司名OCR括号变体应匹配",
+      "ocr_text": "环胜电子商务（上海）有限公司",
+      "target": "环胜电子商务（上海）有限公司",
+      "expected": true
+    },
+    {
+      "name": "rule1-供应商名称不应匹配甲方",
+      "ocr_text": "上海科翼文化传播有限公司",
+      "target": "环胜电子商务（上海）有限公司",
+      "expected": false
+    },
+    {
+      "name": "rule3-收货单金额含逗号精确匹配",
+      "ocr_text": "370,815.56",
+      "target": "370,815.56",
+      "expected": true
+    },
+    {
+      "name": "rule3-不同金额不应匹配",
+      "ocr_text": "22679.76",
+      "target": "370,815.56",
+      "expected": false
+    },
+    {
+      "name": "rule5-日期区间OCR匹配",
+      "ocr_text": "2025.1.15-2025.2.28",
+      "target": "2025.1.15-2025.2.28",
+      "expected": true
+    },
+    {
+      "name": "rule5-完成日期精确匹配",
+      "ocr_text": "2025-02-28",
+      "target": "2025-02-28",
+      "expected": true
+    },
+    {
+      "name": "rule5-不同日期格式相似会匹配(预期行为)",
+      "ocr_text": "2025-04-09",
+      "target": "2025-02-28",
+      "expected": true
+    }
+  ],
+  "highlight_cases": [
+    {
+      "name": "rule4-报价单项目抬头标注位置正确",
+      "pdf": "报价单",
+      "page": 1,
+      "value": "KFC Y25 2月疯狂星期四social项目",
+      "label": "项目名称",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "页面中部偏上，项目标题行",
+        "x_range": [300, 520],
+        "y_range": [140, 200]
+      }
+    },
+    {
+      "name": "rule4-收货单备注标注位置正确",
+      "pdf": "收货单",
+      "page": 1,
+      "value": "2月疯四全套social物料",
+      "label": "备注",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "收货单信息区备注行",
+        "x_range": [120, 250],
+        "y_range": [130, 155]
+      }
+    },
+    {
+      "name": "rule1-报价单甲方名称标注(签字区)",
+      "pdf": "报价单",
+      "page": 1,
+      "value": "环胜电子商务（上海）有限公司",
+      "label": "甲方",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "报价单底部甲方签字区(label甲方在此处，proximity选中此处)",
+        "x_range": [130, 300],
+        "y_range": [420, 460]
+      }
+    },
+    {
+      "name": "rule3-报价单费用总计标注",
+      "pdf": "报价单",
+      "page": 1,
+      "value": "370,815.56",
+      "label": "费用总计",
+      "expect_hit": true
+    },
+    {
+      "name": "rule3-收货单折扣后金额标注",
+      "pdf": "收货单",
+      "page": 1,
+      "value": "370,815.56",
+      "label": "折扣后收货含税金额",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "收货单信息区折扣后金额",
+        "x_range": [640, 720],
+        "y_range": [115, 140]
+      }
+    },
+    {
+      "name": "rule3-收货单收货含税总金额标注",
+      "pdf": "收货单",
+      "page": 1,
+      "value": "370,815.56",
+      "label": "收货含税总金额",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "收货单信息区收货含税总金额",
+        "x_range": [640, 720],
+        "y_range": [95, 125]
+      }
+    },
+    {
+      "name": "rule5-报价单项目周期标注",
+      "pdf": "报价单",
+      "page": 1,
+      "value": "2025.1.15-2025.2.28",
+      "label": "项目周期",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "报价单右上角项目周期行",
+        "x_range": [480, 620],
+        "y_range": [140, 165]
+      }
+    },
+    {
+      "name": "rule5-收货单完成日期标注",
+      "pdf": "收货单",
+      "page": 1,
+      "value": "2025-02-28",
+      "label": "完成日期",
+      "expect_hit": true,
+      "expect_rect_region": {
+        "description": "收货单订单信息区完成日期",
+        "x_range": [640, 720],
+        "y_range": [268, 295]
+      }
+    },
+    {
+      "name": "不存在的值应miss",
+      "pdf": "收货单",
+      "page": 1,
+      "value": "这个值在PDF中不存在XYZ123",
+      "label": "测试",
+      "expect_hit": false
+    }
+  ],
+  "frontend_dedup_cases": [
+    {
+      "name": "JSON解析成功后应移除逐条审核结果",
+      "input": "# 审核报告\n\n## 文档识别\n| 文件名 | 识别类型 |\n|---|---|\n| a.pdf | 报价单 |\n\n## 逐条审核结果\n\n### 规则 1: xxx\n- 状态: PASS\n- 分析: blah\n\n---\n\n## 审核总结\n- 通过: 1 条\n\n<!-- AUDIT_RESULT_JSON {\"rules\":[],\"summary\":{\"pass\":1,\"fail\":0,\"unknown\":0}} AUDIT_RESULT_JSON -->",
+      "expect_contains": ["文档识别", "审核总结", "通过: 1 条"],
+      "expect_not_contains": ["逐条审核结果", "规则 1", "AUDIT_RESULT_JSON"]
+    },
+    {
+      "name": "多规则报告去重",
+      "input": "# 审核报告\n\n## 文档识别\n| 文件名 | 识别类型 |\n|---|---|\n| 报价单.pdf | 报价单 |\n| 收货单.pdf | 收货单 |\n\n## 逐条审核结果\n\n### 规则 1: 甲方校验\n- 状态: PASS\n\n### 规则 2: 金额一致\n- 状态: FAIL\n\n### 规则 3: 关键字匹配\n- 状态: PASS\n\n---\n\n## 审核总结\n- 通过: 2 条\n- 未通过: 1 条\n\n<!-- AUDIT_RESULT_JSON {\"rules\":[],\"summary\":{\"pass\":2,\"fail\":1,\"unknown\":0}} AUDIT_RESULT_JSON -->",
+      "expect_contains": ["文档识别", "报价单.pdf", "收货单.pdf", "审核总结", "通过: 2 条", "未通过: 1 条"],
+      "expect_not_contains": ["逐条审核结果", "规则 1", "规则 2", "规则 3", "甲方校验", "金额一致", "AUDIT_RESULT_JSON"]
+    },
+    {
+      "name": "无JSON块时保留完整内容",
+      "input": "# 审核报告\n\n## 逐条审核结果\n\n### 规则 1: xxx\n- 状态: PASS\n\n## 审核总结\n- 通过: 1 条",
+      "expect_contains": ["逐条审核结果", "规则 1", "审核总结"],
+      "expect_not_contains": []
+    }
+  ]
+}

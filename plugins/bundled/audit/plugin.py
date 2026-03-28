@@ -28,12 +28,14 @@ def _search_text(page, value: str) -> list:
     # 1. Exact match
     rects = page.search_for(value)
     if rects:
+        logger.debug(f"[Audit] _search_text exact match: value={value!r} -> {len(rects)} rects")
         return rects
     # 2. Strip whitespace
     cleaned = value.strip().replace("\u3000", "").replace(" ", "")
     if cleaned != value:
         rects = page.search_for(cleaned)
         if rects:
+            logger.debug(f"[Audit] _search_text cleaned match: value={cleaned!r} -> {len(rects)} rects")
             return rects
     # 3. For numbers: try without commas
     if re.match(r"^[\d,]+\.?\d*$", value.replace(",", "")):
@@ -41,11 +43,35 @@ def _search_text(page, value: str) -> list:
         rects = page.search_for(no_commas)
         if rects:
             return rects
-    # 4. Substring: try first 10 chars for long values
-    if len(value) > 10:
-        rects = page.search_for(value[:10])
-        if rects:
-            return rects
+    # 4. Try splitting value into segments and searching for each
+    #    (PDF text may be stored as separate text spans)
+    segments = re.split(r'[\s\u3000]+', value.strip())
+    if len(segments) >= 2:
+        # Try the longest segment first
+        segments_sorted = sorted(segments, key=len, reverse=True)
+        for seg in segments_sorted:
+            if len(seg) >= 4:
+                rects = page.search_for(seg)
+                if rects and len(rects) <= 3:
+                    logger.debug(f"[Audit] _search_text segment match: seg={seg!r} from value={value!r} -> {len(rects)} rects")
+                    return rects
+    # 5. Substring: progressively shorten, prefer fewest matches
+    if len(value) > 8:
+        best_rects = []
+        for ratio in [0.8, 0.6, 0.4]:
+            sub_len = max(8, int(len(value) * ratio))
+            if sub_len >= len(value):
+                continue
+            rects = page.search_for(value[:sub_len])
+            if rects and len(rects) <= 3:
+                logger.debug(f"[Audit] _search_text substring match: sub={value[:sub_len]!r} -> {len(rects)} rects")
+                return rects
+            if rects and (not best_rects or len(rects) < len(best_rects)):
+                best_rects = rects
+        if best_rects:
+            logger.debug(f"[Audit] _search_text substring best-effort: value={value!r} -> {len(best_rects)} rects")
+            return best_rects
+    logger.debug(f"[Audit] _search_text NO match: value={value!r}")
     return []
 
 
@@ -63,23 +89,25 @@ def _fuzzy_match(ocr_text: str, target: str) -> bool:
     # 1. Exact
     if ocr_clean == target_clean:
         return True
-    # 2. Numeric: compare digits only (handles commas, spaces, OCR errors on dots)
+    # 2. Numeric: compare digits only — but ONLY when target is predominantly numeric
+    #    (e.g. amounts like "370,815.56"), not for text with incidental digits
     target_digits = _digits_only(target_clean)
-    if len(target_digits) >= 3:
+    non_digit_chars = len(target_clean) - len(target_digits)
+    is_numeric_target = len(target_digits) >= 3 and len(target_digits) > non_digit_chars
+    if is_numeric_target:
         ocr_digits = _digits_only(ocr_clean)
         if ocr_digits and target_digits:
-            # Allow partial match: one contains the other, or high overlap
             if target_digits in ocr_digits or ocr_digits in target_digits:
                 return True
-            # Digit similarity >= 0.8
             if SequenceMatcher(None, ocr_digits, target_digits).ratio() >= 0.8:
                 return True
     # 3. Chinese/text: similarity >= 0.7
     if SequenceMatcher(None, ocr_clean, target_clean).ratio() >= 0.7:
         return True
-    # 4. Substring
-    if len(target_clean) > 3 and (target_clean in ocr_clean or ocr_clean in target_clean):
-        return True
+    # 4. Substring — require minimum length on both sides to avoid single-char matches
+    if len(target_clean) > 4 and len(ocr_clean) > 4:
+        if target_clean in ocr_clean or ocr_clean in target_clean:
+            return True
     return False
 
 
@@ -104,8 +132,8 @@ def _run_ocr(page, dpi: int = 150) -> list:
     page_rect = page.rect
     scale_x = page_rect.width / pix.w
     scale_y = page_rect.height / pix.h
-    # For rotated pages, convert from visual coords to internal coords
-    derot = page.derotation_matrix if page.rotation else None
+    # Note: pixmap is rendered in visual (rotated) orientation, and draw_rect/search_for
+    # also work in page.rect space (rotated). So do NOT apply derotation_matrix here.
     items = []
     for bbox, text, conf in result:
         # bbox is [[x0,y0],[x1,y1],[x2,y2],[x3,y3]] (4 corners)
@@ -115,8 +143,6 @@ def _run_ocr(page, dpi: int = 150) -> list:
             min(xs) * scale_x, min(ys) * scale_y,
             max(xs) * scale_x, max(ys) * scale_y,
         )
-        if derot:
-            pdf_rect = pdf_rect * derot
         items.append((pdf_rect, text))
     return items
 
@@ -156,8 +182,11 @@ def _find_field_rect(page, value: str, label: str = "", ocr_cache: dict = None) 
         use_ocr = True
     if not value_rects:
         return []
-    if len(value_rects) == 1 or not label:
+    if len(value_rects) == 1:
         return value_rects
+    if not label:
+        # No label to disambiguate — return at most 1 to avoid false highlights
+        return value_rects[:1]
     # Try to find the label on the page
     if use_ocr:
         label_rects = _ocr_find_rects(page, label, ocr_cache)
@@ -171,7 +200,9 @@ def _find_field_rect(page, value: str, label: str = "", ocr_cache: dict = None) 
                 if label_rects:
                     break
     if not label_rects:
-        return value_rects
+        # Can't find label — return only the first match to limit noise
+        logger.debug(f"[Audit] Label not found on page: label={label!r}, returning first of {len(value_rects)} value matches")
+        return value_rects[:1]
     # Pick the value rect closest to any label rect
     best_rect = min(
         value_rects,
@@ -329,9 +360,14 @@ class AuditChannelPlugin(ChannelPlugin):
                         if not value:
                             continue
 
+                        logger.info(f"[Audit] Highlight search: value={value!r}, label={label!r}, page={page}")
                         rects = _find_field_rect(pg, value, label, ocr_cache)
                         if not rects:
+                            logger.info(f"[Audit] Highlight MISS: value={value!r}")
                             misses.append(value)
+                        else:
+                            for rect in rects:
+                                logger.info(f"[Audit] Highlight HIT: value={value!r} -> rect=({rect.x0:.1f},{rect.y0:.1f},{rect.x1:.1f},{rect.y1:.1f})")
                             continue
 
                         ch = color_hex.lstrip("#")

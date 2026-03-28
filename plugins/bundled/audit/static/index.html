@@ -650,11 +650,13 @@
             const cleaned = this.cleanJson(jsonStr);
             console.log('Attempting to parse audit JSON (' + cleaned.length + ' chars)');
             this.auditResult = JSON.parse(cleaned);
-            // Remove JSON block from display text
-            const clean = text
+            // Remove JSON block + detailed per-rule section (cards handle that)
+            let clean = text
               .replace(/<!-- AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON -->/, '')
               .replace(/```json\s*\/\/ AUDIT_RESULT_JSON[\s\S]*?\/\/ AUDIT_RESULT_JSON\s*```/, '')
               .trim();
+            // Strip "逐条审核结果" section — keep doc identification + summary only
+            clean = clean.replace(/##\s*逐条审核结果[\s\S]*?(?=##\s*审核总结)/, '');
             if (clean) this.updateLastAssistant(clean);
           } catch (e) {
             console.warn('Failed to parse audit JSON, trying relaxed parse:', e.message);
@@ -663,7 +665,8 @@
               const relaxed = this.relaxedJsonParse(jsonStr);
               if (relaxed) {
                 this.auditResult = relaxed;
-                const clean = text.replace(/AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON/, '').trim();
+                const clean = text.replace(/AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON/, '')
+                  .replace(/##\s*逐条审核结果[\s\S]*?(?=##\s*审核总结)/, '').trim();
                 if (clean) this.updateLastAssistant(clean);
               }
             } catch (e2) {
