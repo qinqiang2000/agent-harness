@@ -47,10 +47,10 @@ class AuditHandler:
         for f in files:
             parts.append(f"- {f['name']}: {f['path']}")
 
-        # Rules
+        # Rules (include rule.id so Agent returns matching IDs in JSON)
         parts.append("\n## 审核规则")
         for i, rule in enumerate(rules, 1):
-            parts.append(f"{i}. {rule.text}")
+            parts.append(f"{i}. [{rule.id}] {rule.text}")
 
         # User message
         if user_prompt:

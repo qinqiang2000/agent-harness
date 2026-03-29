@@ -440,6 +440,20 @@ class AuditChannelPlugin(ChannelPlugin):
             rule_store.save_rules(tenant_id, payload.rules)
             return {"saved": len(payload.rules)}
 
+        @router.get("/audit/rules/{tenant_id}/categories")
+        async def get_rule_categories(tenant_id: str):
+            """Get rules grouped by category with display names."""
+            groups = rule_store.get_rules_by_category(tenant_id)
+            return {
+                "categories": {
+                    cat: {
+                        "name": rule_store.CATEGORY_NAMES.get(cat, cat),
+                        "rules": [r.model_dump() for r in rules],
+                    }
+                    for cat, rules in groups.items()
+                }
+            }
+
         # --- Tenant config ---
 
         @router.get("/audit/config/{tenant_id}")

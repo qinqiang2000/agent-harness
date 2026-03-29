@@ -1,11 +1,10 @@
 """Audit plugin regression tests.
 
-Tests fuzzy matching, PDF highlight placement, and frontend dedup logic.
+Tests fuzzy matching, PDF highlight placement, and native text search.
 Run: python -m pytest tests/audit/test_highlight.py -v
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -151,48 +150,3 @@ class TestSearchText:
         assert rects == [], "Image-based PDF should return no native text matches"
 
 
-# ===========================================================================
-# 4. Frontend dedup logic tests (pure string processing, no server needed)
-# ===========================================================================
-class TestFrontendDedup:
-    """Test the Markdown cleanup logic that removes duplicate content."""
-
-    @staticmethod
-    def _simulate_dedup(text: str) -> str:
-        """Simulate the frontend tryParseAuditResult cleanup logic.
-
-        Only strips per-rule details when JSON block is found and parsed.
-        """
-        # Check if JSON block exists
-        has_json = bool(
-            re.search(r"AUDIT_RESULT_JSON", text)
-        )
-        # Remove JSON block
-        clean = re.sub(
-            r"<!-- AUDIT_RESULT_JSON[\s\S]*?AUDIT_RESULT_JSON -->", "", text
-        )
-        clean = re.sub(
-            r"```json\s*// AUDIT_RESULT_JSON[\s\S]*?// AUDIT_RESULT_JSON\s*```",
-            "",
-            clean,
-        )
-        # Strip detailed per-rule section only when JSON was found
-        if has_json:
-            clean = re.sub(r"##\s*逐条审核结果[\s\S]*?(?=##\s*审核总结)", "", clean)
-        return clean.strip()
-
-    @pytest.mark.parametrize(
-        "case",
-        CASES["frontend_dedup_cases"],
-        ids=[c["name"] for c in CASES["frontend_dedup_cases"]],
-    )
-    def test_dedup(self, case):
-        result = self._simulate_dedup(case["input"])
-        for expected in case["expect_contains"]:
-            assert expected in result, (
-                f"Expected {expected!r} in cleaned output, got:\n{result}"
-            )
-        for unexpected in case["expect_not_contains"]:
-            assert unexpected not in result, (
-                f"Did NOT expect {unexpected!r} in cleaned output, got:\n{result}"
-            )

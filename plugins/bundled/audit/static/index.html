@@ -78,26 +78,45 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         </button>
       </div>
-      <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
-        <template x-for="(rule, idx) in rules" :key="rule.id">
-          <div class="group relative bg-gray-50 rounded-lg p-2.5 hover:bg-gray-100 transition">
-            <div class="flex items-start gap-2">
-              <input type="checkbox" :checked="rule.enabled" @change="rule.enabled = $el.checked; saveRules()"
-                class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-              <div class="flex-1 min-w-0">
-                <template x-if="editingRuleId !== rule.id">
-                  <p class="text-xs text-gray-700 leading-relaxed cursor-pointer" @click="editingRuleId = rule.id" x-text="rule.text"></p>
-                </template>
-                <template x-if="editingRuleId === rule.id">
-                  <div>
-                    <textarea x-model="rule.text" @keydown.escape="editingRuleId = null" @blur="editingRuleId = null; saveRules()"
-                      class="w-full text-xs border rounded p-1.5 focus:ring-1 focus:ring-blue-500" rows="3" x-ref="ruleEditor"></textarea>
-                  </div>
-                </template>
+      <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+        <template x-for="cat in ruleCategories" :key="cat.key">
+          <div class="border rounded-lg overflow-hidden">
+            <!-- Category header -->
+            <button @click="toggleCategory(cat.key)"
+              class="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 transition text-xs">
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3 h-3 text-gray-500 transition-transform" :class="collapsedCategories[cat.key] && 'rotate-[-90deg]'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                <span class="font-medium text-gray-700" x-text="cat.name"></span>
               </div>
-              <button @click="removeRule(idx)" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition shrink-0">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-              </button>
+              <span class="text-[10px] text-gray-400" x-text="cat.rules.filter(r=>r.enabled).length + '/' + cat.rules.length"></span>
+            </button>
+            <!-- Rules in category -->
+            <div x-show="!collapsedCategories[cat.key]" class="space-y-1 p-1.5">
+              <template x-for="rule in cat.rules" :key="rule.id">
+                <div class="group relative bg-gray-50 rounded-lg p-2 hover:bg-gray-100 transition">
+                  <div class="flex items-start gap-2">
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <span class="w-2 h-2 rounded-full shrink-0" :style="`background:${rule.color || '#9CA3AF'}`"></span>
+                      <input type="checkbox" :checked="rule.enabled" @change="rule.enabled = $el.checked; saveRules()"
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" style="width:14px;height:14px;">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <template x-if="editingRuleId !== rule.id">
+                        <p class="text-xs text-gray-700 leading-relaxed cursor-pointer" @click="editingRuleId = rule.id" x-text="rule.text"></p>
+                      </template>
+                      <template x-if="editingRuleId === rule.id">
+                        <div>
+                          <textarea x-model="rule.text" @keydown.escape="editingRuleId = null" @blur="editingRuleId = null; saveRules()"
+                            class="w-full text-xs border rounded p-1.5 focus:ring-1 focus:ring-blue-500" rows="3"></textarea>
+                        </div>
+                      </template>
+                    </div>
+                    <button @click="removeRule(rules.indexOf(rule))" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition shrink-0">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </template>
@@ -184,28 +203,42 @@
         <!-- Audit Report (parsed from JSON) -->
         <div x-show="auditResult" x-cloak class="shrink-0 border-t bg-white max-h-[45vh] overflow-y-auto">
           <div class="px-4 py-3">
-            <!-- Summary bar -->
-            <div class="flex items-center gap-4 mb-3" x-show="auditResult?.summary">
+            <!-- Summary bar + filter + batch compare -->
+            <div class="flex items-center gap-3 mb-3 flex-wrap" x-show="auditResult?.summary">
               <h3 class="text-sm font-semibold text-gray-700">审核结果</h3>
-              <div class="flex gap-3 text-xs">
-                <span class="flex items-center gap-1 text-green-600">
-                  <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+              <div class="flex gap-1 text-xs">
+                <button @click="resultFilter = 'ALL'"
+                  class="px-2 py-0.5 rounded-full border transition"
+                  :class="resultFilter === 'ALL' ? 'bg-gray-700 text-white border-gray-700' : 'text-gray-500 border-gray-300 hover:bg-gray-100'">
+                  全部 <span class="font-semibold" x-text="(auditResult?.rules || []).length"></span>
+                </button>
+                <button @click="resultFilter = 'PASS'"
+                  class="px-2 py-0.5 rounded-full border transition"
+                  :class="resultFilter === 'PASS' ? 'bg-green-600 text-white border-green-600' : 'text-green-600 border-green-300 hover:bg-green-50'">
                   通过 <span class="font-semibold" x-text="auditResult?.summary?.pass || 0"></span>
-                </span>
-                <span class="flex items-center gap-1 text-red-600">
-                  <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+                <button @click="resultFilter = 'FAIL'"
+                  class="px-2 py-0.5 rounded-full border transition"
+                  :class="resultFilter === 'FAIL' ? 'bg-red-600 text-white border-red-600' : 'text-red-600 border-red-300 hover:bg-red-50'">
                   未通过 <span class="font-semibold" x-text="auditResult?.summary?.fail || 0"></span>
-                </span>
-                <span class="flex items-center gap-1 text-yellow-600">
-                  <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                </button>
+                <button @click="resultFilter = 'UNABLE_TO_DETERMINE'"
+                  class="px-2 py-0.5 rounded-full border transition"
+                  :class="resultFilter === 'UNABLE_TO_DETERMINE' ? 'bg-yellow-500 text-white border-yellow-500' : 'text-yellow-600 border-yellow-300 hover:bg-yellow-50'">
                   待定 <span class="font-semibold" x-text="auditResult?.summary?.unknown || 0"></span>
-                </span>
+                </button>
               </div>
+              <button @click="showAllComparisons()"
+                x-show="(auditResult?.rules || []).some(r => r.comparisons?.length >= 2)"
+                class="ml-auto text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2.5 py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                全部对比
+              </button>
             </div>
 
-            <!-- Rule cards -->
+            <!-- Rule cards (filtered) -->
             <div class="space-y-3">
-              <template x-for="rule in (auditResult?.rules || [])" :key="rule.id">
+              <template x-for="rule in filteredRules" :key="rule.id">
                 <div class="border rounded-xl p-3 transition"
                   :class="{
                     'border-green-200 bg-green-50/50': rule.status === 'PASS',
@@ -296,6 +329,15 @@
         <div class="flex items-center gap-3">
           <span class="text-sm font-semibold text-gray-700">文档对比白板</span>
           <span class="text-xs text-gray-400" x-text="whiteboard.panelCount + ' 个面板'"></span>
+          <!-- Rule color legend -->
+          <div class="flex items-center gap-2 ml-2 border-l pl-2">
+            <template x-for="item in whiteboardLegend" :key="item.id">
+              <span class="flex items-center gap-1 text-[10px] text-gray-500">
+                <span class="w-2.5 h-2.5 rounded-sm shrink-0" :style="`background:${item.color}`"></span>
+                <span x-text="item.label"></span>
+              </span>
+            </template>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <button @click="whiteboardZoom(-0.15)"
@@ -361,6 +403,12 @@
         sessionId: null,
         auditResult: null,
         rulesCollapsed: false,
+        collapsedCategories: {},
+        resultFilter: 'ALL',
+        categoryNames: {
+          identity: '身份校验', seal: '印章校验', amount: '金额核对',
+          keyword: '关键字匹配', date: '日期核对', other: '其他',
+        },
         whiteboard: {
           show: false,
           fabricCanvas: null,
@@ -371,6 +419,48 @@
 
         // Base URL (same origin)
         get baseUrl() { return window.location.origin; },
+
+        // Computed: rules grouped by category
+        get ruleCategories() {
+          const groups = {};
+          for (const rule of this.rules) {
+            const cat = rule.category || 'other';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(rule);
+          }
+          const order = ['identity', 'seal', 'amount', 'keyword', 'date', 'other'];
+          return order
+            .filter(k => groups[k]?.length)
+            .map(k => ({ key: k, name: this.categoryNames[k] || k, rules: groups[k] }));
+        },
+
+        // Computed: filtered audit result rules
+        get filteredRules() {
+          const rules = this.auditResult?.rules || [];
+          if (this.resultFilter === 'ALL') return rules;
+          return rules.filter(r => r.status === this.resultFilter);
+        },
+
+        toggleCategory(cat) {
+          this.collapsedCategories[cat] = !this.collapsedCategories[cat];
+        },
+
+        // Computed: whiteboard legend (rule colors currently on canvas)
+        get whiteboardLegend() {
+          if (!this.whiteboard.show || !this.auditResult?.rules) return [];
+          const palette = ['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#F97316'];
+          const seen = new Set();
+          const legend = [];
+          for (const rule of this.auditResult.rules) {
+            const idx = typeof rule.id === 'string' ? parseInt(rule.id.split('-')[1]) - 1 : (rule.id - 1);
+            const color = palette[(idx >= 0 ? idx : 0) % palette.length];
+            if (seen.has(color)) continue;
+            seen.add(color);
+            const label = typeof rule.id === 'string' ? rule.id : ('规则' + rule.id);
+            legend.push({ id: rule.id, color, label });
+          }
+          return legend;
+        },
 
         // Init
         async init() {
@@ -518,6 +608,7 @@
         async startAudit() {
           if (this.files.length === 0) return;
           this.auditResult = null;
+          this.resultFilter = 'ALL';
           this.sessionId = null;
           this.rulesCollapsed = true;
           if (this.whiteboard.show) this.closeWhiteboard();
@@ -761,6 +852,67 @@
         },
 
         // ── Whiteboard ──
+
+        showAllComparisons() {
+          const palette = ['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#F97316'];
+          const rules = this.filteredRules.filter(r => r.comparisons?.length >= 1);
+          if (rules.length === 0) return;
+
+          // Merge panels by (filename, page) — combine highlights from different rules
+          const merged = {};
+          for (const rule of rules) {
+            const idx = typeof rule.id === 'string' ? parseInt(rule.id.split('-')[1]) - 1 : (rule.id - 1);
+            const ruleColor = palette[(idx >= 0 ? idx : 0) % palette.length];
+
+            const bySource = {};
+            rule.comparisons.forEach(comp => {
+              if (!comp.page) return;
+              if (!bySource[comp.source]) bySource[comp.source] = { comps: [], page: comp.page };
+              bySource[comp.source].comps.push({ ...comp, color: ruleColor, ruleId: rule.id });
+            });
+
+            for (const [source, group] of Object.entries(bySource)) {
+              const doc = this.auditResult?.documents?.find(d => d.identified_as === source);
+              if (!doc) continue;
+              const key = `${doc.file}|${group.page}`;
+              if (!merged[key]) merged[key] = { filename: doc.file, page: group.page, highlights: [], ruleIds: new Set() };
+              group.comps.forEach(c => {
+                merged[key].highlights.push({ value: c.value, label: c.field_name, color: c.color });
+                merged[key].ruleIds.add(c.ruleId);
+              });
+            }
+          }
+
+          const newPanels = [];
+          for (const [key, data] of Object.entries(merged)) {
+            const hlParam = encodeURIComponent(JSON.stringify(data.highlights));
+            const url = `${this.baseUrl}/audit/files/${this.tenantId}/${encodeURIComponent(data.filename)}/pages/${data.page}/highlighted?highlights=${hlParam}`;
+
+            if (this.whiteboard.fabricCanvas) {
+              const dup = this.whiteboard.fabricCanvas.getObjects().find(o => o._panelUrl === url);
+              if (dup) continue;
+            }
+
+            newPanels.push({
+              id: this.whiteboard.nextPanelId++,
+              filename: data.filename, page: data.page, url, highlights: data.highlights,
+              ruleIds: [...data.ruleIds],
+            });
+          }
+
+          if (newPanels.length === 0 && !this.whiteboard.show) return;
+          this.rulesCollapsed = true;
+
+          if (!this.whiteboard.show) {
+            this.whiteboard.show = true;
+            this.$nextTick(() => {
+              this.initWhiteboard();
+              this._addPanelsWithLayout(newPanels);
+            });
+          } else {
+            this._addPanelsWithLayout(newPanels);
+          }
+        },
 
         showComparison(rule) {
           const palette = ['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#F97316'];

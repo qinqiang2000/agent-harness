@@ -4,22 +4,29 @@ AI 财务单据审核插件。详细架构见 `README.md`。
 
 ## 回归测试
 
-改动 `plugin.py`（标注/OCR/fuzzy match）或 `static/index.html`（报告去重）后，务必跑回归测试：
+改动后务必跑全部回归测试：
 
 ```bash
 source .venv/bin/activate
-python -m pytest tests/audit/test_highlight.py -v
+python -m pytest tests/audit/ -v
 ```
 
-测试结构：
-- `tests/audit/fixtures/highlight_cases.json` — 测试数据（与代码分离，新增场景只需加 JSON）
-- `tests/audit/test_highlight.py` — 测试脚本
+测试文件：
+- `tests/audit/test_highlight.py` — PDF 标注核心函数测试
+- `tests/audit/test_multi_rule.py` — 多规则比对功能验收测试
+- `tests/audit/fixtures/highlight_cases.json` — 标注测试数据
+- `tests/audit/fixtures/multi_rule_cases.json` — 多规则测试数据
 
 覆盖范围：
 - `TestFuzzyMatch` — `_fuzzy_match()` OCR 文本匹配（防误匹配：数字子串、单字符、日期等）
 - `TestHighlightPlacement` — `_find_field_rect()` 在真实 PDF 上的标注位置（覆盖规则 1/3/4/5）
 - `TestSearchText` — 图片 PDF 原生文本搜索返回空
-- `TestFrontendDedup` — Markdown 报告去重逻辑（JSON 解析后移除逐条详情）
+- `TestCategoryGrouping` — 规则按 category 分组逻辑
+- `TestPromptBuilding` — handler prompt 包含 rule ID
+- `TestStatusFilter` — 审核结果按状态筛选
+- `TestBatchPanelGeneration` — 白板批量面板生成与合并
+- `TestMultiRuleJsonParse` — 多规则 JSON 解析与去重
+- `TestRuleColors` — 规则颜色唯一性
 
 测试 PDF 依赖 `../../audit_demo/报价单.pdf` 和 `收货单.pdf`，缺失时 PDF 相关用例自动 skip。
 

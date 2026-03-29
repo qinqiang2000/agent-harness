@@ -20,6 +20,7 @@ class AuditRule(BaseModel):
     text: str
     enabled: bool = True
     category: Optional[str] = None
+    color: Optional[str] = None
 
 
 class RulesPayload(BaseModel):

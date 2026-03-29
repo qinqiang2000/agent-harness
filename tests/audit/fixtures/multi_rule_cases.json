@@ -1,0 +1,161 @@
+{
+  "description": "多规则比对功能验收测试数据",
+
+  "category_grouping": {
+    "description": "验证规则按 category 分组逻辑",
+    "rules": [
+      {"id": "rule-1", "text": "甲方校验", "enabled": true, "category": "identity", "color": "#3B82F6"},
+      {"id": "rule-2", "text": "红章校验", "enabled": true, "category": "seal", "color": "#EF4444"},
+      {"id": "rule-3", "text": "金额一致", "enabled": true, "category": "amount", "color": "#10B981"},
+      {"id": "rule-4", "text": "项目抬头与备注一致", "enabled": true, "category": "keyword", "color": "#F59E0B"},
+      {"id": "rule-5", "text": "项目周期匹配", "enabled": true, "category": "date", "color": "#8B5CF6"},
+      {"id": "rule-6", "text": "项目抬头与推文抬头一致", "enabled": true, "category": "keyword", "color": "#F97316"},
+      {"id": "rule-7", "text": "推文物料关键字匹配", "enabled": false, "category": "keyword", "color": "#EC4899"}
+    ],
+    "expected_groups": {
+      "identity": ["rule-1"],
+      "seal": ["rule-2"],
+      "amount": ["rule-3"],
+      "keyword": ["rule-4", "rule-6", "rule-7"],
+      "date": ["rule-5"]
+    },
+    "expected_enabled_groups": {
+      "identity": ["rule-1"],
+      "seal": ["rule-2"],
+      "amount": ["rule-3"],
+      "keyword": ["rule-4", "rule-6"],
+      "date": ["rule-5"]
+    }
+  },
+
+  "prompt_building": {
+    "description": "验证 handler 构建 prompt 时包含 rule.id",
+    "files": [
+      {"name": "报价单.pdf", "path": "/data/tenants/test/audit-files/报价单.pdf"},
+      {"name": "收货单.pdf", "path": "/data/tenants/test/audit-files/收货单.pdf"}
+    ],
+    "rules": [
+      {"id": "rule-1", "text": "甲方校验", "enabled": true, "category": "identity"},
+      {"id": "rule-3", "text": "金额一致", "enabled": true, "category": "amount"},
+      {"id": "rule-4", "text": "关键字匹配", "enabled": true, "category": "keyword"}
+    ],
+    "expect_in_prompt": [
+      "rule-1",
+      "rule-3",
+      "rule-4",
+      "甲方校验",
+      "金额一致",
+      "关键字匹配",
+      "报价单.pdf",
+      "收货单.pdf"
+    ]
+  },
+
+  "status_filter": {
+    "description": "验证按状态筛选规则结果",
+    "audit_result": {
+      "documents": [
+        {"file": "报价单.pdf", "identified_as": "报价单"},
+        {"file": "收货单.pdf", "identified_as": "收货单"}
+      ],
+      "rules": [
+        {"id": "rule-1", "text": "甲方校验", "status": "PASS", "comparisons": [], "explanation": ""},
+        {"id": "rule-2", "text": "红章校验", "status": "UNABLE_TO_DETERMINE", "comparisons": [], "explanation": ""},
+        {"id": "rule-3", "text": "金额一致", "status": "PASS", "comparisons": [], "explanation": ""},
+        {"id": "rule-4", "text": "关键字匹配", "status": "FAIL", "comparisons": [], "explanation": ""},
+        {"id": "rule-5", "text": "周期匹配", "status": "PASS", "comparisons": [], "explanation": ""},
+        {"id": "rule-6", "text": "推文抬头匹配", "status": "FAIL", "comparisons": [], "explanation": ""},
+        {"id": "rule-7", "text": "推文物料关键字", "status": "PASS", "comparisons": [], "explanation": ""}
+      ],
+      "summary": {"pass": 4, "fail": 2, "unknown": 1}
+    },
+    "expected_by_status": {
+      "PASS": ["rule-1", "rule-3", "rule-5", "rule-7"],
+      "FAIL": ["rule-4", "rule-6"],
+      "UNABLE_TO_DETERMINE": ["rule-2"],
+      "ALL": ["rule-1", "rule-2", "rule-3", "rule-4", "rule-5", "rule-6", "rule-7"]
+    }
+  },
+
+  "batch_panel_generation": {
+    "description": "验证多规则批量生成白板面板，颜色按规则分配",
+    "documents": [
+      {"file": "报价单.pdf", "identified_as": "报价单"},
+      {"file": "收货单.pdf", "identified_as": "收货单"},
+      {"file": "推文物料.pdf", "identified_as": "推文物料"}
+    ],
+    "rules": [
+      {
+        "id": "rule-1", "text": "甲方校验", "status": "PASS",
+        "comparisons": [
+          {"source": "报价单", "field_name": "甲方", "value": "环胜电子商务（上海）有限公司", "page": 1}
+        ],
+        "explanation": ""
+      },
+      {
+        "id": "rule-3", "text": "金额一致", "status": "PASS",
+        "comparisons": [
+          {"source": "报价单", "field_name": "费用总计", "value": "370,815.56", "page": 1},
+          {"source": "收货单", "field_name": "折扣后收货含税总金额", "value": "370,815.56", "page": 1}
+        ],
+        "explanation": ""
+      },
+      {
+        "id": "rule-4", "text": "关键字匹配", "status": "FAIL",
+        "comparisons": [
+          {"source": "报价单", "field_name": "项目抬头", "value": "KFC Y25 2月疯狂星期四social项目", "page": 1},
+          {"source": "收货单", "field_name": "备注摘要", "value": "2月疯四全套social物料", "page": 1}
+        ],
+        "explanation": ""
+      },
+      {
+        "id": "rule-6", "text": "推文抬头匹配", "status": "PASS",
+        "comparisons": [
+          {"source": "报价单", "field_name": "项目抬头", "value": "KFC Y25 2月疯狂星期四social项目", "page": 1},
+          {"source": "推文物料", "field_name": "物料抬头", "value": "KFC Y25 2月疯狂星期四", "page": 1}
+        ],
+        "explanation": ""
+      }
+    ],
+    "expected_panels": {
+      "total_count": 3,
+      "by_document": {
+        "报价单.pdf": 1,
+        "收货单.pdf": 1,
+        "推文物料.pdf": 1
+      },
+      "note": "批量模式下同一文档同一页的面板合并：报价单page1合并rule-1/3/4/6的高亮(4个字段)→1面板，收货单page1合并rule-3/4的高亮(2个字段)→1面板，推文page1仅rule-6→1面板。不同规则用不同颜色区分。"
+    },
+    "colors_must_differ": [
+      ["rule-1", "rule-3"],
+      ["rule-3", "rule-4"],
+      ["rule-4", "rule-6"]
+    ]
+  },
+
+  "multi_rule_json_parse": {
+    "description": "验证前端解析多规则 JSON 结果",
+    "cases": [
+      {
+        "name": "7条规则完整JSON解析",
+        "input": "# 审核报告\n\n## 文档识别\n| 文件名 | 类型 |\n|---|---|\n| 报价单.pdf | 报价单 |\n| 收货单.pdf | 收货单 |\n\n## 逐条审核结果\n\n### 规则 rule-1: 甲方校验\n- PASS\n\n### 规则 rule-2: 红章校验\n- UNABLE_TO_DETERMINE\n\n### 规则 rule-3: 金额一致\n- PASS\n\n### 规则 rule-4: 关键字匹配\n- FAIL\n\n### 规则 rule-5: 周期匹配\n- PASS\n\n### 规则 rule-6: 推文抬头\n- FAIL\n\n### 规则 rule-7: 推文物料\n- PASS\n\n---\n\n## 审核总结\n- 通过: 4 条\n- 不通过: 2 条\n- 待定: 1 条\n\n<!-- AUDIT_RESULT_JSON\n{\"documents\":[{\"file\":\"报价单.pdf\",\"identified_as\":\"报价单\"},{\"file\":\"收货单.pdf\",\"identified_as\":\"收货单\"}],\"rules\":[{\"id\":\"rule-1\",\"text\":\"甲方校验\",\"status\":\"PASS\",\"comparisons\":[{\"source\":\"报价单\",\"field_name\":\"甲方\",\"value\":\"环胜\",\"page\":1}],\"explanation\":\"甲方正确\"},{\"id\":\"rule-2\",\"text\":\"红章校验\",\"status\":\"UNABLE_TO_DETERMINE\",\"comparisons\":[],\"explanation\":\"无法确认\"},{\"id\":\"rule-3\",\"text\":\"金额一致\",\"status\":\"PASS\",\"comparisons\":[{\"source\":\"报价单\",\"field_name\":\"费用总计\",\"value\":\"370,815.56\",\"page\":1},{\"source\":\"收货单\",\"field_name\":\"金额\",\"value\":\"370,815.56\",\"page\":1}],\"explanation\":\"金额一致\"},{\"id\":\"rule-4\",\"text\":\"关键字匹配\",\"status\":\"FAIL\",\"comparisons\":[{\"source\":\"报价单\",\"field_name\":\"项目抬头\",\"value\":\"KFC\",\"page\":1},{\"source\":\"收货单\",\"field_name\":\"备注\",\"value\":\"2月疯四\",\"page\":1}],\"explanation\":\"关键字不匹配\"},{\"id\":\"rule-5\",\"text\":\"周期匹配\",\"status\":\"PASS\",\"comparisons\":[{\"source\":\"报价单\",\"field_name\":\"周期\",\"value\":\"2025.1-2025.2\",\"page\":1},{\"source\":\"收货单\",\"field_name\":\"完成日期\",\"value\":\"2025-02-28\",\"page\":1}],\"explanation\":\"周期匹配\"},{\"id\":\"rule-6\",\"text\":\"推文抬头\",\"status\":\"FAIL\",\"comparisons\":[],\"explanation\":\"无推文文件\"},{\"id\":\"rule-7\",\"text\":\"推文物料\",\"status\":\"PASS\",\"comparisons\":[],\"explanation\":\"匹配\"}],\"summary\":{\"pass\":4,\"fail\":2,\"unknown\":1}}\nAUDIT_RESULT_JSON -->",
+        "expect_rule_count": 7,
+        "expect_summary": {"pass": 4, "fail": 2, "unknown": 1},
+        "expect_dedup_contains": ["文档识别", "审核总结"],
+        "expect_dedup_not_contains": ["逐条审核结果", "AUDIT_RESULT_JSON"]
+      },
+      {
+        "name": "规则ID为字符串格式(rule-N)",
+        "input": "<!-- AUDIT_RESULT_JSON\n{\"documents\":[],\"rules\":[{\"id\":\"rule-1\",\"text\":\"test\",\"status\":\"PASS\",\"comparisons\":[],\"explanation\":\"\"}],\"summary\":{\"pass\":1,\"fail\":0,\"unknown\":0}}\nAUDIT_RESULT_JSON -->",
+        "expect_rule_count": 1,
+        "expect_rule_ids": ["rule-1"]
+      },
+      {
+        "name": "无JSON块时保留完整内容不做去重",
+        "input": "# 审核报告\n\n## 逐条审核结果\n\n### 规则 1: xxx\n- 状态: PASS\n\n## 审核总结\n- 通过: 1 条",
+        "expect_parse_fail": true,
+        "expect_raw_contains": ["逐条审核结果", "规则 1", "审核总结"]
+      }
+    ]
+  }
+}
