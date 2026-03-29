@@ -125,5 +125,5 @@ pip install PyMuPDF
 ./run.sh restart
 
 # 4. 打开浏览器
-open http://localhost:9090/audit/
+open http://localhost:9123/audit/
 ```

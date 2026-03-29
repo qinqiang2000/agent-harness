@@ -7,6 +7,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5/dist/fabric.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
     .drag-over { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
@@ -284,60 +285,45 @@
       </div>
     </main>
 
-    <!-- Right side: Compare Panel -->
-    <aside x-show="comparePanel.show" x-cloak
-      class="bg-white border-l flex flex-col shrink-0 transition-all duration-300"
-      :class="comparePanel.maximized ? 'fixed inset-0 z-50' : 'w-[45%]'">
+    <!-- Whiteboard Canvas Overlay -->
+    <div x-show="whiteboard.show" x-cloak
+      class="fixed inset-0 z-50 flex flex-col"
+      @keydown.escape.window="whiteboard.show && closeWhiteboard()"
+      @keydown.delete.window="whiteboard.show && deleteSelectedPanels()"
+      @keydown.backspace.window="whiteboard.show && deleteSelectedPanels()">
       <!-- Toolbar -->
-      <div class="flex items-center justify-between px-3 py-2 border-b bg-gray-50 shrink-0">
-        <span class="text-xs font-medium text-gray-600">文档对比</span>
-        <div class="flex items-center gap-1.5">
-          <!-- Zoom controls -->
-          <button @click="comparePanel.zoom = Math.max(0.3, comparePanel.zoom - 0.2)"
-            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs font-bold">−</button>
-          <span class="text-[10px] text-gray-400 w-8 text-center" x-text="Math.round(comparePanel.zoom * 100) + '%'"></span>
-          <button @click="comparePanel.zoom = Math.min(3, comparePanel.zoom + 0.2)"
-            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs font-bold">+</button>
-          <div class="w-px h-4 bg-gray-300 mx-1"></div>
-          <!-- Maximize toggle -->
-          <button @click="comparePanel.maximized = !comparePanel.maximized"
-            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500" title="最大化/还原">
-            <svg x-show="!comparePanel.maximized" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-            <svg x-show="comparePanel.maximized" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M15 15h4.5m-4.5 0v4.5m0-4.5l5.5 5.5"/></svg>
-          </button>
-          <!-- Close -->
-          <button @click="comparePanel.show = false; comparePanel.maximized = false"
-            class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      <div class="shrink-0 flex items-center justify-between px-4 py-2 bg-white border-b shadow-sm z-10">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-semibold text-gray-700">文档对比白板</span>
+          <span class="text-xs text-gray-400" x-text="whiteboard.panelCount + ' 个面板'"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="whiteboardZoom(-0.15)"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-sm font-bold border">−</button>
+          <span class="text-xs text-gray-500 w-12 text-center"
+            x-text="Math.round(whiteboard.canvasZoom * 100) + '%'"></span>
+          <button @click="whiteboardZoom(0.15)"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-sm font-bold border">+</button>
+          <div class="w-px h-5 bg-gray-200 mx-1"></div>
+          <button @click="whiteboardFitAll()"
+            class="px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded-lg border" title="适应全部面板">适应全部</button>
+          <button @click="whiteboardResetLayout()"
+            class="px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded-lg border" title="重新排列面板">重排</button>
+          <div class="w-px h-5 bg-gray-200 mx-1"></div>
+          <span class="text-[10px] text-gray-400">Alt+拖拽平移 · 滚轮缩放 · Delete删除</span>
+          <div class="w-px h-5 bg-gray-200 mx-1"></div>
+          <button @click="closeWhiteboard()"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 border" title="关闭白板">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
       </div>
-      <!-- Panels (stacked vertically) -->
-      <div class="flex-1 overflow-hidden flex flex-col divide-y">
-        <template x-for="(panel, pi) in comparePanel.panels" :key="pi">
-          <div class="flex-1 flex flex-col overflow-hidden min-h-0">
-            <!-- Panel header: filename + legend -->
-            <div class="px-3 py-1.5 bg-gray-50 border-b shrink-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-[11px] font-medium text-gray-600" x-text="panel.filename + ' · 第' + panel.page + '页'"></span>
-                <template x-for="h in panel.highlights" :key="h.label">
-                  <span class="flex items-center gap-1 text-[10px]">
-                    <span class="w-2 h-2 rounded-sm shrink-0" :style="'background:' + h.color"></span>
-                    <span class="text-gray-500" x-text="h.label"></span>
-                  </span>
-                </template>
-              </div>
-            </div>
-            <!-- Scrollable image with zoom -->
-            <div class="flex-1 overflow-auto bg-gray-100">
-              <div class="p-3 flex justify-center" :style="'transform-origin: top center; transform: scale(' + comparePanel.zoom + ')'">
-                <img :src="panel.url" class="shadow-lg rounded max-w-full" alt="Highlighted PDF page">
-              </div>
-            </div>
-          </div>
-        </template>
+      <!-- Canvas area -->
+      <div class="flex-1 overflow-hidden" x-ref="whiteboardContainer"
+        style="background-color:#f1f5f9; background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 20px 20px;">
+        <canvas id="whiteboard-canvas"></canvas>
       </div>
-    </aside>
+    </div>
 
   </div>
 
@@ -375,11 +361,12 @@
         sessionId: null,
         auditResult: null,
         rulesCollapsed: false,
-        comparePanel: {
+        whiteboard: {
           show: false,
-          maximized: false,
-          zoom: 1,
-          panels: [],
+          fabricCanvas: null,
+          panelCount: 0,
+          canvasZoom: 1,
+          nextPanelId: 1,
         },
 
         // Base URL (same origin)
@@ -533,7 +520,7 @@
           this.auditResult = null;
           this.sessionId = null;
           this.rulesCollapsed = true;
-          this.comparePanel.show = false;
+          if (this.whiteboard.show) this.closeWhiteboard();
           this.addMessage('user', '开始审核');
           await this.runQuery({ tenant_id: this.tenantId });
         },
@@ -773,12 +760,12 @@
           };
         },
 
-        // Compare View
+        // ── Whiteboard ──
+
         showComparison(rule) {
           const palette = ['#3B82F6','#F59E0B','#10B981','#EF4444','#8B5CF6','#F97316'];
-          // Single color for the entire rule
           const ruleColor = palette[(rule.id - 1) % palette.length] || palette[0];
-          // Group comparisons by source document
+
           const bySource = {};
           rule.comparisons.forEach((comp) => {
             if (!comp.page) return;
@@ -787,7 +774,7 @@
             bySource[key].comps.push({ ...comp, color: ruleColor });
           });
 
-          const panels = [];
+          const newPanels = [];
           for (const [source, group] of Object.entries(bySource)) {
             const doc = this.auditResult?.documents?.find(d => d.identified_as === source);
             if (!doc) continue;
@@ -797,12 +784,293 @@
             }));
             const hlParam = encodeURIComponent(JSON.stringify(highlights));
             const url = `${this.baseUrl}/audit/files/${this.tenantId}/${encodeURIComponent(filename)}/pages/${group.page}/highlighted?highlights=${hlParam}`;
-            panels.push({ filename, page: group.page, url, highlights, color: ruleColor });
+
+            // Deduplicate: skip if same URL already on canvas
+            if (this.whiteboard.fabricCanvas) {
+              const dup = this.whiteboard.fabricCanvas.getObjects().find(o => o._panelUrl === url);
+              if (dup) continue;
+            }
+
+            newPanels.push({
+              id: this.whiteboard.nextPanelId++,
+              filename, page: group.page, url, highlights,
+            });
           }
-          if (panels.length > 0) {
-            this.comparePanel = { show: true, maximized: false, zoom: 1, panels: panels.slice(0, 2) };
-            this.rulesCollapsed = true;
+
+          if (newPanels.length === 0 && !this.whiteboard.show) return;
+          this.rulesCollapsed = true;
+
+          if (!this.whiteboard.show) {
+            this.whiteboard.show = true;
+            this.$nextTick(() => {
+              this.initWhiteboard();
+              this._addPanelsWithLayout(newPanels);
+            });
+          } else {
+            this._addPanelsWithLayout(newPanels);
           }
+        },
+
+        // ── Whiteboard: init / destroy ──
+
+        initWhiteboard() {
+          const container = this.$refs.whiteboardContainer;
+          if (!container || !window.fabric) return;
+
+          const w = container.clientWidth;
+          const h = container.clientHeight;
+
+          const canvas = new fabric.Canvas('whiteboard-canvas', {
+            width: w, height: h,
+            selection: true,
+            preserveObjectStacking: true,
+            backgroundColor: 'transparent',
+          });
+
+          // Pan: Alt + drag or middle-button drag
+          canvas.on('mouse:down', function (opt) {
+            const e = opt.e;
+            if (e.altKey || e.button === 1) {
+              this.isDragging = true;
+              this.selection = false;
+              this.lastPosX = e.clientX;
+              this.lastPosY = e.clientY;
+            }
+          });
+          canvas.on('mouse:move', function (opt) {
+            if (this.isDragging) {
+              const e = opt.e;
+              const vpt = this.viewportTransform;
+              vpt[4] += e.clientX - this.lastPosX;
+              vpt[5] += e.clientY - this.lastPosY;
+              this.requestRenderAll();
+              this.lastPosX = e.clientX;
+              this.lastPosY = e.clientY;
+            }
+          });
+          canvas.on('mouse:up', function () {
+            this.setViewportTransform(this.viewportTransform);
+            this.isDragging = false;
+            this.selection = true;
+          });
+
+          // Zoom: mouse wheel
+          const self = this;
+          canvas.on('mouse:wheel', function (opt) {
+            const delta = opt.e.deltaY;
+            let zoom = canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            zoom = Math.max(0.1, Math.min(3, zoom));
+            canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+            self.whiteboard.canvasZoom = Math.round(zoom * 100) / 100;
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+          });
+
+          this.whiteboard.fabricCanvas = canvas;
+
+          // Resize handler
+          this._wbResize = () => {
+            if (!this.whiteboard.fabricCanvas) return;
+            this.whiteboard.fabricCanvas.setDimensions({
+              width: container.clientWidth, height: container.clientHeight,
+            });
+          };
+          window.addEventListener('resize', this._wbResize);
+        },
+
+        closeWhiteboard() {
+          if (this.whiteboard.fabricCanvas) {
+            this.whiteboard.fabricCanvas.dispose();
+            this.whiteboard.fabricCanvas = null;
+          }
+          if (this._wbResize) {
+            window.removeEventListener('resize', this._wbResize);
+            this._wbResize = null;
+          }
+          this.whiteboard.show = false;
+          this.whiteboard.panelCount = 0;
+          this.whiteboard.canvasZoom = 1;
+          this.whiteboard.nextPanelId = 1;
+        },
+
+        // ── Whiteboard: add panels ──
+
+        _addPanelsWithLayout(newPanels) {
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas || newPanels.length === 0) return;
+
+          const existing = canvas.getObjects().filter(o => o._panelId);
+          const cols = 3;
+          const panelW = 420;
+          const gap = 40;
+          const startX = 60;
+          const startY = 60;
+
+          let loaded = 0;
+          newPanels.forEach((panel, i) => {
+            const idx = existing.length + i;
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            const x = startX + col * (panelW + gap);
+            const y = startY + row * 500;
+
+            this._createPanelGroup(panel, x, y, () => {
+              loaded++;
+              this.whiteboard.panelCount = canvas.getObjects().filter(o => o._panelId).length;
+              if (loaded === newPanels.length) {
+                this.$nextTick(() => this.whiteboardFitAll());
+              }
+            });
+          });
+        },
+
+        _createPanelGroup({ id, filename, page, url, highlights }, x, y, onDone) {
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas) return;
+
+          const panelW = 420;
+          const padding = 4;
+          const headerH = 28;
+
+          fabric.Image.fromURL(url, (img) => {
+            if (!img || !img.width) { if (onDone) onDone(); return; }
+
+            const scale = (panelW - padding * 2) / img.width;
+            const imgH = img.height * scale;
+            const totalH = headerH + imgH + padding;
+
+            img.set({ left: padding, top: headerH, scaleX: scale, scaleY: scale });
+
+            // Background
+            const bg = new fabric.Rect({
+              left: 0, top: 0, width: panelW, height: totalH,
+              fill: '#ffffff', rx: 6, ry: 6,
+              stroke: '#e5e7eb', strokeWidth: 1,
+              shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.06)', blur: 8, offsetY: 2 }),
+            });
+
+            // Title
+            const title = new fabric.Text(`${filename} · 第${page}页`, {
+              left: padding + 2, top: 4,
+              fontSize: 11, fill: '#374151', fontWeight: 'bold',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            });
+
+            // Color legend (inline after title)
+            const legend = [];
+            let lx = title.left + title.width + 10;
+            (highlights || []).forEach(h => {
+              legend.push(new fabric.Rect({
+                left: lx, top: 7, width: 6, height: 6, fill: h.color, rx: 1, ry: 1,
+              }));
+              lx += 8;
+              const lbl = new fabric.Text(h.label, {
+                left: lx, top: 5, fontSize: 9, fill: '#6b7280',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              });
+              lx += lbl.width + 8;
+              legend.push(lbl);
+            });
+
+            const group = new fabric.Group([bg, title, ...legend, img], {
+              left: x, top: y,
+              lockRotation: true,
+              hasRotatingPoint: false,
+              cornerStyle: 'circle', cornerSize: 8,
+              transparentCorners: false,
+              borderColor: '#3B82F6', cornerColor: '#3B82F6',
+            });
+            group._panelId = id;
+            group._panelUrl = url;
+
+            canvas.add(group);
+            canvas.renderAll();
+            if (onDone) onDone();
+          });
+        },
+
+        // ── Whiteboard: controls ──
+
+        deleteSelectedPanels() {
+          const el = document.activeElement;
+          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas) return;
+          const active = canvas.getActiveObjects();
+          if (active.length === 0) return;
+          active.forEach(o => canvas.remove(o));
+          canvas.discardActiveObject();
+          canvas.renderAll();
+          this.whiteboard.panelCount = canvas.getObjects().filter(o => o._panelId).length;
+          if (this.whiteboard.panelCount === 0) this.closeWhiteboard();
+        },
+
+        whiteboardZoom(delta) {
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas) return;
+          let zoom = canvas.getZoom() + delta;
+          zoom = Math.max(0.1, Math.min(3, zoom));
+          canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
+          this.whiteboard.canvasZoom = Math.round(zoom * 100) / 100;
+        },
+
+        whiteboardFitAll() {
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas) return;
+          const objects = canvas.getObjects().filter(o => o._panelId);
+          if (objects.length === 0) return;
+
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          objects.forEach(obj => {
+            const l = obj.left, t = obj.top;
+            const w = obj.width * (obj.scaleX || 1);
+            const h = obj.height * (obj.scaleY || 1);
+            minX = Math.min(minX, l);
+            minY = Math.min(minY, t);
+            maxX = Math.max(maxX, l + w);
+            maxY = Math.max(maxY, t + h);
+          });
+
+          const contentW = maxX - minX || 1;
+          const contentH = maxY - minY || 1;
+          const pad = 60;
+          const zoom = Math.min(
+            (canvas.width - pad * 2) / contentW,
+            (canvas.height - pad * 2) / contentH,
+            1.5
+          );
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+
+          canvas.setViewportTransform([
+            zoom, 0, 0, zoom,
+            canvas.width / 2 - cx * zoom,
+            canvas.height / 2 - cy * zoom,
+          ]);
+          this.whiteboard.canvasZoom = Math.round(zoom * 100) / 100;
+          canvas.renderAll();
+        },
+
+        whiteboardResetLayout() {
+          const canvas = this.whiteboard.fabricCanvas;
+          if (!canvas) return;
+          const objects = canvas.getObjects().filter(o => o._panelId);
+          const cols = 3, gap = 40, startX = 60, startY = 60;
+
+          objects.forEach((obj, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const panelW = obj.width * (obj.scaleX || 1);
+            const panelH = obj.height * (obj.scaleY || 1);
+            obj.set({
+              left: startX + col * (panelW + gap),
+              top: startY + row * (panelH + gap),
+            });
+            obj.setCoords();
+          });
+          canvas.renderAll();
+          this.$nextTick(() => this.whiteboardFitAll());
         },
       };
     }

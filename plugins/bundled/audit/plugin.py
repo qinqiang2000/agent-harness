@@ -353,6 +353,10 @@ class AuditChannelPlugin(ChannelPlugin):
 
                     misses = []
                     ocr_cache = {}
+                    # For rotated pages, draw_rect uses mediabox (unrotated) coords,
+                    # but OCR/search return page.rect (visual) coords. Convert at draw time.
+                    derot = pg.derotation_matrix if pg.rotation else None
+
                     for hl in hl_list:
                         value = hl.get("value", "")
                         label = hl.get("label", "")
@@ -365,19 +369,20 @@ class AuditChannelPlugin(ChannelPlugin):
                         if not rects:
                             logger.info(f"[Audit] Highlight MISS: value={value!r}")
                             misses.append(value)
-                        else:
-                            for rect in rects:
-                                logger.info(f"[Audit] Highlight HIT: value={value!r} -> rect=({rect.x0:.1f},{rect.y0:.1f},{rect.x1:.1f},{rect.y1:.1f})")
                             continue
+
+                        for rect in rects:
+                            logger.info(f"[Audit] Highlight HIT: value={value!r} -> rect=({rect.x0:.1f},{rect.y0:.1f},{rect.x1:.1f},{rect.y1:.1f})")
 
                         ch = color_hex.lstrip("#")
                         r, g, b = int(ch[0:2], 16) / 255, int(ch[2:4], 16) / 255, int(ch[4:6], 16) / 255
 
                         for rect in rects:
-                            padded = fitz.Rect(rect.x0 - 2, rect.y0 - 2, rect.x1 + 2, rect.y1 + 2)
+                            draw_rect = rect * derot if derot else rect
+                            padded = fitz.Rect(draw_rect.x0 - 2, draw_rect.y0 - 2, draw_rect.x1 + 2, draw_rect.y1 + 2)
                             pg.draw_rect(padded, color=(r, g, b), width=1.5, overlay=True)
                             if label:
-                                label_pt = fitz.Point(rect.x0, rect.y0 - 4)
+                                label_pt = fitz.Point(draw_rect.x0, draw_rect.y0 - 4)
                                 pg.insert_text(label_pt, label, fontsize=6, color=(r, g, b),
                                                fontname="china-s", overlay=True)
 
