@@ -9,9 +9,7 @@
       "verbose": false
     },
     "zhichi": {
-      "app_id": "6b22d5877a7a43f4aadff27405395c14",
-      "app_key": "s04bC0Z82pmS",
-      "session_timeout": 3600,
+"session_timeout": 3600,
       "default_skill": "customer-service",
       "token_refresh_buffer_seconds": 300,
       "mock_send": false,

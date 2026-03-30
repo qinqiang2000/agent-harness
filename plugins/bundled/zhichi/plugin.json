@@ -52,6 +52,6 @@
         "default": "https://www.sobot.com/api/robot/third_algorithm/answer"
       }
     },
-    "required": ["app_id", "app_key"]
+    "required": []
   }
 }
