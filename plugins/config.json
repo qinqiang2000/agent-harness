@@ -14,7 +14,8 @@
       "session_timeout": 3600,
       "default_skill": "customer-service",
       "token_refresh_buffer_seconds": 300,
-      "mock_send": true
+      "mock_send": false,
+      "transfer_group": "测试技能组"
     },
     "audit": {
       "max_upload_size_mb": 20,

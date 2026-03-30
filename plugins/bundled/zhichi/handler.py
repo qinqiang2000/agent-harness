@@ -34,6 +34,7 @@ class ZhichiHandler:
         self.session_service = session_service
         # self.message_sender = message_sender
         self.default_skill = config.get("default_skill", "customer-service")
+        self.transfer_group = config.get("transfer_group", "")
         session_timeout = config.get("session_timeout", 3600)
 
         self.session_mapper = PluginSessionMapper(
@@ -120,7 +121,7 @@ class ZhichiHandler:
 
             elif event_type == "transfer_human":
                 data = json.loads(event["data"])
-                group_name = data.get("group", "通用客服组")
+                group_name = self.transfer_group or data.get("group", "通用客服组")
                 reason = data.get("reason", "正在为您转接人工客服，请稍候。")
                 logger.info(f"[Zhichi] Transfer to human: group={group_name}")
                 yield reason, True, True, group_name

@@ -26,6 +26,11 @@
         "description": "默认使用的 Skill 名称",
         "default": "customer-service"
       },
+      "transfer_group": {
+        "type": "string",
+        "description": "转人工时的目标技能组名，留空则使用 Skill 输出的组名",
+        "default": ""
+      },
       "token_refresh_buffer_seconds": {
         "type": "integer",
         "description": "Token 到期前提前刷新的缓冲秒数",
