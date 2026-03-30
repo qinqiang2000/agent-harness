@@ -23,6 +23,8 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
     # 多余空行压缩为单换行
     text = re.sub(r'\n{2,}', '\n', text)
+    # 换行替换为空格（云之家不支持换行符）
+    text = text.replace('\n', ' ')
     return text.strip()
 
 
@@ -36,7 +38,7 @@ class YunzhijiaMessageSender:
         """发送文本消息"""
         url = self.notify_url_template.format(token)
         data = {
-            "content": _strip_markdown(content),
+            "content": content,
             "notifyParams": [{"type": "openIds", "values": [openid]}]
         }
 
