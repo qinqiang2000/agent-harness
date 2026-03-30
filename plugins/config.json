@@ -9,7 +9,7 @@
       "verbose": false
     },
     "zhichi": {
-"session_timeout": 3600,
+      "session_timeout": 3600,
       "default_skill": "customer-service",
       "token_refresh_buffer_seconds": 300,
       "mock_send": false,
