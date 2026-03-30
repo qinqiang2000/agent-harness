@@ -24,20 +24,12 @@ mcp__gitlab__search_repositories(search="{fields.project 的值}")
 
 ## 二、获取本地源码（必须 clone，禁止逐文件 API 拉取）
 
-> **强制规范**：查看任何项目源码，必须将整个仓库 clone 到本地后再检索。**严禁**使用 `mcp__gitlab__get_file_contents` 等 GitLab API 逐文件拉取。
+> **强制规范**：查看任何项目源码，必须将整个仓库 clone 到本地后再检索。**严禁**使用 `mcp__gitlab__get_file_contents`、`mcp__gitlab__search_repositories` 等 GitLab API 逐文件拉取或搜索源码内容。
 
-获得 `project_id` 后，按以下逻辑操作：
+获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull：
 
 ```bash
-LOCAL_DIR="/tmp/gitlab/src/{repo-name}"
-
-# 本地已有 → 拉取最新代码
-if [ -d "$LOCAL_DIR/.git" ]; then
-  git -C "$LOCAL_DIR" pull
-# 本地没有 → 完整 clone
-else
-  git clone "https://test-master.piaozone.com/git/{namespace/repo-name}.git" "$LOCAL_DIR"
-fi
+LOCAL_DIR="/tmp/gitlab/src/{repo-name}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "https://token:$GITLAB_TOKEN@test-master.piaozone.com/git/{namespace/repo-name}.git" "$LOCAL_DIR")
 ```
 
 - clone / pull 成功后，所有源码检索均在本地目录进行

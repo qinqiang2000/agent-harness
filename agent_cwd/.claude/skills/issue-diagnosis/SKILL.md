@@ -115,7 +115,15 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 ## Step 4：源码定位
 
-按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 执行源码定位。在源码定位完成之前，不输出任何诊断结论。
+**⚠️ 严禁在本地工作目录（agent_cwd）用 Grep/Glob 搜索源码，严禁用 `mcp__gitlab__search_repositories` 传类名/方法名搜索。**
+
+必须严格按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的顺序执行：
+1. 读 `references/service-repo-map.md`，用日志中的 `fields.project` 精确匹配，获取 `project_id`
+2. 映射表未命中时，才用 `mcp__gitlab__search_repositories(search="{fields.project 的值}")` 搜索（传服务名，禁止传类名）
+3. 获得 `project_id` 后，clone 仓库到 `/tmp/gitlab/src/{repo-name}`
+4. 在本地 clone 目录用 Grep 搜索目标类
+
+在源码定位完成之前，不输出任何诊断结论。
 
 收票服务源码定位时，先查 [references/invoice-collection-context.md](references/invoice-collection-context.md) 中的调用链速查和错误码表，再定位目标类。
 
