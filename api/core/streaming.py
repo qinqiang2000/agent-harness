@@ -19,7 +19,7 @@ from api.utils.sdk_logger import SDKLogger
 logger = logging.getLogger(__name__)
 
 
-_TRANSFER_PATTERN = re.compile(r'^\[TRANSFER:([^\]]*)\]\s*')
+_TRANSFER_PATTERN = re.compile(r'\[TRANSFER:([^\]]*)\]\s*')
 
 
 class StreamProcessor:
@@ -185,10 +185,10 @@ class StreamProcessor:
 
         # Include result field if present (SDK final output)
         if msg.result:
-            m = _TRANSFER_PATTERN.match(msg.result)
+            m = _TRANSFER_PATTERN.search(msg.result)
             if m:
                 group_name = m.group(1).strip()
-                reason = msg.result[m.end():]
+                reason = msg.result[m.end():].strip() or msg.result[:m.start()].strip()
                 logger.info(f"[Transfer] Detected transfer signal: group={group_name}")
                 yield format_sse_message("transfer_human", {"group": group_name, "reason": reason})
                 result_data["result"] = reason
