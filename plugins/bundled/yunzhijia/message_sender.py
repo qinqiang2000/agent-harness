@@ -1,6 +1,7 @@
 """消息发送器 - 发送云之家消息（文本和图片卡片）."""
 
 import logging
+import re
 from typing import List
 
 import aiohttp
@@ -8,6 +9,21 @@ import aiohttp
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_markdown(text: str) -> str:
+    """将 Markdown 格式转为纯文本，避免云之家 403。"""
+    # 代码块（```...```）→ 保留内容，去掉围栏
+    text = re.sub(r'```[^\n]*\n?(.*?)```', lambda m: m.group(1).strip(), text, flags=re.DOTALL)
+    # 行内代码（`code`）→ 保留内容
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    # 加粗/斜体
+    text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
+    # 标题（# ## ###）
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    # 多余空行（超过两个换行压缩为两个）
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 class YunzhijiaMessageSender:
@@ -20,7 +36,7 @@ class YunzhijiaMessageSender:
         """发送文本消息"""
         url = self.notify_url_template.format(token)
         data = {
-            "content": content,
+            "content": _strip_markdown(content),
             "notifyParams": [{"type": "openIds", "values": [openid]}]
         }
 
