@@ -16,7 +16,7 @@ class REPLState:
             skill: 要使用的skill名称，默认为 customer-service
         """
         self.session_id: Optional[str] = None
-        self.tenant_id: str = "cli-debug"
+        self.tenant_id: Optional[str] = None
         self.language: str = "中文"
         self.skill: str = skill
         self.session_history: list = []

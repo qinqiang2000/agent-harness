@@ -111,7 +111,7 @@ class YunzhijiaHandler:
             request = QueryRequest(
                 prompt=prompt,
                 skill=effective_skill,
-                tenant_id="yzj",
+                tenant_id=None,
                 language="中文",
                 session_id=agent_session_id,
             )

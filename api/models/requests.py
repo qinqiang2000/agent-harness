@@ -8,7 +8,7 @@ class QueryRequest(BaseModel):
     """Generic request model for agent queries."""
 
     # Required fields
-    tenant_id: str = Field(..., description="租户ID")
+    tenant_id: Optional[str] = Field(None, description="租户ID")
     prompt: str = Field(..., min_length=1, description="用户请求")
 
     # Optional fields - generic
@@ -17,13 +17,6 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="会话ID (续会话用)")
     context: Optional[str] = Field(None, description="附加上下文数据")
     metadata: Optional[Dict[str, Any]] = Field(None, description="扩展元数据")
-
-    @field_validator('tenant_id')
-    @classmethod
-    def tenant_id_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError('tenant_id cannot be empty')
-        return v.strip()
 
     @field_validator('prompt')
     @classmethod
@@ -54,7 +47,6 @@ class QueryRequest(BaseModel):
                     "summary": "New session",
                     "description": "Starting a new conversation (requires language)",
                     "value": {
-                        "tenant_id": "1",
                         "prompt": "如何配置开票模板？",
                         "skill": "customer-service",
                         "language": "中文",
@@ -65,7 +57,6 @@ class QueryRequest(BaseModel):
                     "summary": "Continuation session",
                     "description": "Resuming an existing conversation",
                     "value": {
-                        "tenant_id": "1",
                         "prompt": "继续前面的对话",
                         "session_id": "abc-123-def"
                     }
