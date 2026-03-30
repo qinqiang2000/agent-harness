@@ -21,8 +21,8 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
     # 标题（# ## ###）
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-    # 多余空行（超过两个换行压缩为两个）
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # 多余空行压缩为单换行
+    text = re.sub(r'\n{2,}', '\n', text)
     return text.strip()
 
 
