@@ -156,6 +156,14 @@ class YunzhijiaHandler:
                 self.session_mapper.update_activity(yzj_session_id, new_session_id)
                 logger.info(f"[YZJ] Session mapping: {yzj_session_id} -> {new_session_id}")
 
+            elif event_type == "transfer_human":
+                # 云之家不支持转人工，直接将 Skill 给出的说明文字发给用户
+                data = json.loads(event["data"])
+                reason = data.get("reason", "抱歉，请联系发票云人工客服做支持。")
+                await self.message_sender.send_text(yzj_token, operator_openid, reason)
+                message_count += 1
+                break
+
             elif event_type == "ask_user_question":
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])

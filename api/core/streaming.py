@@ -1,6 +1,7 @@
 """Claude SDK streaming response processor."""
 
 import logging
+import re
 from typing import AsyncGenerator, Optional
 from claude_agent_sdk import (
     ClaudeSDKClient,
@@ -16,6 +17,9 @@ from api.utils import format_sse_message, extract_todos_from_tool
 from api.utils.sdk_logger import SDKLogger
 
 logger = logging.getLogger(__name__)
+
+
+_TRANSFER_PATTERN = re.compile(r'^\[TRANSFER:([^\]]*)\]\s*')
 
 
 class StreamProcessor:
@@ -181,7 +185,15 @@ class StreamProcessor:
 
         # Include result field if present (SDK final output)
         if msg.result:
-            result_data["result"] = msg.result
+            m = _TRANSFER_PATTERN.match(msg.result)
+            if m:
+                group_name = m.group(1).strip()
+                reason = msg.result[m.end():]
+                logger.info(f"[Transfer] Detected transfer signal: group={group_name}")
+                yield format_sse_message("transfer_human", {"group": group_name, "reason": reason})
+                result_data["result"] = reason
+            else:
+                result_data["result"] = msg.result
 
         yield format_sse_message("result", result_data)
 

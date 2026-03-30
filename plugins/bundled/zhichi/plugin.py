@@ -51,6 +51,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
             send_cards=False,
             receive_webhook=True,
             session_management=True,
+            transfer_human=True,
         )
 
     def create_router(self) -> APIRouter:
@@ -73,7 +74,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
                     # 先推送等待提示（MESSAGE 类型，智齿流式显示）
                     waiting = ThirdAlgorithmRespWrapper(
                         data=ThirdAlgorithmRespVo(
-                            llm_answer="您好，感谢您的咨询！我正在为您查找相关信息，请稍候片刻～",
+                            llm_answer="您好，感谢您的咨询！我正在为您查找相关信息，请稍候片刻。。。\n",
                             robot_answer_message_type="MESSAGE",
                             runtimeid=req.runtimeid,
                             message_end=False,

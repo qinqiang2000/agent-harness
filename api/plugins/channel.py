@@ -26,6 +26,7 @@ class ChannelCapabilities:
     send_cards: bool = False
     receive_webhook: bool = True
     session_management: bool = True
+    transfer_human: bool = False  # 支持转人工客服
 
 
 class ChannelPlugin(ABC):

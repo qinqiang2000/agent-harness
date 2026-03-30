@@ -40,7 +40,6 @@ class ZhichiHandler:
             timeout_seconds=session_timeout,
             channel_id="zhichi",
         )
-        self._transfer_counts: dict[str, int] = {}
 
     # async def process_message(self, req: ThirdAlgorithmReqVo, skill=None):
     #     """异步回调模式 - 已停用，智齿无回调接口."""
@@ -119,21 +118,27 @@ class ZhichiHandler:
                 new_session_id = data["session_id"]
                 self.session_mapper.update_activity(cid, new_session_id)
 
+            elif event_type == "transfer_human":
+                data = json.loads(event["data"])
+                group_name = data.get("group", "通用客服组")
+                reason = data.get("reason", "正在为您转接人工客服，请稍候。")
+                logger.info(f"[Zhichi] Transfer to human: group={group_name}")
+                yield reason, True, True, group_name
+                return
+
             elif event_type == "ask_user_question":
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
                 if questions:
                     answer = self._format_question(questions[0])
-                    transfer, group_name = await self._check_transfer(cid, answer)
-                    yield answer, True, transfer, group_name
+                    yield answer, True, False, ""
                 return
 
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
                 answer = result_data.get("result", "抱歉，处理您的问题时出现错误，请稍后再试。")
-                transfer, group_name = await self._check_transfer(cid, answer)
-                yield answer, True, transfer, group_name
+                yield answer, True, False, ""
                 return
 
             elif event_type == "error":
@@ -148,24 +153,6 @@ class ZhichiHandler:
         async for llm_answer, _, transfer, group_name in self.stream_answer(req):
             return llm_answer, transfer, group_name
         return "抱歉，处理您的问题时出现错误，请稍后再试。", False, ""
-
-    async def _check_transfer(self, cid: str, answer: str) -> tuple[bool, str]:
-        """用 AI 判断答案是否建议转人工，累计 2 次则触发，同时返回目标技能组名."""
-        should_transfer, group_name = await self._should_transfer_ai(answer)
-        if not should_transfer:
-            return False, ""
-        self._transfer_counts[cid] = self._transfer_counts.get(cid, 0) + 1
-        count = self._transfer_counts[cid]
-        logger.info(f"[Zhichi] Transfer intent detected: cid={cid}, count={count}, group={group_name}")
-        if count >= 2:
-            self._transfer_counts.pop(cid, None)
-            logger.info(f"[Zhichi] Transfer to human triggered: cid={cid}, group={group_name}")
-            return True, group_name
-        return False, ""
-
-    async def _should_transfer_ai(self, answer: str) -> tuple[bool, str]:
-        """调用 LLM 判断回复是否建议转人工，组名暂时固定返回"测试技能组"."""
-        return False, "测试技能组"
 
     def get_session_stats(self) -> dict:
         """获取会话统计信息."""

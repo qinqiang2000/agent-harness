@@ -43,6 +43,7 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
             send_cards=True,
             receive_webhook=True,
             session_management=True,
+            transfer_human=False,  # 云之家不支持转人工
         )
 
     def create_router(self) -> APIRouter:
