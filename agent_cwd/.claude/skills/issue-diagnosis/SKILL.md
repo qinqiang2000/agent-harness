@@ -156,7 +156,6 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 ## Step 6：综合输出
 
 按一定格式以纯文本的方式输出总结
-**⚠️ 禁止使用任何 Markdown 代码格式**
 **⚠️ 脱敏规则（仅适用于最终输出，工具调用参数必须使用原始值）**：
 - 外部供应商订单号、合同号、账号（如 `4DLW2D124`）→ 脱敏
 - 凭证类字段值：clientSecret、entryKey、appSecret、privateKey、password、token、secret → 脱敏
