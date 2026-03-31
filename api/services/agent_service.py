@@ -108,7 +108,7 @@ class AgentService:
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
             _meta = request.metadata or {}
             model = _meta.get("model", "claude-haiku-4-5-20251001")
-            max_turns = int(_meta.get("max_turns", 20))
+            max_turns = int(_meta.get("max_turns", 40))
             options = ClaudeAgentOptions(
                 # model 参数不传（默认 None），由 Claude Code CLI 自动决定模型版本。
                 # SDK 源码（subprocess_cli.py）：仅当 model 非空时才追加 --model 参数。
