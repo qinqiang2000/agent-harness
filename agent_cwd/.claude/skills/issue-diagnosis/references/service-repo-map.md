@@ -2,8 +2,7 @@
 
 日志中 `fields.project` 打印的服务名与 GitLab 实际仓库路径可能不一致，查此表获取正确的 `project_id`。
 
-**GitLab Base URL**: `https://test-master.piaozone.com/git/`，clone 地址格式：`https://git.kingdee.com/{project_id}.git`
-如果上面地址网络不通用改用这个https://test-master.piaozone.com/git/
+**GitLab Base URL**: `https://test-master.piaozone.com/git/`，clone 地址格式：`https://token:$GITLAB_TOKEN@test-master.piaozone.com/git/{project_id}.git`
 
 | 日志服务名 (fields.project) | GitLab 仓库路径 (project_id) |
 |---|---|
