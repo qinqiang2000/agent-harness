@@ -11,6 +11,7 @@ from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
 from plugins.bundled.zhichi.handler import ZhichiHandler
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
+from plugins.bundled.zhichi.quick_reply import generate_quick_reply
 # from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
 # from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 
@@ -71,10 +72,11 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
             if req.req_stream:
                 async def generate():
-                    # 先推送等待提示（MESSAGE 类型，智齿流式显示）
+                    # 先推送 AI 即时回复（与主 Agent 启动并行，提升响应体验）
+                    quick_reply_text = await generate_quick_reply(req.question)
                     waiting = ThirdAlgorithmRespWrapper(
                         data=ThirdAlgorithmRespVo(
-                            llm_answer="您好，感谢您的咨询！我正在为您查找相关信息，请稍候片刻。。。\n",
+                            llm_answer=quick_reply_text + "\n",
                             robot_answer_message_type="MESSAGE",
                             runtimeid=req.runtimeid,
                             message_end=False,
