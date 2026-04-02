@@ -26,7 +26,7 @@ mcp__gitlab__search_repositories(search="{fields.project 的值}")
 
 > **强制规范**：查看任何项目源码，必须将整个仓库 clone 到本地后再检索。**严禁**使用 `mcp__gitlab__get_file_contents`、`mcp__gitlab__search_repositories` 等 GitLab API 逐文件拉取或搜索源码内容。
 
-获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull：
+获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull。**必须原样使用以下模板，禁止修改 URL 格式（特别是不得省略 `token:$GITLAB_TOKEN@` 部分，否则会因认证失败导致 clone 失败）**：
 
 ```bash
 LOCAL_DIR="/tmp/gitlab/src/{repo-name}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "https://token:$GITLAB_TOKEN@test-master.piaozone.com/git/{namespace/repo-name}.git" "$LOCAL_DIR")
