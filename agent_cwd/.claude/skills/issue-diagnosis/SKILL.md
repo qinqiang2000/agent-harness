@@ -124,7 +124,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 必须严格按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的顺序执行：
 1. 读 `references/service-repo-map.md`，用日志中的 `fields.project` 精确匹配，获取 `project_id`
 2. 映射表未命中时，才用 `mcp__gitlab__search_repositories(search="{fields.project 的值}")` 搜索（传服务名，禁止传类名）
-3. 获得 `project_id` 后，clone 仓库到 `/tmp/gitlab/src/{repo-name}`
+3. 获得 `project_id` 后，**必须使用 `references/gitlab-lookup.md` 中的 clone 模板**，原样替换 `{repo-name}` 和 `{namespace/repo-name}`，**禁止自行简化命令或省略 `token:$GITLAB_TOKEN@`**
 4. 在本地 clone 目录用 Grep 搜索目标类
 
 在源码定位完成之前，不输出任何诊断结论。
