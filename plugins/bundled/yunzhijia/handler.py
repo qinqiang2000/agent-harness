@@ -61,6 +61,8 @@ class YunzhijiaHandler:
         )
         # 已发过欢迎消息但尚未建立 agent 会话的 yzj_session_id 集合
         self._welcomed_sessions: set = set()
+        # 信息收集阶段累积的上下文：yzj_session_id -> {"product": str|None, "has_problem": bool, "content": str}
+        self._pending_info: dict = {}
         self.message_sender = YunzhijiaMessageSender(self.NOTIFY_URL_TEMPLATE)
         self.card_builder = YunzhijiaCardBuilder(
             template_id=card_template_id,
@@ -101,7 +103,7 @@ class YunzhijiaHandler:
 
                 if is_first_contact:
                     logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
-                    # 首次：发固定欢迎消息，标记已欢迎
+                    # 首次：发固定欢迎消息，标记已欢迎，初始化上下文
                     await self.message_sender.send_text(
                         yzj_token, msg.operatorOpenid,
                         "您好！为了帮您更快解决问题，请告知：\n"
@@ -110,30 +112,37 @@ class YunzhijiaHandler:
                         "收到后我马上为您查询，请耐心等待。",
                     )
                     self._welcomed_sessions.add(yzj_session_id)
+                    self._pending_info[yzj_session_id] = {"product": None, "has_problem": False, "content": ""}
                 else:
                     logger.info(f"[YZJ] Collecting info for pending session: {yzj_session_id}")
 
-                # 规则分析消息，判断是否已包含产品和问题
+                # 规则分析当前消息，与已收集的上下文合并
                 analysis = analyze_first_message(msg.content)
-                has_product = analysis.get("has_product", False)
-                has_problem = analysis.get("has_problem", False)
-                logger.info(f"[YZJ] Session analysis: has_product={has_product}, has_problem={has_problem}")
+                pending = self._pending_info.get(yzj_session_id, {"product": None, "has_problem": False, "content": ""})
+
+                # OR 合并：任一条消息提供了产品/问题即视为已有
+                product = analysis.get("product") or pending["product"]
+                has_product = product is not None
+                has_problem = analysis.get("has_problem", False) or pending["has_problem"]
+
+                # 更新问题内容（拼接两条消息供 Agent 使用）
+                current_content = self._clean_content(msg.content)
+                accumulated_content = f"{pending['content']} {current_content}".strip() if pending["content"] else current_content
+                self._pending_info[yzj_session_id] = {"product": product, "has_problem": has_problem, "content": accumulated_content}
+
+                logger.info(f"[YZJ] Session analysis: has_product={has_product}, has_problem={has_problem}, product={product}")
 
                 if not (has_product and has_problem):
                     # 信息不完整，追问缺少的一项
-                    product = analysis.get("product")
-                    problem_summary = analysis.get("problem_summary")
-
                     if has_product and not has_problem:
                         await self.message_sender.send_text(
                             yzj_token, msg.operatorOpenid,
                             f"您咨询的是「{product}」，请问遇到了什么具体问题？",
                         )
                     elif has_problem and not has_product:
-                        problem_text = f"「{problem_summary}」" if problem_summary else "您的问题"
                         await self.message_sender.send_text(
                             yzj_token, msg.operatorOpenid,
-                            f"{problem_text}已收到，请问您使用的是哪款产品？\n"
+                            "您的问题已收到，请问您使用的是哪款产品？\n"
                             "（标准版、星瀚旗舰版、星空旗舰版、国际版）",
                         )
                     # 两者都没有：欢迎消息已说明，无需重复追问
@@ -143,7 +152,13 @@ class YunzhijiaHandler:
             robot_name = f"@{msg.robotName}" if msg.robotName else "@机器人"
 
             # 5. 清理消息内容
-            cleaned_content = self._clean_content(msg.content)
+            # 若来自信息收集阶段，使用累积内容作为 prompt 并清理 pending 状态
+            pending = self._pending_info.pop(yzj_session_id, None)
+            self._welcomed_sessions.discard(yzj_session_id)
+            if pending and pending.get("content"):
+                cleaned_content = pending["content"]
+            else:
+                cleaned_content = self._clean_content(msg.content)
 
             # 6. 构建请求（检查是否有待回答的问题）
             prompt = cleaned_content
