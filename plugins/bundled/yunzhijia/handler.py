@@ -106,7 +106,8 @@ class YunzhijiaHandler:
                         yzj_token, msg.operatorOpenid,
                         "您好！为了帮您更快解决问题，请告知：\n"
                         "• 您使用的是哪款产品？（标准版、星瀚旗舰版、星空旗舰版、国际版）\n"
-                        "• 遇到了什么具体问题？",
+                        "• 遇到了什么具体问题？\n\n"
+                        "收到后我马上为您查询，请耐心等待。",
                     )
                     self._welcomed_sessions.add(yzj_session_id)
                 else:

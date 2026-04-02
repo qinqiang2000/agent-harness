@@ -84,14 +84,14 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
 
             background_tasks.add_task(handler.process_message, msg, yzj_token, skill)
 
-            message_content = (
-                "收到，我马上探索最佳答案"
-                if verbose
-                else "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）"
-            )
+            # message_content = (
+            #     "收到，我马上探索最佳答案"
+            #     if verbose
+            #     else "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）"
+            # )
             return JSONResponse(content={
                 "success": True,
-                "data": {"type": 2, "content": message_content},
+                "data": {"type": 2, "content": ""},
             })
 
         @router.get("/yzj/stats")
