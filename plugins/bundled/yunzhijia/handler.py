@@ -59,6 +59,8 @@ class YunzhijiaHandler:
             timeout_seconds=session_timeout,
             channel_id="yunzhijia",
         )
+        # 已发过欢迎消息但尚未建立 agent 会话的 yzj_session_id 集合
+        self._welcomed_sessions: set = set()
         self.message_sender = YunzhijiaMessageSender(self.NOTIFY_URL_TEMPLATE)
         self.card_builder = YunzhijiaCardBuilder(
             template_id=card_template_id,
@@ -92,15 +94,24 @@ class YunzhijiaHandler:
             agent_session_id = self.session_mapper.get_or_create(yzj_session_id)
             if agent_session_id:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
+                # 已建立 agent 会话，清理欢迎状态
+                self._welcomed_sessions.discard(yzj_session_id)
             else:
-                logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
-                # 新会话：始终发固定欢迎消息
-                await self.message_sender.send_text(
-                    yzj_token, msg.operatorOpenid,
-                    "您好！为了帮您更快解决问题，请告知：\n"
-                    "• 您使用的是哪款产品？（标准版、星瀚旗舰版、星空旗舰版、国际版）\n"
-                    "• 遇到了什么具体问题？",
-                )
+                is_first_contact = yzj_session_id not in self._welcomed_sessions
+
+                if is_first_contact:
+                    logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
+                    # 首次：发固定欢迎消息，标记已欢迎
+                    await self.message_sender.send_text(
+                        yzj_token, msg.operatorOpenid,
+                        "您好！为了帮您更快解决问题，请告知：\n"
+                        "• 您使用的是哪款产品？（标准版、星瀚旗舰版、星空旗舰版、国际版）\n"
+                        "• 遇到了什么具体问题？",
+                    )
+                    self._welcomed_sessions.add(yzj_session_id)
+                else:
+                    logger.info(f"[YZJ] Collecting info for pending session: {yzj_session_id}")
+
                 # AI 分析消息，判断是否已包含产品和问题
                 analysis = await analyze_first_message(msg.content)
                 has_product = analysis.get("has_product", False)
@@ -108,7 +119,7 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Session analysis: has_product={has_product}, has_problem={has_problem}")
 
                 if not (has_product and has_problem):
-                    # 信息不完整，回显已知信息并追问缺少的一项
+                    # 信息不完整，追问缺少的一项
                     product = analysis.get("product")
                     problem_summary = analysis.get("problem_summary")
 
@@ -118,12 +129,13 @@ class YunzhijiaHandler:
                             f"您咨询的是「{product}」，请问遇到了什么具体问题？",
                         )
                     elif has_problem and not has_product:
+                        problem_text = f"「{problem_summary}」" if problem_summary else "您的问题"
                         await self.message_sender.send_text(
                             yzj_token, msg.operatorOpenid,
-                            f"您的问题已收到：「{problem_summary}」，请问您使用的是哪款产品？\n"
+                            f"{problem_text}已收到，请问您使用的是哪款产品？\n"
                             "（标准版、星瀚旗舰版、星空旗舰版、国际版）",
                         )
-                    # 两者都没有：固定欢迎消息已说明，无需重复追问
+                    # 两者都没有：欢迎消息已说明，无需重复追问
                     return
 
             # 4. 获取机器人名称

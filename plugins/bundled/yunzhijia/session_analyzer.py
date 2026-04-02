@@ -5,6 +5,8 @@ import json
 import logging
 import os
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一个消息分析模块。分析用户消息，判断是否包含以下两类信息：
@@ -32,39 +34,43 @@ TIMEOUT_SECONDS = 3.0
 async def analyze_first_message(question: str) -> dict:
     """
     Analyze whether the first message contains product and/or problem info.
+    Uses the service's configured LLM endpoint via httpx.
 
     Returns:
-        {"has_product": bool, "has_problem": bool}
+        {"has_product": bool, "product": str|None, "has_problem": bool, "problem_summary": str|None}
     """
+    base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    auth_token = os.getenv("ANTHROPIC_AUTH_TOKEN") or os.getenv("ANTHROPIC_API_KEY", "")
+    model = os.getenv("ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001")
+
+    if not auth_token:
+        logger.warning("[SessionAnalyzer] No auth token configured, using fallback")
+        return _fallback(question)
+
+    payload = {
+        "model": model,
+        "max_tokens": 60,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": question}],
+    }
+    headers = {
+        "x-api-key": auth_token,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
     try:
-        from anthropic import AsyncAnthropic
-
-        kwargs = {}
-        base_url = os.getenv("ANTHROPIC_BASE_URL")
-        if base_url:
-            kwargs["base_url"] = base_url
-
-        api_key = os.getenv("ANTHROPIC_AUTH_TOKEN") or os.getenv("ANTHROPIC_API_KEY")
-        if api_key:
-            kwargs["api_key"] = api_key
-        elif not base_url:
-            return _fallback(question)
-
-        client = AsyncAnthropic(**kwargs)
-        model = os.getenv("ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001")
-
-        resp = await asyncio.wait_for(
-            client.messages.create(
-                model=model,
-                max_tokens=60,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": question}],
-            ),
-            timeout=TIMEOUT_SECONDS,
-        )
-        result = json.loads(resp.content[0].text.strip())
-        logger.debug(f"[SessionAnalyzer] {question!r} → {result}")
-        return result
+        async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/v1/messages",
+                json=payload,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            text = resp.json()["content"][0]["text"].strip()
+            result = json.loads(text)
+            logger.debug(f"[SessionAnalyzer] {question!r} → {result}")
+            return result
 
     except asyncio.TimeoutError:
         logger.warning("[SessionAnalyzer] Timed out, using fallback")
@@ -81,7 +87,7 @@ _GREETING_PATTERN = {"你好", "您好", "hi", "hello", "在吗", "有人吗", "
 
 
 def _fallback(question: str) -> dict:
-    """Rule-based fallback when AI is unavailable."""
+    """Rule-based fallback when LLM is unavailable."""
     q = question.lower()
     has_product = any(kw in q for kw in _PRODUCT_KEYWORDS)
     product = next((kw for kw in _PRODUCT_KEYWORDS if kw in q), None)
