@@ -14,6 +14,7 @@ from api.services.session_service import SessionService
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 from plugins.bundled.yunzhijia.message_sender import YunzhijiaMessageSender
 from plugins.bundled.yunzhijia.models import YZJRobotMsg
+from plugins.bundled.yunzhijia.session_analyzer import analyze_first_message
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,37 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
+                # 新会话：始终发固定欢迎消息
+                await self.message_sender.send_text(
+                    yzj_token, msg.operatorOpenid,
+                    "您好！为了帮您更快解决问题，请告知：\n"
+                    "• 您使用的是哪款产品？（标准版、星瀚旗舰版、星空旗舰版、国际版）\n"
+                    "• 遇到了什么具体问题？",
+                )
+                # AI 分析消息，判断是否已包含产品和问题
+                analysis = await analyze_first_message(msg.content)
+                has_product = analysis.get("has_product", False)
+                has_problem = analysis.get("has_problem", False)
+                logger.info(f"[YZJ] Session analysis: has_product={has_product}, has_problem={has_problem}")
+
+                if not (has_product and has_problem):
+                    # 信息不完整，回显已知信息并追问缺少的一项
+                    product = analysis.get("product")
+                    problem_summary = analysis.get("problem_summary")
+
+                    if has_product and not has_problem:
+                        await self.message_sender.send_text(
+                            yzj_token, msg.operatorOpenid,
+                            f"您咨询的是「{product}」，请问遇到了什么具体问题？",
+                        )
+                    elif has_problem and not has_product:
+                        await self.message_sender.send_text(
+                            yzj_token, msg.operatorOpenid,
+                            f"您的问题已收到：「{problem_summary}」，请问您使用的是哪款产品？\n"
+                            "（标准版、星瀚旗舰版、星空旗舰版、国际版）",
+                        )
+                    # 两者都没有：固定欢迎消息已说明，无需重复追问
+                    return
 
             # 4. 获取机器人名称
             robot_name = f"@{msg.robotName}" if msg.robotName else "@机器人"
