@@ -113,8 +113,8 @@ class YunzhijiaHandler:
                 else:
                     logger.info(f"[YZJ] Collecting info for pending session: {yzj_session_id}")
 
-                # AI 分析消息，判断是否已包含产品和问题
-                analysis = await analyze_first_message(msg.content)
+                # 规则分析消息，判断是否已包含产品和问题
+                analysis = analyze_first_message(msg.content)
                 has_product = analysis.get("has_product", False)
                 has_problem = analysis.get("has_problem", False)
                 logger.info(f"[YZJ] Session analysis: has_product={has_product}, has_problem={has_problem}")
