@@ -72,21 +72,21 @@ class ZhichiChannelPlugin(ChannelPlugin):
 
             if req.req_stream:
                 async def generate():
-                    # 先推送 AI 即时回复（与主 Agent 启动并行，提升响应体验）
-                    quick_reply_text = generate_quick_reply(req.question)
-                    waiting = ThirdAlgorithmRespWrapper(
-                        data=ThirdAlgorithmRespVo(
-                            llm_answer=quick_reply_text + "\n",
-                            robot_answer_message_type="MESSAGE",
-                            runtimeid=req.runtimeid,
-                            message_end=False,
-                        )
-                    )
-                    waiting_json = waiting.model_dump_json(exclude_none=True)
-                    logger.info(f"[Zhichi] Stream chunk: {waiting_json}")
-                    yield f"data:{waiting_json}\n\n"
+                    # 先推送即时回复（与主 Agent 启动并行，提升响应体验）
+                    # quick_reply_text = generate_quick_reply(req.question)
+                    # waiting = ThirdAlgorithmRespWrapper(
+                    #     data=ThirdAlgorithmRespVo(
+                    #         llm_answer=quick_reply_text + "\n",
+                    #         robot_answer_message_type="MESSAGE",
+                    #         runtimeid=req.runtimeid,
+                    #         message_end=False,
+                    #     )
+                    # )
+                    # waiting_json = waiting.model_dump_json(exclude_none=True)
+                    # logger.info(f"[Zhichi] Stream chunk: {waiting_json}")
+                    # yield f"data:{waiting_json}\n\n"
 
-                    # 再推送 AI 实际答案
+                    # 推送 AI 实际答案
                     async for llm_answer, message_end, transfer, group_name in handler.stream_answer(req):
                         chunk = ThirdAlgorithmRespWrapper(
                             data=ThirdAlgorithmRespVo(
