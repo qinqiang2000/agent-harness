@@ -73,7 +73,7 @@ class ZhichiChannelPlugin(ChannelPlugin):
             if req.req_stream:
                 async def generate():
                     # 先推送 AI 即时回复（与主 Agent 启动并行，提升响应体验）
-                    quick_reply_text = await generate_quick_reply(req.question)
+                    quick_reply_text = generate_quick_reply(req.question)
                     waiting = ThirdAlgorithmRespWrapper(
                         data=ThirdAlgorithmRespVo(
                             llm_answer=quick_reply_text + "\n",
