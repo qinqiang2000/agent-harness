@@ -5,12 +5,13 @@ import os
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Request, Query, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 
 from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelPlugin, ChannelMeta, ChannelCapabilities
 
 from plugins.bundled.yunzhijia.handler import YunzhijiaHandler
+from plugins.bundled.yunzhijia.message_sender import mock_pop_messages
 from plugins.bundled.yunzhijia.models import YZJRobotMsg
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,6 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
         """Create the /yzj/* router."""
         router = APIRouter(tags=["yunzhijia"])
         handler = self.handler
-        verbose = self.config.get("verbose", False)
 
         @router.post("/yzj/chat")
         async def yzj_chat(
@@ -84,11 +84,6 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
 
             background_tasks.add_task(handler.process_message, msg, yzj_token, skill)
 
-            # message_content = (
-            #     "收到，我马上探索最佳答案"
-            #     if verbose
-            #     else "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）"
-            # )
             return JSONResponse(content={
                 "success": True,
                 "data": {"type": 2, "content": ""},
@@ -98,6 +93,20 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
         async def yzj_stats():
             """获取云之家处理器统计信息"""
             return handler.get_session_stats()
+
+        if os.getenv("YZJ_MOCK_ENABLED") == "true":
+            @router.get("/yzj/mock/poll")
+            async def yzj_mock_poll(openid: str = Query(...)):
+                """轮询 mock 消息队列，取出并清空当前消息。"""
+                return {"messages": mock_pop_messages(openid)}
+
+            @router.get("/yzj/debug")
+            async def yzj_debug():
+                """调试用聊天页面"""
+                html_path = os.path.join(os.path.dirname(__file__), "debug.html")
+                return FileResponse(html_path, media_type="text/html")
+
+            logger.info("[YZJ] Mock mode enabled: /yzj/debug and /yzj/mock/poll registered")
 
         return router
 

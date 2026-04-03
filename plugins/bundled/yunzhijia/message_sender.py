@@ -1,7 +1,9 @@
 """消息发送器 - 发送云之家消息（文本和图片卡片）."""
 
 import logging
+import os
 import re
+from collections import defaultdict
 from typing import List
 
 import aiohttp
@@ -9,6 +11,18 @@ import aiohttp
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 
 logger = logging.getLogger(__name__)
+
+MOCK_TOKEN = "mock"
+
+# mock 消息队列：openid -> [message, ...]
+_mock_queue: dict = defaultdict(list)
+
+
+def mock_pop_messages(openid: str) -> list:
+    """取出并清空指定 openid 的 mock 消息队列。"""
+    messages = list(_mock_queue.get(openid, []))
+    _mock_queue.pop(openid, None)
+    return messages
 
 
 def _strip_markdown(text: str) -> str:
@@ -26,6 +40,11 @@ class YunzhijiaMessageSender:
 
     async def send_text(self, token: str, openid: str, content: str):
         """发送文本消息"""
+        if token == MOCK_TOKEN and os.getenv("YZJ_MOCK_ENABLED") == "true":
+            _mock_queue[openid].append(_strip_markdown(content))
+            logger.info(f"[MessageSender] Mock message queued for {openid}")
+            return
+
         url = self.notify_url_template.format(token)
         data = {
             "content": _strip_markdown(content),
