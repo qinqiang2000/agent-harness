@@ -11,6 +11,7 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from api.models.requests import QueryRequest
 from api.core.streaming import StreamProcessor
 from api.utils import build_initial_prompt, format_sse_message
+from api.utils.perf_timer import PerfTimer
 from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class AgentService:
             json.dump(security_settings, f, indent=2)
 
     async def process_query(
-        self, request: QueryRequest, context_file_path: Optional[str] = None
+        self, request: QueryRequest, context_file_path: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
         """
         Process Agent query request and return SSE stream.
@@ -103,6 +104,11 @@ class AgentService:
                     metadata=request.metadata,
                 )
                 logger.info(f"Starting new session")
+
+            # 节点 2：prompt 构建完成
+            t = PerfTimer.current()
+            if t:
+                t.mark("PROMPT_BUILT")
 
             # Configure Claude SDK
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
@@ -158,6 +164,10 @@ class AgentService:
             # Stream responses
             async with ClaudeSDKClient(options=options) as client:
                 logger.info("ClaudeSDKClient connected, sending query...")
+                # 节点 3：SDK 初始化完成
+                t = PerfTimer.current()
+                if t:
+                    t.mark("SDK_CONNECTED")
                 yield format_sse_message("heartbeat", {"status": "connected"})
 
                 await client.query(prompt)

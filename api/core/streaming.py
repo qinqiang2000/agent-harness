@@ -15,7 +15,7 @@ from claude_agent_sdk import (
 from api.models.requests import QueryRequest
 from api.utils import format_sse_message, extract_todos_from_tool
 from api.utils.sdk_logger import SDKLogger
-
+from api.utils.perf_timer import PerfTimer
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +37,7 @@ class StreamProcessor:
         self,
         client: ClaudeSDKClient,
         request: QueryRequest,
-        session_service=None
+        session_service=None,
     ):
         """
         Args:
@@ -92,6 +92,10 @@ class StreamProcessor:
             async for msg in self.client.receive_response():
                 if not self.first_message_received:
                     self.first_message_received = True
+                    # 节点 4：首条消息到达
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("FIRST_MESSAGE")
 
                 # Handle different message types
                 if isinstance(msg, SystemMessage):
@@ -174,6 +178,11 @@ class StreamProcessor:
 
             # Register session (fallback)
             await self._ensure_session_registered(msg.session_id)
+
+        # 节点 5：流结束
+        t = PerfTimer.current()
+        if t:
+            t.mark("STREAM_DONE")
 
         # Send final result with result field
         result_data = {

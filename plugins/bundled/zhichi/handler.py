@@ -8,6 +8,7 @@ from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
+from api.utils.perf_timer import PerfTimer
 
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
 
@@ -95,6 +96,8 @@ class ZhichiHandler:
         """流式处理消息，yield (llm_answer, message_end) 元组."""
         cid = req.ai_agent_cid
         self.session_mapper.cleanup_expired()
+        perf = PerfTimer(request_id=cid[:8] if cid else None)
+        perf.attach()
 
         agent_session_id = self.session_mapper.get_or_create(cid)
         prompt = req.question
@@ -139,7 +142,14 @@ class ZhichiHandler:
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
                 answer = result_data.get("result", "抱歉，处理您的问题时出现错误，请稍后再试。")
+                # 节点 6：智齿消息发送开始
+                t = PerfTimer.current()
+                if t:
+                    t.mark("ZHICHI_SEND_START")
                 yield answer, True, False, ""
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 return
 
             elif event_type == "error":

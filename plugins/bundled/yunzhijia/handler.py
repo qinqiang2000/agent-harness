@@ -14,6 +14,7 @@ from api.services.session_service import SessionService
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 from plugins.bundled.yunzhijia.message_sender import YunzhijiaMessageSender
 from plugins.bundled.yunzhijia.models import YZJRobotMsg
+from api.utils.perf_timer import PerfTimer
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,8 @@ class YunzhijiaHandler:
         """处理 Agent 消息流"""
         message_count = 0
         agent_session_id = request.session_id
+        perf = PerfTimer(request_id=yzj_session_id[:8] if yzj_session_id else None)
+        perf.attach()
 
         # Resume session 时也要更新 last_active
         if agent_session_id:
@@ -195,10 +198,17 @@ class YunzhijiaHandler:
                 if result_data.get("result"):
                     final_result = result_data["result"]
                     reply = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"
+                    # 节点 6：云之家消息发送开始
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("YZJ_SEND_START")
                     await self.message_sender.send_with_images(
                         yzj_token, operator_openid, reply,
                         self.service_base_url, self.card_builder,
                     )
+                    t = PerfTimer.current()
+                    if t:
+                        t.done()
                     message_count += 1
                     logger.info(f"[YZJ] Sent final result")
                 else:

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
 from ..models.requests import QueryRequest
 from ..utils.context_storage import save_context
+from ..utils.perf_timer import PerfTimer
 from ..dependencies import get_agent_service, get_session_service
 
 
@@ -104,6 +105,11 @@ async def query_agent(request: Request):
                     "details": errors
                 }
             )
+
+        # 节点 1：请求入口
+        perf = PerfTimer()
+        perf.attach()
+        perf.mark("REQUEST_RECEIVED")
 
         # Print request body information
         request_dict = query_request.model_dump()
