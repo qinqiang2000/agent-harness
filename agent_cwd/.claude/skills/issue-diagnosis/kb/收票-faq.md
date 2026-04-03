@@ -9,7 +9,8 @@
 
 1. 通过日志定位 traceId（参考 [references/log-analysis.md](../references/log-analysis.md) 的「合规校验：通过发票号码定位 traceId」）
 2. 用 traceId 查完整链路日志，在链路日志中按各 FAQ 的「链路日志分析关键字」提取字段（这些关键字仅用于分析已查到的日志内容，**不用于构建 searchWordList 搜索**）
-3. 根据提取字段，按各条目的「结论示例」格式输出结论
+3. 根据traceid日志里的服务，查看project对应源码校验逻辑
+3. 根据提取字段和源码的校验逻辑按各条目的「结论示例」格式输出结论
 
 ---
 
@@ -287,3 +288,25 @@ WHERE fmail_user = '{邮箱}'
 
 **结论示例**：
 > 邮箱 xxx@xxx.com 已被 openId 为 `abc123` 的账号绑定（fclient_id=xxx），与当前用户 openId `def456` 不一致，提示"邮箱已被绑定"。
+
+---
+
+## Q16: 查询某单据关联的企业
+
+> 相似问题: 单据属于哪个企业、单据关联企业、单据对应的租户、哪个公司的单据
+
+**诊断步骤**（数据源：prod-invoice / prod-cms）：
+
+1. 查询 invoice 库，获取单据关联的企业 ID：
+```sql
+SELECT * FROM t_bill_expense WHERE fexpense_id = '{用户提供的单据编号}'
+```
+返回结果中的 `fclient_id` 即为关联的企业 ID。
+
+2. 用 `fclient_id` 查询 cms 库，获取企业税号和关联租户：
+```sql
+SELECT fname, ftax_no, ftenant_id FROM t_ou_company WHERE fid = '{fclient_id}'
+```
+
+**结论示例**：
+> 单据 {fexpense_id} 关联企业 ID 为 {fclient_id}，企业名称为「{fname}」，税号为 {ftax_no}，所属租户 ID 为 {ftenant_id}。
