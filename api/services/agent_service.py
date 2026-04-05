@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import os
-import uuid
 from dataclasses import replace as dc_replace
 from typing import Optional, AsyncGenerator
 from pathlib import Path
@@ -16,7 +15,7 @@ from api.core.streaming import StreamProcessor
 from api.utils import build_initial_prompt, format_sse_message
 from api.utils.perf_timer import PerfTimer
 from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
-from api.services.sdk_pool import get_cache
+from api.services.sdk_pool import get_cache, CachedSession
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +166,10 @@ class AgentService:
             )
 
             cache = get_cache()
-            cache_key = request.session_id or str(uuid.uuid4())
+            cache_key = request.session_id  # 只有 resume 时才有值
             healthy = True
 
-            if cache:
+            if cache and cache_key:
                 client = await cache.get_or_create(cache_key, options)
             else:
                 logger.info("ClaudeSDKClient: 按需创建连接（缓存未初始化）...")
@@ -194,15 +193,25 @@ class AgentService:
                 )
 
                 async for message in processor.process():
+                    # 新会话：拿到真实 session_id 后存入缓存
+                    if (cache and not request.session_id
+                            and isinstance(message, dict)
+                            and message.get("event") == "session_created"):
+                        real_sid = json.loads(message["data"]).get("session_id")
+                        if real_sid:
+                            async with cache._lock:
+                                cache._cache[real_sid] = CachedSession(client=client, in_use=True)
+                            cache_key = real_sid
+                            logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
                     yield message
 
             except Exception:
                 healthy = False
                 raise
             finally:
-                if cache:
+                if cache and cache_key:
                     await cache.release(cache_key, healthy=healthy)
-                else:
+                elif not cache:
                     try:
                         await client.disconnect()
                     except Exception:
