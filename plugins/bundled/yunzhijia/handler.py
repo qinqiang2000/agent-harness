@@ -169,6 +169,9 @@ class YunzhijiaHandler:
                 reason = data.get("reason", "抱歉，请联系发票云人工客服做支持。")
                 await self.message_sender.send_text(yzj_token, operator_openid, reason)
                 message_count += 1
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 break
 
             elif event_type == "ask_user_question":
@@ -190,6 +193,9 @@ class YunzhijiaHandler:
                 if agent_session_id:
                     await self.session_service.interrupt(agent_session_id)
                 logger.info(f"[YZJ] Session paused awaiting user reply: {agent_session_id}")
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 break  # 不再处理后续事件
 
             elif event_type == "result":
@@ -228,12 +234,18 @@ class YunzhijiaHandler:
                     yzj_token, operator_openid,
                     f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}",
                 )
+                t = PerfTimer.current()
+                if t:
+                    t.done()
 
         if message_count == 0:
             await self.message_sender.send_text(
                 yzj_token, operator_openid,
                 "抱歉，未能获取到答案，请稍后再试。",
             )
+            t = PerfTimer.current()
+            if t:
+                t.done()
 
     async def _handle_stop_command(
         self,

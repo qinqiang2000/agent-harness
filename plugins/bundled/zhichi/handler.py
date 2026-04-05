@@ -127,6 +127,9 @@ class ZhichiHandler:
                 group_name = self.transfer_group or data.get("group", "通用客服组")
                 reason = data.get("reason", "正在为您转接人工客服，请稍候。")
                 logger.info(f"[Zhichi] Transfer to human: group={group_name}")
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 yield reason, True, True, group_name
                 return
 
@@ -134,6 +137,9 @@ class ZhichiHandler:
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 if questions:
                     answer = self._format_question(questions[0])
                     yield answer, True, False, ""
@@ -154,9 +160,15 @@ class ZhichiHandler:
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 yield f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}", True, False, ""
                 return
 
+        t = PerfTimer.current()
+        if t:
+            t.done()
         yield "抱歉，处理您的问题时出现错误，请稍后再试。", True, False, ""
 
     async def get_answer(self, req: ThirdAlgorithmReqVo) -> tuple[str, bool, str]:
