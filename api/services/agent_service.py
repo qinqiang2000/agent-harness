@@ -172,9 +172,17 @@ class AgentService:
             if cache and cache_key:
                 client = await cache.get_or_create(cache_key, options)
             else:
-                logger.info("ClaudeSDKClient: 按需创建连接（缓存未初始化）...")
                 client = ClaudeSDKClient(options=options)
                 await client.connect()
+
+            async def _on_session_id(real_sid: str) -> None:
+                nonlocal cache_key
+                if cache and not cache_key:
+                    async with cache._lock:
+                        if real_sid not in cache._cache:
+                            cache._cache[real_sid] = CachedSession(client=client, in_use=True)
+                    cache_key = real_sid
+                    logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
 
             try:
                 # 节点 3：SDK 初始化完成
@@ -189,20 +197,11 @@ class AgentService:
 
                 # Use StreamProcessor to handle message stream
                 processor = StreamProcessor(
-                    client=client, request=request, session_service=self.session_service
+                    client=client, request=request, session_service=self.session_service,
+                    on_session_id=_on_session_id if not request.session_id else None,
                 )
 
                 async for message in processor.process():
-                    # 新会话：拿到真实 session_id 后存入缓存
-                    if (cache and not request.session_id
-                            and isinstance(message, dict)
-                            and message.get("event") == "session_created"):
-                        real_sid = json.loads(message["data"]).get("session_id")
-                        if real_sid:
-                            async with cache._lock:
-                                cache._cache[real_sid] = CachedSession(client=client, in_use=True)
-                            cache_key = real_sid
-                            logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
                     yield message
 
             except Exception:

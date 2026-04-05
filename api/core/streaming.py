@@ -38,16 +38,19 @@ class StreamProcessor:
         client: ClaudeSDKClient,
         request: QueryRequest,
         session_service=None,
+        on_session_id=None,
     ):
         """
         Args:
             client: Claude SDK client
             request: Query request
             session_service: Session service (optional, dependency injection)
+            on_session_id: async callable(session_id) — 新会话拿到真实 session_id 时调用
         """
         self.client = client
         self.request = request
         self.session_service = session_service
+        self.on_session_id = on_session_id
         self.session_id_sent = False
         self.actual_session_id = request.session_id
         self.first_message_received = False
@@ -65,17 +68,12 @@ class StreamProcessor:
             self.session_registered = True
 
     async def _emit_session_created(self, session_id: str) -> AsyncGenerator[dict, None]:
-        """发送 session_created 事件（消除重复）
-
-        Args:
-            session_id: 会话 ID
-
-        Yields:
-            SSE 格式的 session_created 消息
-        """
+        """发送 session_created 事件，同时触发 on_session_id 回调（两者原子绑定）。"""
         if not self.session_id_sent:
-            yield format_sse_message("session_created", {"session_id": session_id})
             self.session_id_sent = True
+            if self.on_session_id:
+                await self.on_session_id(session_id)
+            yield format_sse_message("session_created", {"session_id": session_id})
 
     async def process(self) -> AsyncGenerator[dict, None]:
         """
@@ -128,7 +126,7 @@ class StreamProcessor:
             if isinstance(msg.data, dict) and 'session_id' in msg.data:
                 self.actual_session_id = msg.data['session_id']
 
-                # Emit session created event
+                # Emit session created event (also triggers on_session_id callback)
                 async for sse_msg in self._emit_session_created(self.actual_session_id):
                     yield sse_msg
 
@@ -172,7 +170,7 @@ class StreamProcessor:
 
         # Send session_created (fallback)
         if not self.request.session_id and not self.session_id_sent:
-            # Emit session created event
+            # Emit session created event (also triggers on_session_id callback)
             async for sse_msg in self._emit_session_created(msg.session_id):
                 yield sse_msg
 
