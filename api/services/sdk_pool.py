@@ -9,7 +9,7 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 
 logger = logging.getLogger(__name__)
 
-TTL_SECONDS = 600  # 10 分钟
+TTL_SECONDS = 3600  # 10 分钟
 
 
 @dataclass
