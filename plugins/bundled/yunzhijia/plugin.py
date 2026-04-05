@@ -96,9 +96,9 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
 
         if os.getenv("YZJ_MOCK_ENABLED") == "true":
             @router.get("/yzj/mock/poll")
-            async def yzj_mock_poll(openid: str = Query(...)):
+            async def yzj_mock_poll(openid: str = Query(...), token: str = Query("mock")):
                 """轮询 mock 消息队列，取出并清空当前消息。"""
-                return {"messages": mock_pop_messages(openid)}
+                return {"messages": mock_pop_messages(token, openid)}
 
             @router.get("/yzj/debug")
             async def yzj_debug():

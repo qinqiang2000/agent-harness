@@ -80,6 +80,21 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         proxy_env=None,  # No proxy needed
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
     ),
+    "kimi": ModelConfig(
+        name="kimi",
+        description="Kimi K2.5 (Moonshot AI) 模型",
+        base_url="https://api.moonshot.cn/anthropic",
+        auth_token_env="MOONSHOT_API_KEY",
+        timeout_ms=3000000,
+        proxy_env=None,
+        model="kimi-k2.5",
+        small_fast_model="kimi-k2.5",
+        sonnet_model="kimi-k2.5",
+        opus_model="kimi-k2.5",
+        haiku_model="kimi-k2.5",
+        auth_env_target="api_key",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    ),
     "claude-router": ModelConfig(
         name="claude-router",
         description="Claude Code Router (本地代理)",
