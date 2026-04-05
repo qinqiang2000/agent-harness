@@ -59,24 +59,12 @@ class ZhichiHandler:
     #     ...
 
     def _build_answer_prompt(self, user_reply: str, questions: list) -> str:
-        """构建携带上下文的 prompt."""
-        parts = []
-        for question in questions:
-            question_text = question.get("question", "")
-            options = question.get("options", [])
-            parts.append(f"上一轮你使用 AskUserQuestion 向用户提问: {question_text}")
-            if options:
-                parts.append("选项:")
-                for i, option in enumerate(options, 1):
-                    label = option.get("label", "")
-                    description = option.get("description", "")
-                    if description:
-                        parts.append(f"  {i}. {label} - {description}")
-                    else:
-                        parts.append(f"  {i}. {label}")
-        parts.append(f"\n用户回答: {user_reply}")
-        parts.append("请根据用户的回答继续处理。")
-        return "\n".join(parts)
+        """构建携带上下文的 prompt.
+
+        Session 历史已包含 AskUserQuestion 调用记录，只需提供用户回答即可，
+        避免重复问题文本导致 LLM 再次输出问题内容。
+        """
+        return f"用户回答: {user_reply}\n请根据用户的回答继续处理。"
 
     def _format_question(self, question: dict) -> str:
         """将 AskUserQuestion 格式化为纯文本."""
