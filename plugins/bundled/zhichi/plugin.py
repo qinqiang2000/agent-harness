@@ -99,6 +99,8 @@ class ZhichiChannelPlugin(ChannelPlugin):
                         )
                         chunk_json = chunk.model_dump_json(exclude_none=True)
                         logger.info(f"[Zhichi] Stream chunk: {chunk_json}")
+                        # 节点 7：智齿 chunk 发出
+                        logger.info(f"[PERF] ZHICHI_SEND_DONE chunk_len={len(chunk_json)}bytes")
                         yield f"data:{chunk_json}\n\n"
 
                 return StreamingResponse(

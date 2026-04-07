@@ -8,6 +8,7 @@ from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
+from api.utils.perf_timer import PerfTimer
 
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
 
@@ -58,24 +59,12 @@ class ZhichiHandler:
     #     ...
 
     def _build_answer_prompt(self, user_reply: str, questions: list) -> str:
-        """构建携带上下文的 prompt."""
-        parts = []
-        for question in questions:
-            question_text = question.get("question", "")
-            options = question.get("options", [])
-            parts.append(f"上一轮你使用 AskUserQuestion 向用户提问: {question_text}")
-            if options:
-                parts.append("选项:")
-                for i, option in enumerate(options, 1):
-                    label = option.get("label", "")
-                    description = option.get("description", "")
-                    if description:
-                        parts.append(f"  {i}. {label} - {description}")
-                    else:
-                        parts.append(f"  {i}. {label}")
-        parts.append(f"\n用户回答: {user_reply}")
-        parts.append("请根据用户的回答继续处理。")
-        return "\n".join(parts)
+        """构建携带上下文的 prompt.
+
+        Session 历史已包含 AskUserQuestion 调用记录，只需提供用户回答即可，
+        避免重复问题文本导致 LLM 再次输出问题内容。
+        """
+        return f"用户回答: {user_reply}\n请根据用户的回答继续处理。"
 
     def _format_question(self, question: dict) -> str:
         """将 AskUserQuestion 格式化为纯文本."""
@@ -95,6 +84,8 @@ class ZhichiHandler:
         """流式处理消息，yield (llm_answer, message_end) 元组."""
         cid = req.ai_agent_cid
         self.session_mapper.cleanup_expired()
+        perf = PerfTimer(request_id=cid[:8] if cid else None)
+        perf.attach()
 
         agent_session_id = self.session_mapper.get_or_create(cid)
         prompt = req.question
@@ -124,6 +115,9 @@ class ZhichiHandler:
                 group_name = self.transfer_group or data.get("group", "通用客服组")
                 reason = data.get("reason", "正在为您转接人工客服，请稍候。")
                 logger.info(f"[Zhichi] Transfer to human: group={group_name}")
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 yield reason, True, True, group_name
                 return
 
@@ -131,6 +125,9 @@ class ZhichiHandler:
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 if questions:
                     answer = self._format_question(questions[0])
                     yield answer, True, False, ""
@@ -139,14 +136,27 @@ class ZhichiHandler:
             elif event_type == "result":
                 result_data = json.loads(event.get("data", "{}"))
                 answer = result_data.get("result", "抱歉，处理您的问题时出现错误，请稍后再试。")
+                # 节点 6：智齿消息发送开始
+                t = PerfTimer.current()
+                if t:
+                    t.mark("ZHICHI_SEND_START")
                 yield answer, True, False, ""
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 return
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 yield f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}", True, False, ""
                 return
 
+        t = PerfTimer.current()
+        if t:
+            t.done()
         yield "抱歉，处理您的问题时出现错误，请稍后再试。", True, False, ""
 
     async def get_answer(self, req: ThirdAlgorithmReqVo) -> tuple[str, bool, str]:

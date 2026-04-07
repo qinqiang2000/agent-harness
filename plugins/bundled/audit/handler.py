@@ -9,6 +9,8 @@ from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
 
+from api.utils.perf_timer import PerfTimer
+
 from plugins.bundled.audit import file_manager, rule_store
 from plugins.bundled.audit.models import AuditQueryRequest, AuditRule
 
@@ -65,6 +67,8 @@ class AuditHandler:
     ) -> AsyncGenerator[dict, None]:
         """Run an audit and yield SSE events."""
         tenant_id = request.tenant_id
+        perf = PerfTimer(request_id=tenant_id[:8] if tenant_id else None)
+        perf.attach()
 
         # Get files
         all_files = file_manager.list_files(tenant_id)
@@ -73,6 +77,7 @@ class AuditHandler:
 
         if not all_files:
             from api.utils import format_sse_message
+            perf.done()
             yield format_sse_message("error", {"message": "没有找到可审核的文件，请先上传文件。"})
             return
 
@@ -85,6 +90,7 @@ class AuditHandler:
 
         if not rules:
             from api.utils import format_sse_message
+            perf.done()
             yield format_sse_message("error", {"message": "没有启用的审核规则，请先配置规则。"})
             return
 
@@ -111,4 +117,9 @@ class AuditHandler:
 
         # Stream from AgentService
         async for event in self.agent_service.process_query(query_request):
+            event_type = event.get("event") if isinstance(event, dict) else None
+            if event_type in ("result", "error"):
+                t = PerfTimer.current()
+                if t:
+                    t.done()
             yield event

@@ -91,6 +91,11 @@ async def startup_event():
     plugin_manager = get_plugin_manager()
     await plugin_manager.load_all(app)
 
+    # 初始化 SDK 会话缓存
+    from api.services.sdk_pool import init_cache
+    cache = init_cache()
+    await cache.start()
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -101,6 +106,11 @@ async def shutdown_event():
 
     plugin_manager = get_plugin_manager()
     await plugin_manager.stop_all()
+
+    from api.services.sdk_pool import get_cache
+    cache = get_cache()
+    if cache:
+        await cache.stop()
 
 
 if __name__ == "__main__":

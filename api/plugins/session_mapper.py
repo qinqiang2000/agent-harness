@@ -62,6 +62,7 @@ class PluginSessionMapper:
             del self.session_map[external_session_id]
             return None
 
+        session_info.last_active = time.time()
         return session_info.agent_session_id
 
     def update_activity(self, external_session_id: str, agent_session_id: str) -> None:

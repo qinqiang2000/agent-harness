@@ -14,6 +14,7 @@ from api.services.session_service import SessionService
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 from plugins.bundled.yunzhijia.message_sender import YunzhijiaMessageSender
 from plugins.bundled.yunzhijia.models import YZJRobotMsg
+from api.utils.perf_timer import PerfTimer
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,8 @@ class YunzhijiaHandler:
         """处理 Agent 消息流"""
         message_count = 0
         agent_session_id = request.session_id
+        perf = PerfTimer(request_id=yzj_session_id[:8] if yzj_session_id else None)
+        perf.attach()
 
         # Resume session 时也要更新 last_active
         if agent_session_id:
@@ -166,6 +169,9 @@ class YunzhijiaHandler:
                 reason = data.get("reason", "抱歉，请联系发票云人工客服做支持。")
                 await self.message_sender.send_text(yzj_token, operator_openid, reason)
                 message_count += 1
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 break
 
             elif event_type == "ask_user_question":
@@ -187,6 +193,9 @@ class YunzhijiaHandler:
                 if agent_session_id:
                     await self.session_service.interrupt(agent_session_id)
                 logger.info(f"[YZJ] Session paused awaiting user reply: {agent_session_id}")
+                t = PerfTimer.current()
+                if t:
+                    t.done()
                 break  # 不再处理后续事件
 
             elif event_type == "result":
@@ -195,10 +204,17 @@ class YunzhijiaHandler:
                 if result_data.get("result"):
                     final_result = result_data["result"]
                     reply = f"{final_result}\n\n👉 如还有疑问，可直接回复本消息"
+                    # 节点 6：云之家消息发送开始
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("YZJ_SEND_START")
                     await self.message_sender.send_with_images(
                         yzj_token, operator_openid, reply,
                         self.service_base_url, self.card_builder,
                     )
+                    t = PerfTimer.current()
+                    if t:
+                        t.done()
                     message_count += 1
                     logger.info(f"[YZJ] Sent final result")
                 else:
@@ -218,12 +234,18 @@ class YunzhijiaHandler:
                     yzj_token, operator_openid,
                     f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}",
                 )
+                t = PerfTimer.current()
+                if t:
+                    t.done()
 
         if message_count == 0:
             await self.message_sender.send_text(
                 yzj_token, operator_openid,
                 "抱歉，未能获取到答案，请稍后再试。",
             )
+            t = PerfTimer.current()
+            if t:
+                t.done()
 
     async def _handle_stop_command(
         self,
@@ -277,34 +299,12 @@ class YunzhijiaHandler:
         return None
 
     def _build_answer_prompt(self, user_reply: str, questions: list) -> str:
-        """Build enriched prompt that includes the question context for the user's reply.
+        """Build prompt for user's reply to a previous AskUserQuestion.
 
-        Args:
-            user_reply: User's raw reply (e.g. "2")
-            questions: Original AskUserQuestion questions list
-
-        Returns:
-            Enriched prompt with question context
+        Session history already contains the AskUserQuestion context, so only
+        the user's answer is needed to avoid the LLM re-outputting the question.
         """
-        parts = []
-        for question in questions:
-            question_text = question.get("question", "")
-            options = question.get("options", [])
-
-            parts.append(f"上一轮你使用 AskUserQuestion 向用户提问: {question_text}")
-            if options:
-                parts.append("选项:")
-                for i, option in enumerate(options, 1):
-                    label = option.get("label", "")
-                    description = option.get("description", "")
-                    if description:
-                        parts.append(f"  {i}. {label} - {description}")
-                    else:
-                        parts.append(f"  {i}. {label}")
-
-        parts.append(f"\n用户回答: {user_reply}")
-        parts.append("请根据用户的回答继续处理。")
-        return "\n".join(parts)
+        return f"用户回答: {user_reply}\n请根据用户的回答继续处理。"
 
     def _format_question(self, question: dict, robot_name: Optional[str] = None) -> str:
         """将 AskUserQuestion 格式化为云之家可读的文本"""

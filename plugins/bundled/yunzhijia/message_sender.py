@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+import time
 from collections import defaultdict
 from typing import List
 
@@ -14,14 +15,15 @@ logger = logging.getLogger(__name__)
 
 MOCK_TOKEN = "mock"
 
-# mock 消息队列：openid -> [message, ...]
+# mock 消息队列：(token, openid) -> [message, ...]
 _mock_queue: dict = defaultdict(list)
 
 
-def mock_pop_messages(openid: str) -> list:
-    """取出并清空指定 openid 的 mock 消息队列。"""
-    messages = list(_mock_queue.get(openid, []))
-    _mock_queue.pop(openid, None)
+def mock_pop_messages(token: str, openid: str) -> list:
+    """取出并清空指定 token + openid 的 mock 消息队列。"""
+    key = (token, openid)
+    messages = list(_mock_queue.get(key, []))
+    _mock_queue.pop(key, None)
     return messages
 
 
@@ -41,7 +43,8 @@ class YunzhijiaMessageSender:
     async def send_text(self, token: str, openid: str, content: str):
         """发送文本消息"""
         if token == MOCK_TOKEN and os.getenv("YZJ_MOCK_ENABLED") == "true":
-            _mock_queue[openid].append(_strip_markdown(content))
+            key = (token, openid)
+            _mock_queue[key].append(_strip_markdown(content))
             logger.info(f"[MessageSender] Mock message queued for {openid}")
             return
 
@@ -99,10 +102,14 @@ class YunzhijiaMessageSender:
     async def _send_request(self, url: str, data: dict) -> bool:
         """发送 HTTP 请求到云之家"""
         logger.debug(f"[MessageSender] POST {url} payload={data}")
+        t0 = time.perf_counter()
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=data) as response:
+                    elapsed_ms = (time.perf_counter() - t0) * 1000
                     if response.status == 200:
+                        # 节点 7：云之家消息发送完成
+                        logger.info(f"[PERF] YZJ_SEND_DONE http_ms={elapsed_ms:.1f}ms status=200")
                         return True
                     else:
                         response_text = await response.text()
@@ -110,7 +117,10 @@ class YunzhijiaMessageSender:
                             f"[MessageSender] HTTP {response.status}: {response_text} "
                             f"| url={url} payload={data}"
                         )
+                        logger.info(f"[PERF] YZJ_SEND_DONE http_ms={elapsed_ms:.1f}ms status={response.status}")
                         return False
         except Exception as e:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.error(f"[MessageSender] Request error: {e}", exc_info=True)
+            logger.info(f"[PERF] YZJ_SEND_DONE http_ms={elapsed_ms:.1f}ms status=error")
             return False
