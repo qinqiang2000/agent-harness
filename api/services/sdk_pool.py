@@ -1,4 +1,4 @@
-"""Claude SDK 会话级连接缓存 - 按 session_id 复用 ClaudeSDKClient，空闲 10 分钟后自动回收。"""
+"""Claude SDK 会话级连接缓存 - 按 session_id 复用 ClaudeSDKClient，空闲 60 分钟后自动回收。"""
 
 import asyncio
 import logging
@@ -67,7 +67,14 @@ class SDKSessionCache:
             if entry:
                 entry.last_used = time.monotonic()
                 entry.in_use = True
-                logger.debug(f"[SessionCache] 复用连接: {session_id}")
+                t = entry.client._transport
+                returncode = t._process.returncode if t and t._process else "no_process"
+                stdin_alive = t._stdin_stream is not None if t else False
+                ready = t._ready if t else False
+                logger.info(
+                    f"[SessionCache] 复用连接: {session_id} | "
+                    f"returncode={returncode} stdin_alive={stdin_alive} ready={ready}"
+                )
                 return entry.client
 
         # 锁外创建，避免 connect() 阻塞其他协程
