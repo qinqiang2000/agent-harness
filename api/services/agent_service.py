@@ -207,6 +207,9 @@ class AgentService:
             except Exception:
                 healthy = False
                 raise
+            except BaseException:
+                healthy = False
+                raise
             finally:
                 if cache and cache_key:
                     await cache.release(cache_key, healthy=healthy)
