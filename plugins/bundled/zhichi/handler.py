@@ -102,6 +102,8 @@ class ZhichiHandler:
             session_id=agent_session_id,
         )
 
+        answered = False
+
         async for event in self.agent_service.process_query(request):
             event_type = event.get("event")
 
@@ -118,6 +120,7 @@ class ZhichiHandler:
                 t = PerfTimer.current()
                 if t:
                     t.done()
+                answered = True
                 yield reason, True, True, group_name
                 return
 
@@ -128,6 +131,7 @@ class ZhichiHandler:
                 t = PerfTimer.current()
                 if t:
                     t.done()
+                answered = True
                 if questions:
                     answer = self._format_question(questions[0])
                     yield answer, True, False, ""
@@ -140,24 +144,28 @@ class ZhichiHandler:
                 t = PerfTimer.current()
                 if t:
                     t.mark("ZHICHI_SEND_START")
+                answered = True
                 yield answer, True, False, ""
                 t = PerfTimer.current()
                 if t:
                     t.done()
-                return
+                # 不 return，让循环自然耗尽 process_query，
+                # 确保其 finally 以 healthy=True 归还连接，实现多轮热复用。
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
                 t = PerfTimer.current()
                 if t:
                     t.done()
+                answered = True
                 yield f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}", True, False, ""
                 return
 
-        t = PerfTimer.current()
-        if t:
-            t.done()
-        yield "抱歉，处理您的问题时出现错误，请稍后再试。", True, False, ""
+        if not answered:
+            t = PerfTimer.current()
+            if t:
+                t.done()
+            yield "抱歉，处理您的问题时出现错误，请稍后再试。", True, False, ""
 
     async def get_answer(self, req: ThirdAlgorithmReqVo) -> tuple[str, bool, str]:
         """同步处理消息，返回 (llm_answer, third_transfer_flag, group_name)."""
