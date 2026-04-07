@@ -108,11 +108,12 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - **日志查不到**（重试后仍无结果）→ 用 `AskUserQuestion` 反问用户，告知未找到相关日志，请求更多信息（如 traceId、准确报错文本、发生时间），收到回答后重新执行本步骤
 - **日志显示后端处理成功**（无异常、含"成功"字样），但与用户描述的问题不符 → 用 `AskUserQuestion` 反问用户，告知后端正常这一发现，询问具体操作路径/页面/筛选条件，等收到回答后再继续，不直接输出推测性原因
 - **多次数据库查询结果矛盾** → 对比两次查询的 WHERE 条件差异，找出导致结果不同的字段；若该字段值来自用户传参，用 `AskUserQuestion` 反问用户确认，不得自行推断
-- **日志含以下任意一项** → 执行 Step 4 源码定位：
-  - 异常类名（含 Exception、Error 等）
-  - 日志了含有异常堆栈信息
+- **⚠️ 日志含以下任意一项，必须无条件执行 Step 4 源码定位，即使外部原因已明确也不得跳过：**
+  - 异常类名，程序异常（含 Exception、Error 等，如 NullPointerException、IllegalStateException）
+  - 日志含有异常堆栈信息（含 `at com.` 等堆栈行）
   - 字段值异常（某字段被置为 0/null/默认值，或处理前后值不一致）
   - 根因指向代码逻辑（字段映射、数据转换、赋值逻辑，枚举转化等）
+  - **日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的数字型字段，先查 [references/field-glossary.md](references/field-glossary.md)，命中则直接理解继续分析；**未命中且该字段含义影响根因判断** → 进入 Step 4 查询源码定位，禁止自行猜测
 - **日志无异常信号** → 直接进入 Step 6 输出结论
 
 ---
@@ -128,8 +129,6 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 4. 在本地 clone 目录用 Grep 搜索目标类
 
 在源码定位完成之前，不输出任何诊断结论。
-
-收票服务源码定位时，先查 [references/invoice-collection-context.md](references/invoice-collection-context.md) 中的调用链速查和错误码表，再定位目标类。
 
 完成后进入 Step 6 输出结论。
 
