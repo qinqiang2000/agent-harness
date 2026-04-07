@@ -54,6 +54,8 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 **分析前必须做的事**：日志中每出现一次数据库查询（SELECT），必须找到对应的查询结果行数（通常紧跟在 SQL 之后，如 `Total: 0`、`查询结果: []`、返回空列表等），明确记录"第N次查询返回X条"，再进行后续分析。不得在未确认返回行数的情况下对查询结果下结论。
 
+**日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的数字型字段，先查 [references/field-glossary.md](references/field-glossary.md)，命中则直接理解继续分析；**未命中且该字段含义影响根因判断** → 进入 Step 4 查询源码定位，禁止自行猜测
+
 从返回的日志列表中，按 `time` 排序，优先关注 `level=ERROR` 条目，其次 `level=WARN`，逐条读取 `message`、`level`、`fields.project`，提取关键信息：
 
 | 关键词 | 需提取 | 示例 |
