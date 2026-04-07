@@ -154,7 +154,7 @@
   - `isbdk=true` 且 `authenticateFlag=0` → 去**不抵扣已勾选列表**查补参
 - 若补全后仍缺失 `invoiceType`/`govInvoiceType` → `beforeCheckFail` 将该发票置为失败，错误描述固定为"发票数据不存在或发票已经勾选，请检查后再进行操作！"
 
-**关键点**：抵扣勾选（`authenticateFlag=0`）时，`beforeCheck` 去**已勾选列表**补参。若发票是首次勾选（未勾选状态），已勾选列表自然查不到，导致参数补全失败，触发 `beforeCheckFail`，报"发票数据不存在或发票已经勾选"。
+**关键点**：撤销勾选（`authenticateFlag=0`）时，`beforeCheck` 去**已勾选列表**补参。若发票实际处于未勾选状态，已勾选列表自然查不到，导致参数补全失败，触发 `beforeCheckFail`，报"发票数据不存在或发票已经勾选"。若该发票是首次勾选（未勾选状态），`authenticateFlag` 应传 `1`（抵扣勾选），而非 `0`（撤销勾选）。
 
 **日志特征**：
 ```
