@@ -207,6 +207,9 @@ class AgentService:
             except Exception:
                 healthy = False
                 raise
+            except GeneratorExit:
+                # Consumer stopped iterating early (normal generator cleanup) — keep connection healthy
+                raise
             except BaseException:
                 healthy = False
                 raise
