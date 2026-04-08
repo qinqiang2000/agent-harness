@@ -104,7 +104,14 @@ class SDKSessionCache:
             if healthy:
                 entry.in_use = False
                 entry.last_used = time.monotonic()
-                logger.debug(f"[SessionCache] 连接已归还: {session_id}")
+                t = entry.client._transport
+                returncode = t._process.returncode if t and t._process else "no_process"
+                stdin_alive = t._stdin_stream is not None if t else False
+                ready = t._ready if t else False
+                logger.info(
+                    f"[SessionCache] 连接已归还: {session_id} | "
+                    f"returncode={returncode} stdin_alive={stdin_alive} ready={ready}"
+                )
             else:
                 self._cache.pop(session_id)
                 asyncio.create_task(self._disconnect(entry.client))

@@ -1,10 +1,12 @@
 """智齿 Channel Plugin 入口."""
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
@@ -58,6 +60,13 @@ class ZhichiChannelPlugin(ChannelPlugin):
     def create_router(self) -> APIRouter:
         router = APIRouter(tags=["zhichi"])
         handler = self.handler
+        static_dir = Path(__file__).parent / "static"
+
+        @router.get("/zhichi/")
+        async def zhichi_index():
+            return FileResponse(static_dir / "index.html")
+
+        router.mount("/zhichi/static", StaticFiles(directory=static_dir), name="zhichi-static")
 
         @router.post("/zhichi/ask")
         async def zhichi_ask(req: ThirdAlgorithmReqVo):

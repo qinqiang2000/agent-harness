@@ -7,6 +7,7 @@ from typing import Optional
 from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
+from api.services.sdk_pool import get_cache
 from api.services.session_service import SessionService
 from api.utils.perf_timer import PerfTimer
 
@@ -103,6 +104,7 @@ class ZhichiHandler:
         )
 
         answered = False
+        current_session_id = agent_session_id
 
         async for event in self.agent_service.process_query(request):
             event_type = event.get("event")
@@ -110,6 +112,7 @@ class ZhichiHandler:
             if event_type == "session_created":
                 data = json.loads(event["data"])
                 new_session_id = data["session_id"]
+                current_session_id = new_session_id
                 self.session_mapper.update_activity(cid, new_session_id)
 
             elif event_type == "transfer_human":
@@ -128,6 +131,11 @@ class ZhichiHandler:
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
+                if current_session_id:
+                    await self.session_service.interrupt(current_session_id)
+                    cache = get_cache()
+                    if cache:
+                        await cache.release(current_session_id, healthy=False)
                 t = PerfTimer.current()
                 if t:
                     t.done()
