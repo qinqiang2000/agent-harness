@@ -32,7 +32,7 @@ class YunzhijiaHandler:
     # FAQ 配置：预定义问答，不走 agent
     FAQ_MAP = {
         "你好，你能做什么呢?": '"0幻觉"回答发票云知识',
-        "你好": '"你好，我可0幻觉"回答发票云知识，请有什么可以帮助您',
+        "你好": '"您好，您可以告诉我要咨询的发票云问题，并@我。',
         "你能做什么": '"0幻觉"回答发票云知识',
         "能做什么": '"0幻觉"回答发票云知识',
     }
@@ -106,7 +106,7 @@ class YunzhijiaHandler:
             cleaned_content = self._clean_content(msg.content)
 
             # 6. 构建请求（检查是否有待回答的问题）
-            prompt = cleaned_content
+            prompt = cleaned_content or "你好"
             if agent_session_id:
                 pending_questions = self.session_mapper.get_and_clear_pending_questions(yzj_session_id)
                 if pending_questions:
