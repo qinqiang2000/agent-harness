@@ -14,6 +14,7 @@ from api.models.requests import QueryRequest
 from api.core.streaming import StreamProcessor
 from api.utils import build_initial_prompt, format_sse_message
 from api.utils.perf_timer import PerfTimer
+from api.utils.interaction_logger import interaction_logger, FALLBACK_PHRASE
 from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
 from api.services.sdk_pool import get_cache, CachedSession
 
@@ -201,7 +202,38 @@ class AgentService:
                     on_session_id=_on_session_id if not request.session_id else None,
                 )
 
+                answer_parts = []
+                asked_user_question = False
+
                 async for message in processor.process():
+                    event = message.get("event")
+                    if event == "assistant_message":
+                        try:
+                            answer_parts.append(json.loads(message["data"]).get("content", ""))
+                        except Exception:
+                            pass
+                    elif event == "ask_user_question":
+                        asked_user_question = True
+                    elif event == "result":
+                        try:
+                            data = json.loads(message["data"])
+                            answer = "".join(answer_parts)
+                            await interaction_logger.log({
+                                "question": request.prompt,
+                                "answer": answer,
+                                "skill": request.skill,
+                                "tenant_id": request.tenant_id,
+                                "session_id": data.get("session_id"),
+                                "num_turns": data.get("num_turns"),
+                                "duration_ms": data.get("duration_ms"),
+                                "status": "error" if data.get("is_error") else "success",
+                                "has_doc_url": "http" in answer,
+                                "used_fallback_phrase": FALLBACK_PHRASE in answer,
+                                "asked_user_question": asked_user_question,
+                                "product_selected": (request.metadata or {}).get("product_selected"),
+                            })
+                        except Exception as e:
+                            logger.warning(f"Failed to log interaction: {e}")
                     yield message
 
             except Exception:
