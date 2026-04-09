@@ -6,7 +6,9 @@
 
 ---
 
-## Task-Step 1：查询任务状态（数据库）
+## Task-Step 1：查询任务状态
+
+### 1a. 查数据库
 
 若有 `batchNo`，立即执行：
 
@@ -22,6 +24,28 @@ python3 .claude/skills/issue-diagnosis/db/db_query.py --source prod-invoice --sq
 `ferr_desc`：最新结果描述，失败时包含具体错误信息。
 
 若无 `batchNo` → 用 `AskUserQuestion` 询问："请提供任务批次号（batchNo），以便查询任务状态。"
+
+### 1b. 查日志关键字 `etaxbill callback params`
+
+在 ELK 中搜索关键字 `etaxbill callback params` + `{batchNo}`，找到**最新一条**记录，即可获取任务处理结果。
+
+日志示例：
+```
+# 成功示例
+etaxbill callback params{"errcode":"0000","data":{"batchNo":"2041785801885925376","fileList":[{"resCount":486,"resFile":"https://..."}]},"description":"成功"}
+
+# 失败示例
+etaxbill callback params{"errcode":"3367","data":{"batchNo":"2041785801885925376"},"description":"登录超时，请重新登录"}
+```
+
+`errcode` 为 `"0000"` 表示成功，其他值表示失败，`description` 为具体原因。
+
+---
+
+## Task-Step 1 结论判断
+
+- **任务处理成功**（`ftask_status=4` 或 `errcode="0000"`）→ 直接跳至 **Task-Step 4** 输出结论，**不再执行 Step 2/3**，除非用户追问中间处理细节。
+- **任务处理未成功** → 继续执行 **Task-Step 2/3** 定位根因。
 
 ---
 

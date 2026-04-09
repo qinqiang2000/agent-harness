@@ -218,22 +218,22 @@
       ]
     },
     {
-      "id": 10,
-      "prompt": "测试环境，traceid：3550d9440c4b3658，报错，看下什么原因",
-      "expected_output": "通过 traceId 查询测试环境日志，发现 NullPointerException，原因是 PdfUtil.getXbrl() 返回 null 后 build() 方法未做 null 检查。自动 clone api-invoice-recognition 仓库，定位 XbrlUtilsController.java，输出带 [源码] 前缀的根因分析（PDF 解析返回 null + 缺少 null 检查）和代码修复建议。",
+      "id": 15,
+      "prompt": "测试环境，traceid：116fac6019e35720，帮我看下对应校验了哪些税务和名单",
+      "expected_output": "通过 traceId 查询测试环境日志，找到合规校验相关日志，提取日志中出现的 SQL 语句，使用 type=log 来源执行数据库查询验证税务校验和名单校验结果，输出校验了哪些税务规则和名单类型。数据库查询必须通过 --query JSON 入口，且 type 字段为 log，evidence 填日志原文片段，不得使用 type=template 或无来源的 SQL。",
       "files": [],
       "assertions": [
         {
-          "id": "auto-trigger-source-lookup",
-          "text": "日志中有异常堆栈时，自动触发了 GitLab 源码查询，无需用户提醒"
+          "id": "db-query-uses-log-source",
+          "text": "若执行了数据库查询，--query 参数中 type 字段为 'log'，evidence 填了日志原文片段"
         },
         {
-          "id": "no-directory-browsing",
-          "text": "源码查询时直接用类名构造文件路径拉取，没有逐层浏览目录树"
+          "id": "no-self-constructed-sql",
+          "text": "没有自行构造 SQL（即没有出现不带 evidence 的 --sql 参数调用）"
         },
         {
-          "id": "source-prefixed-cause",
-          "text": "成功找到源码后，根因分析中包含 [源码] 前缀的定位信息"
+          "id": "compliance-check-result-output",
+          "text": "最终输出包含税务校验或名单校验的具体结果（如校验类型、校验结论）"
         }
       ]
     }
