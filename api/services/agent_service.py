@@ -42,8 +42,9 @@ class AgentService:
         """
         self.session_service = session_service
 
-        # 从项目 settings.json 加载 MCP 服务器配置
+        # 从项目 settings.json 加载 MCP 服务器配置和权限配置
         self.mcp_servers: dict = {}
+        extra_allow: list = []
         if self.CLAUDE_SETTINGS_FILE.exists():
             try:
                 with open(self.CLAUDE_SETTINGS_FILE, encoding="utf-8") as f:
@@ -51,12 +52,16 @@ class AgentService:
                 self.mcp_servers = claude_settings.get("mcpServers", {})
                 if self.mcp_servers:
                     logger.info(f"Loaded MCP servers: {list(self.mcp_servers.keys())}")
+                extra_allow = claude_settings.get("permissions", {}).get("allow", [])
+                if extra_allow:
+                    logger.info(f"Loaded extra allow permissions: {extra_allow}")
             except Exception:
                 logger.warning("Failed to load MCP server config from settings.json", exc_info=True)
 
         # 创建安全配置文件
         security_settings = {
             "permissions": {
+                "allow": extra_allow,
                 "deny": [
                     "Read(/.env)",
                     "Read(/.env.*)",
