@@ -92,7 +92,7 @@ class AgentService:
             setting_sources=["project"],
             settings=str(self.settings_file),
             allowed_tools=[
-                "Skill", "Read", "Grep", "Glob", "Bash",
+                "Skill", "Read", "Write", "Edit", "Grep", "Glob", "Bash",
                 "WebFetch", "WebSearch", "AskUserQuestion",
                 "mcp__elastic__searchTraceOrKeyWordsLog",
                 "mcp__gitlab__get_file_contents",
@@ -162,6 +162,10 @@ class AgentService:
                 resume=request.session_id,
             )
 
+            t = PerfTimer.current()
+            if t:
+                t.mark("OPTIONS_BUILT")
+
             logger.info(
                 f"Claude SDK config: cwd={AGENT_CWD}, tenant={request.tenant_id}"
             )
@@ -172,9 +176,15 @@ class AgentService:
 
             if cache and cache_key:
                 client = await cache.get_or_create(cache_key, options)
+                t = PerfTimer.current()
+                if t:
+                    t.mark("SDK_CACHE_HIT")
             else:
                 client = ClaudeSDKClient(options=options)
                 await client.connect()
+                t = PerfTimer.current()
+                if t:
+                    t.mark("SDK_COLD_START")
 
             async def _on_session_id(real_sid: str) -> None:
                 nonlocal cache_key
@@ -187,13 +197,16 @@ class AgentService:
 
             asked_user_question = False
             try:
-                # 节点 3：SDK 初始化完成
+                # 节点 3：SDK 初始化完成（兼容旧节点名）
                 t = PerfTimer.current()
                 if t:
                     t.mark("SDK_CONNECTED")
                 yield format_sse_message("heartbeat", {"status": "connected"})
 
                 await client.query(prompt, session_id=request.session_id or "default")
+                t = PerfTimer.current()
+                if t:
+                    t.mark("QUERY_SENT")
                 logger.info(f"Query sent: {prompt[:80]}...")
                 yield format_sse_message("heartbeat", {"status": "processing"})
 
