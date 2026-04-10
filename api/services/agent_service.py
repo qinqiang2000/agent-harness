@@ -185,6 +185,7 @@ class AgentService:
                     cache_key = real_sid
                     logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
 
+            asked_user_question = False
             try:
                 # 节点 3：SDK 初始化完成
                 t = PerfTimer.current()
@@ -203,7 +204,6 @@ class AgentService:
                 )
 
                 answer_parts = []
-                asked_user_question = False
 
                 async for message in processor.process():
                     event = message.get("event")
@@ -246,6 +246,8 @@ class AgentService:
                 healthy = False
                 raise
             finally:
+                if asked_user_question:
+                    healthy = False
                 if cache and cache_key:
                     await cache.release(cache_key, healthy=healthy)
                 elif not cache:

@@ -65,17 +65,27 @@ class SDKSessionCache:
         async with self._lock:
             entry = self._cache.get(session_id)
             if entry:
-                entry.last_used = time.monotonic()
-                entry.in_use = True
                 t = entry.client._transport
                 returncode = t._process.returncode if t and t._process else "no_process"
                 stdin_alive = t._stdin_stream is not None if t else False
                 ready = t._ready if t else False
-                logger.info(
-                    f"[SessionCache] 复用连接: {session_id} | "
-                    f"returncode={returncode} stdin_alive={stdin_alive} ready={ready}"
-                )
-                return entry.client
+                is_healthy = (returncode is None) and stdin_alive and ready
+                if is_healthy:
+                    entry.last_used = time.monotonic()
+                    entry.in_use = True
+                    logger.info(
+                        f"[SessionCache] 复用连接: {session_id} | "
+                        f"returncode={returncode} stdin_alive={stdin_alive} ready={ready}"
+                    )
+                    return entry.client
+                else:
+                    # 进程已死，丢弃缓存，后续走重建逻辑
+                    self._cache.pop(session_id)
+                    asyncio.create_task(self._disconnect(entry.client))
+                    logger.warning(
+                        f"[SessionCache] 检测到不健康连接，丢弃重建: {session_id} | "
+                        f"returncode={returncode} stdin_alive={stdin_alive} ready={ready}"
+                    )
 
         # 锁外创建，避免 connect() 阻塞其他协程
         client = ClaudeSDKClient(options=options)

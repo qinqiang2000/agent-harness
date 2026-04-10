@@ -10,6 +10,7 @@ from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
+from api.services.sdk_pool import get_cache
 
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 from plugins.bundled.yunzhijia.message_sender import YunzhijiaMessageSender
@@ -192,6 +193,9 @@ class YunzhijiaHandler:
                 # 中断 SDK 会话，等待用户回复
                 if agent_session_id:
                     await self.session_service.interrupt(agent_session_id)
+                    cache = get_cache()
+                    if cache:
+                        await cache.release(agent_session_id, healthy=False)
                 logger.info(f"[YZJ] Session paused awaiting user reply: {agent_session_id}")
                 t = PerfTimer.current()
                 if t:
