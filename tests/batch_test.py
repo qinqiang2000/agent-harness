@@ -56,6 +56,9 @@ load_dotenv(PROJECT_ROOT / '.env')
 
 from api.dependencies import get_agent_service
 from api.models.requests import QueryRequest
+from api.utils.interaction_logger import FALLBACK_PHRASE
+
+FLASH_EXIT_THRESHOLD_MS = 100  # duration_ms 低于此值视为闪退
 
 # 配置日志 - 分离文件日志和控制台输出
 log_dir = PROJECT_ROOT / "log"
@@ -103,6 +106,9 @@ class TestResult:
     status: str = "pending"  # pending, success, error, needs_product
     error: str = ""
     product_selected: str = ""  # 如果触发了产品选择
+    # 断言结果
+    flash_exit: bool = False          # duration_ms < 100ms
+    fallback_after_ask: bool = False  # AskUserQuestion 后出现 fallback 短语
 
 
 # 产品选择检测模式 - 只匹配明确的询问，避免匹配陈述句
@@ -172,6 +178,21 @@ def parse_test_questions(file_path: str) -> list[str]:
             if line:
                 questions.append(line)
     return questions
+
+
+def parse_jsonl_test_cases(file_path: str) -> list[dict]:
+    """解析 jsonl 多轮测试用例文件，每行一个 JSON 对象"""
+    cases = []
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                cases.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                logger.warning(f"跳过无效 JSON 行: {e}")
+    return cases
 
 
 class TestRunner:
@@ -252,6 +273,9 @@ class TestRunner:
                     metadata={"source": "batch-test"}
                 )
 
+                round_duration_ms = 0
+                round_asked_user = False
+
                 # 处理流式响应
                 async for message in self.agent_service.process_query(request):
                     event_type = message.get("event")
@@ -278,6 +302,7 @@ class TestRunner:
                     elif event_type == "ask_user_question":
                         # Skill 使用 AskUserQuestion tool 询问用户，标记需要产品选择
                         questions = data_obj.get("questions", [])
+                        round_asked_user = True
                         for q in questions:
                             # 检测是否是产品选择问题
                             if "产品" in q.get("question", "") or "产品" in q.get("header", ""):
@@ -290,7 +315,8 @@ class TestRunner:
                                 break
 
                     elif event_type == "result":
-                        self.result.duration_ms = data_obj.get("duration_ms", 0)
+                        round_duration_ms = data_obj.get("duration_ms", 0)
+                        self.result.duration_ms = round_duration_ms
 
                     elif event_type == "error":
                         self.log(f"收到错误: {data_obj.get('message', str(data_obj))}", "error")
@@ -302,10 +328,20 @@ class TestRunner:
                 self.round_answer = []
                 self.log(f"第{round_num}轮完成, 回答长度: {len(round_text)}")
 
+                # 断言：闪退检测
+                if round_duration_ms > 0 and round_duration_ms < FLASH_EXIT_THRESHOLD_MS:
+                    self.result.flash_exit = True
+                    self.log(f"⚠️ 闪退检测: duration_ms={round_duration_ms:.1f}ms < {FLASH_EXIT_THRESHOLD_MS}ms", "warning")
+
+                # 断言：AskUserQuestion 后出现 fallback
+                if round_asked_user and FALLBACK_PHRASE in round_text:
+                    self.result.fallback_after_ask = True
+                    self.log(f"⚠️ AskUserQuestion 后出现 fallback 短语", "warning")
+
                 # 检测是否需要产品选择（优先使用 ask_user_question 事件标记）
                 needs_product = self._needs_product_reply or detect_product_question(round_text)
                 self._needs_product_reply = False  # 重置标记
-                
+
                 if needs_product:
                     if round_num < self.max_rounds and self.default_product:
                         reply_text = PRODUCT_REPLIES.get(self.default_product, f"我使用的是{self.default_product}")
@@ -327,6 +363,128 @@ class TestRunner:
             self.log(f"异常: {e}", "error")
             logger.exception(f"{self.task_id} Test failed for: {self.question[:50]}...")
             return self.finalize_result("error", str(e), partial=True)
+
+
+class MultiTurnTestRunner:
+    """多轮对话测试运行器，按 jsonl 用例的 turns 顺序执行"""
+
+    def __init__(self, agent_service, case: dict, default_product: str, task_id: str = ""):
+        self.agent_service = agent_service
+        self.case = case
+        self.default_product = default_product
+        self.task_id = task_id
+        self.session_id = None
+        self.start_time = datetime.now()
+
+    def log(self, msg: str, level: str = "info"):
+        full_msg = f"{self.task_id} {msg}" if self.task_id else msg
+        getattr(logger, level)(full_msg)
+
+    async def _run_turn(self, prompt: str, turn_idx: int) -> dict:
+        """执行单轮，返回轮次结果"""
+        request = QueryRequest(
+            tenant_id="batch-test",
+            prompt=prompt,
+            skill="customer-service",
+            language="中文" if not self.session_id else None,
+            session_id=self.session_id,
+            metadata={"source": "batch-test"},
+        )
+        answer_parts = []
+        duration_ms = 0
+        asked_user = False
+        is_error = False
+        error_msg = ""
+
+        async for message in self.agent_service.process_query(request):
+            event_type = message.get("event")
+            data = message.get("data")
+            if event_type == "heartbeat":
+                continue
+            try:
+                data_obj = json.loads(data) if isinstance(data, str) else data
+            except json.JSONDecodeError:
+                data_obj = {"raw": data}
+
+            if event_type == "session_created":
+                self.session_id = data_obj.get("session_id")
+            elif event_type == "assistant_message":
+                content = data_obj.get("content", "")
+                if content:
+                    answer_parts.append(content)
+            elif event_type == "ask_user_question":
+                asked_user = True
+            elif event_type == "result":
+                duration_ms = data_obj.get("duration_ms", 0)
+            elif event_type == "error":
+                is_error = True
+                error_msg = data_obj.get("message", str(data_obj))
+
+        return {
+            "turn": turn_idx,
+            "prompt": prompt,
+            "answer": "".join(answer_parts),
+            "duration_ms": duration_ms,
+            "asked_user": asked_user,
+            "is_error": is_error,
+            "error": error_msg,
+        }
+
+    async def run(self) -> TestResult:
+        turns = self.case.get("turns", [])
+        case_id = self.case.get("id", "unknown")
+        first_prompt = turns[0]["prompt"] if turns else ""
+        result = TestResult(question=first_prompt, session_id="")
+
+        all_answers = []
+        prev_asked_user = False
+
+        try:
+            for i, turn_spec in enumerate(turns):
+                prompt = turn_spec.get("prompt", "")
+                self.log(f"[{case_id}] 第{i+1}/{len(turns)}轮: {prompt[:40]}...")
+                turn_result = await self._run_turn(prompt, i)
+
+                all_answers.append(turn_result["answer"])
+                result.rounds = i + 1
+                result.duration_ms = turn_result["duration_ms"]
+                result.session_id = self.session_id or ""
+
+                # 断言：闪退检测
+                dm = turn_result["duration_ms"]
+                if dm > 0 and dm < FLASH_EXIT_THRESHOLD_MS:
+                    result.flash_exit = True
+                    self.log(f"⚠️ 闪退: turn={i+1} duration_ms={dm:.1f}ms", "warning")
+
+                # 断言：上一轮有 AskUserQuestion，本轮出现 fallback
+                if prev_asked_user and FALLBACK_PHRASE in turn_result["answer"]:
+                    result.fallback_after_ask = True
+                    self.log(f"⚠️ AskUserQuestion 后出现 fallback: turn={i+1}", "warning")
+
+                if turn_result["is_error"]:
+                    result.answer = "\n---\n".join(all_answers)
+                    result.status = "error"
+                    result.error = turn_result["error"]
+                    return result
+
+                prev_asked_user = turn_result["asked_user"]
+
+            result.answer = "\n---\n".join(all_answers)
+            result.status = "error" if (result.flash_exit or result.fallback_after_ask) else "success"
+            result.duration_ms = (datetime.now() - self.start_time).total_seconds() * 1000
+            return result
+
+        except asyncio.CancelledError:
+            result.answer = "\n---\n".join(all_answers)
+            result.status = "timeout"
+            result.error = "Task cancelled"
+            return result
+        except Exception as e:
+            logger.exception(f"{self.task_id} MultiTurn failed: {case_id}")
+            result.answer = "\n---\n".join(all_answers)
+            result.status = "error"
+            result.error = str(e)
+            return result
 
 
 def escape_md(text: str) -> str:
@@ -389,70 +547,105 @@ async def run_batch_tests(
     concurrency: int = 1,
     default_product: str = "旗舰版发票云",
     timeout: float = 300.0,
-    md_writer: MarkdownWriter = None
+    md_writer: MarkdownWriter = None,
+    jsonl_cases: list[dict] = None,
 ) -> list[TestResult]:
     """并发运行批量测试
 
     Args:
-        questions: 测试问题列表
+        questions: 测试问题列表（.md 格式）
         concurrency: 并发数
         default_product: 默认产品选择
         timeout: 单个测试超时时间（秒）
         md_writer: Markdown 增量写入器，每完成一个任务立即写入
+        jsonl_cases: 多轮测试用例列表（.jsonl 格式），与 questions 二选一
     """
     agent_service = get_agent_service()
     semaphore = asyncio.Semaphore(concurrency)
-
-    # 用于保护 Markdown 写入的锁（避免并发写入冲突）
     write_lock = asyncio.Lock()
 
     def log_progress(msg: str):
-        """同时输出到控制台和日志文件"""
         print(msg)
         logger.info(msg)
 
-    async def run_with_semaphore(idx: int, question: str) -> tuple[int, TestResult]:
-        task_id = f"[{idx+1}/{len(questions)}]"
-        async with semaphore:
-            log_progress(f"{task_id} 开始: {question[:40]}...")
-            runner = TestRunner(agent_service, question, default_product, task_id=task_id)
+    # 统一任务列表
+    if jsonl_cases:
+        total = len(jsonl_cases)
 
-            try:
-                # 使用 wait_for 但保持 runner 引用
-                result = await asyncio.wait_for(runner.run(), timeout=timeout)
-                status_icon = "✓" if result.status == "success" else ("⏱" if result.status == "timeout" else "✗")
-                log_progress(f"{task_id} {status_icon} 完成 ({result.duration_ms/1000:.1f}s, {result.rounds}轮)")
-            except asyncio.TimeoutError:
-                # 超时时，从 runner 中提取部分结果
-                log_progress(f"{task_id} ⏱ 超时 ({timeout}s)")
-                result = runner.finalize_result("timeout", f"Timeout after {timeout}s", partial=True)
-            except asyncio.CancelledError:
-                log_progress(f"{task_id} ⏱ 取消")
-                result = runner.finalize_result("timeout", "Task cancelled", partial=True)
-            except Exception as e:
-                log_progress(f"{task_id} ✗ 异常: {e}")
-                logger.exception(f"{task_id} exception")
-                result = runner.finalize_result("error", str(e), partial=True)
+        async def run_with_semaphore(idx: int, case: dict) -> tuple[int, TestResult]:
+            task_id = f"[{idx+1}/{total}]"
+            async with semaphore:
+                first_prompt = case.get("turns", [{}])[0].get("prompt", "")
+                log_progress(f"{task_id} 开始(多轮{len(case.get('turns',[]))}轮): {first_prompt[:40]}...")
+                runner = MultiTurnTestRunner(agent_service, case, default_product, task_id=task_id)
+                try:
+                    result = await asyncio.wait_for(runner.run(), timeout=timeout)
+                    flags = []
+                    if result.flash_exit:
+                        flags.append("⚡闪退")
+                    if result.fallback_after_ask:
+                        flags.append("⚠️fallback")
+                    status_icon = "✓" if result.status == "success" else "✗"
+                    flag_str = " " + " ".join(flags) if flags else ""
+                    log_progress(f"{task_id} {status_icon} 完成 ({result.duration_ms/1000:.1f}s){flag_str}")
+                except asyncio.TimeoutError:
+                    log_progress(f"{task_id} ⏱ 超时 ({timeout}s)")
+                    result = TestResult(
+                        question=case.get("turns", [{}])[0].get("prompt", ""),
+                        status="timeout", error=f"Timeout after {timeout}s"
+                    )
+                except Exception as e:
+                    log_progress(f"{task_id} ✗ 异常: {e}")
+                    result = TestResult(
+                        question=case.get("turns", [{}])[0].get("prompt", ""),
+                        status="error", error=str(e)
+                    )
+                if md_writer:
+                    async with write_lock:
+                        md_writer.append_result(idx + 1, result)
+                return idx, result
 
-            # 立即写入 Markdown（如果有 writer）
-            if md_writer:
-                async with write_lock:
-                    md_writer.append_result(idx + 1, result)
-                    log_progress(f"{task_id} 📝 已写入 Markdown")
+        tasks = [run_with_semaphore(idx, case) for idx, case in enumerate(jsonl_cases)]
+    else:
+        total = len(questions)
 
-            return idx, result
+        async def run_with_semaphore(idx: int, question: str) -> tuple[int, TestResult]:
+            task_id = f"[{idx+1}/{total}]"
+            async with semaphore:
+                log_progress(f"{task_id} 开始: {question[:40]}...")
+                runner = TestRunner(agent_service, question, default_product, task_id=task_id)
+                try:
+                    result = await asyncio.wait_for(runner.run(), timeout=timeout)
+                    flags = []
+                    if result.flash_exit:
+                        flags.append("⚡闪退")
+                    if result.fallback_after_ask:
+                        flags.append("⚠️fallback")
+                    status_icon = "✓" if result.status == "success" else ("⏱" if result.status == "timeout" else "✗")
+                    flag_str = " " + " ".join(flags) if flags else ""
+                    log_progress(f"{task_id} {status_icon} 完成 ({result.duration_ms/1000:.1f}s, {result.rounds}轮){flag_str}")
+                except asyncio.TimeoutError:
+                    log_progress(f"{task_id} ⏱ 超时 ({timeout}s)")
+                    result = runner.finalize_result("timeout", f"Timeout after {timeout}s", partial=True)
+                except asyncio.CancelledError:
+                    log_progress(f"{task_id} ⏱ 取消")
+                    result = runner.finalize_result("timeout", "Task cancelled", partial=True)
+                except Exception as e:
+                    log_progress(f"{task_id} ✗ 异常: {e}")
+                    logger.exception(f"{task_id} exception")
+                    result = runner.finalize_result("error", str(e), partial=True)
+                if md_writer:
+                    async with write_lock:
+                        md_writer.append_result(idx + 1, result)
+                        log_progress(f"{task_id} 📝 已写入 Markdown")
+                return idx, result
 
-    # 创建所有任务
-    tasks = [
-        run_with_semaphore(idx, q)
-        for idx, q in enumerate(questions)
-    ]
+        tasks = [run_with_semaphore(idx, q) for idx, q in enumerate(questions)]
 
-    # 并发执行
     completed = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # 按原始顺序整理结果
-    results = [None] * len(questions)
+    n = total
+    results = [None] * n
     for item in completed:
         if isinstance(item, Exception):
             logger.error(f"Gather exception: {item}")
@@ -460,15 +653,12 @@ async def run_batch_tests(
         idx, result = item
         results[idx] = result
 
-    # 填充失败的结果
+    fallback_q = jsonl_cases if jsonl_cases else questions
     for idx, r in enumerate(results):
         if r is None:
-            results[idx] = TestResult(
-                question=questions[idx],
-                status="error",
-                error="Task failed unexpectedly"
-            )
-            # 补写失败的结果到 Markdown
+            q = fallback_q[idx]
+            prompt = q.get("turns", [{}])[0].get("prompt", "") if isinstance(q, dict) else q
+            results[idx] = TestResult(question=prompt, status="error", error="Task failed unexpectedly")
             if md_writer:
                 md_writer.append_result(idx + 1, results[idx])
 
@@ -504,15 +694,7 @@ def save_results_markdown(results: list[TestResult], output_dir: Path, name: str
 
 
 def save_results(results: list[TestResult], output_dir: Path, name: str, md_writer: MarkdownWriter = None):
-    """保存测试结果到 JSON（Markdown 已通过 md_writer 增量写入）
-
-    Args:
-        results: 测试结果列表
-        output_dir: 输出目录
-        name: 文件名前缀
-        md_writer: 已使用的 Markdown 写入器（用于获取文件路径）
-    """
-    # 使用 md_writer 的时间戳保持一致，否则生成新的
+    """保存测试结果到 JSON（Markdown 已通过 md_writer 增量写入）"""
     if md_writer:
         timestamp = md_writer.timestamp
     else:
@@ -527,24 +709,34 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
     print(f"JSON 结果已保存: {json_path}")
     logger.info(f"JSON 结果已保存: {json_path}")
 
-    # 如果没有 md_writer，则一次性保存 Markdown
     if md_writer:
         print(f"✅ Markdown 结果已保存: {md_writer.get_path()}")
     else:
         save_results_markdown(results, output_dir, name)
 
-    # 打印摘要
+    # 汇总统计
+    total = len(results)
     success = sum(1 for r in results if r.status == "success")
     timeout = sum(1 for r in results if r.status == "timeout")
     errors = sum(1 for r in results if r.status == "error")
     needs_product = sum(1 for r in results if r.status == "needs_product")
+    flash_exits = sum(1 for r in results if r.flash_exit)
+    fallback_after_ask = sum(1 for r in results if r.fallback_after_ask)
+    fallback_total = sum(1 for r in results if r.answer and FALLBACK_PHRASE in r.answer)
+    durations = [r.duration_ms for r in results if r.duration_ms > 0]
+    avg_duration = sum(durations) / len(durations) if durations else 0
 
     print(f"\n{'='*50}")
-    print(f"测试完成: {len(results)} 个问题")
-    print(f"  ✓ 成功: {success}")
-    print(f"  ⏱ 超时: {timeout}")
-    print(f"  ✗ 错误: {errors}")
-    print(f"  ? 需要产品选择: {needs_product}")
+    print(f"测试完成: {total} 个用例")
+    print(f"  ✓ 成功:              {success}")
+    print(f"  ⏱ 超时:              {timeout}")
+    print(f"  ✗ 错误:              {errors}")
+    if needs_product:
+        print(f"  ? 需要产品选择:      {needs_product}")
+    print(f"  ⚡ 闪退(<{FLASH_EXIT_THRESHOLD_MS}ms):      {flash_exits}")
+    print(f"  ⚠️  AskUser后fallback: {fallback_after_ask}")
+    print(f"  📉 Fallback率:        {fallback_total}/{total} ({fallback_total/total*100:.1f}%)" if total else "")
+    print(f"  ⏱ 平均响应时间:      {avg_duration/1000:.1f}s")
     print(f"{'='*50}\n")
 
     return json_path
@@ -552,7 +744,7 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
 
 async def main():
     parser = argparse.ArgumentParser(description="批量测试 customer-service agent")
-    parser.add_argument("input_file", nargs="?", help="测试问题文件路径（可选，使用 -p 直接输入问题时不需要）")
+    parser.add_argument("input_file", nargs="?", help="测试问题文件路径（.md 单轮 或 .jsonl 多轮）")
     parser.add_argument("-p", "--prompt", help="直接输入单个测试问题")
     parser.add_argument("--concurrency", "-c", type=int, default=1, help="并发数 (默认: 1)")
     parser.add_argument("--default-product", default="旗舰版发票云",
@@ -562,22 +754,31 @@ async def main():
 
     args = parser.parse_args()
 
-    # 解析测试问题：优先使用 -p 参数，否则从文件读取
+    questions = []
+    jsonl_cases = []
+    file_stem = "single_question"
+
     if args.prompt:
         questions = [args.prompt]
-        file_stem = "single_question"
         print(f"使用命令行输入的问题: {args.prompt}")
     elif args.input_file:
         input_path = Path(args.input_file)
         if not input_path.exists():
             print(f"错误: 文件不存在 {input_path}")
             sys.exit(1)
-        questions = parse_test_questions(str(input_path))
         file_stem = input_path.stem
-        if not questions:
-            print("错误: 未找到有效的测试问题")
-            sys.exit(1)
-        print(f"加载了 {len(questions)} 个测试问题")
+        if input_path.suffix == ".jsonl":
+            jsonl_cases = parse_jsonl_test_cases(str(input_path))
+            if not jsonl_cases:
+                print("错误: 未找到有效的测试用例")
+                sys.exit(1)
+            print(f"加载了 {len(jsonl_cases)} 个多轮测试用例")
+        else:
+            questions = parse_test_questions(str(input_path))
+            if not questions:
+                print("错误: 未找到有效的测试问题")
+                sys.exit(1)
+            print(f"加载了 {len(questions)} 个测试问题")
     else:
         print("错误: 请提供测试问题文件或使用 -p 参数直接输入问题")
         parser.print_help()
@@ -587,25 +788,22 @@ async def main():
     print(f"默认产品: {args.default_product}")
     print()
 
-    # 创建输出目录
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 创建 Markdown 增量写入器
     md_writer = MarkdownWriter(output_dir, file_stem)
     print(f"📝 Markdown 结果将实时写入: {md_writer.get_path()}")
     print()
 
-    # 运行测试（每完成一个任务立即写入 Markdown）
     results = await run_batch_tests(
-        questions,
+        questions=questions,
         concurrency=args.concurrency,
         default_product=args.default_product,
         timeout=args.timeout,
-        md_writer=md_writer
+        md_writer=md_writer,
+        jsonl_cases=jsonl_cases if jsonl_cases else None,
     )
 
-    # 保存 JSON 结果
     save_results(results, output_dir, file_stem, md_writer=md_writer)
 
 
