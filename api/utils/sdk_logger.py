@@ -114,6 +114,8 @@ class SDKLogger:
 
     def log_text_block(self, block):
         """Log TextBlock from AssistantMessage"""
+        if not block.text or not block.text.strip() or block.text.strip() == "(empty)":
+            return
         # Replace newlines with space for better log readability
         text_display = block.text.replace('\n', ' ')
         prefix = _colorize("[AssistantMessage]", Colors.GREEN)
