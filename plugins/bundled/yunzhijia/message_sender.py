@@ -29,8 +29,8 @@ def mock_pop_messages(token: str, openid: str) -> list:
 
 def _strip_markdown(text: str) -> str:
     """处理云之家不支持的内容格式。"""
-    # java 全限定类名（如 java.lang.ClassCastException）→ 只保留类名
-    text = re.sub(r'java(?:\.[a-z][a-z0-9_]*)+\.([A-Z][A-Za-z0-9_]*)', r'\1', text)
+    # Java/Spring 全限定类名（如 java.lang.ClassCastException、org.springframework.transaction.UnexpectedRollbackException）→ 只保留类名
+    text = re.sub(r'(?:java|javax|org|com|net|io)(?:\.[a-z][a-z0-9_]*)+\.([A-Z][A-Za-z0-9_]*)', r'\1', text)
     # 云之家会过滤含 SQL 关键字的消息，将关键字替换为中文等价词
     _SQL_KEYWORD_MAP = [
         ('TRUNCATE', '清空'),
