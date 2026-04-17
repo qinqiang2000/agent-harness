@@ -74,7 +74,28 @@ data/kb/接口文档/
 
 ## Step D：在源码中定位接口实现
 
-clone 成功后，在本地仓库中搜索接口路径对应的 Controller：
+clone 成功后，**优先查找设计文档，无文档再追代码**：
+
+### D1：查找设计文档（优先）
+
+用 `Glob` 检查仓库是否存在 docs 目录及相关文档：
+
+```bash
+Glob(pattern="/tmp/gitlab/src/{repo-name}/docs/**/*.md")
+Glob(pattern="/tmp/gitlab/src/{repo-name}/docs/**/*.txt")
+```
+
+若找到文档，用接口路径关键词（如 `invoice/issue`、`查验`）在文档中搜索：
+
+```bash
+Grep(pattern="invoice.*issue|查验|开票", path="/tmp/gitlab/src/{repo-name}/docs", glob="*.md")
+```
+
+**命中相关文档**：直接读取文档内容，提取处理流程描述，跳过 D2，进入输出格式。
+
+### D2：追代码调用链（无文档时）
+
+在本地仓库中搜索接口路径对应的 Controller：
 
 ```bash
 # 搜索接口路径（去掉通配符前缀，如 /m3 → 搜索路径后半段）
@@ -87,25 +108,22 @@ Grep(pattern='@(Post|Get|Put|Delete)Mapping.*invoice.*issue', path="/tmp/gitlab/
 找到 Controller 后：
 1. 读取 Controller 方法，了解入参和调用链
 2. 顺着调用链找到核心 Service 方法
-3. 输出接口处理流程
+3. 整理处理流程
 
 ---
 
 ## 输出格式
 
+**⚠️ 输出总字数不超过 800 字**。用自然语言描述处理流程，**不输出类名、方法名、行号**，只描述每一步做什么。
+
 ```
-【接口定位结果】
-接口：{method} {path}
-服务：{service-name}
-仓库：{gitlab-project-id}
+【接口】{method} {path}（服务：{service-name}）
 
 【处理流程】
-1. {ControllerClass}.{method}()  → 入口，接收参数：{params}
-2. {ServiceClass}.{method}()     → 核心业务逻辑
-3. {下游调用}                    → 调用外部服务/数据库
-
-【关键代码位置】
-- {ClassName}.java:{行号}  {关键逻辑描述}
+1. 接收请求，校验参数：{入参说明}
+2. {核心业务逻辑描述}
+3. {下游调用或数据库操作描述}
+4. 返回结果：{返回内容说明}
 ```
 
 ---

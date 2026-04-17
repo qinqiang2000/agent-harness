@@ -2,7 +2,12 @@
 
 当主流程识别到进项发票采集任务场景时执行本流程，由本流程完整处理并输出结论，主流程不再介入。
 
-**本流程的所有 ELK 查询遵守主流程全局查询规范（query-strategy.md / log-analysis.md）。**
+**⚠️ 本流程 ELK 查询全局约束（覆盖 query-strategy.md 通用规则）：**
+- 所有查询只有两种合法形式：
+  1. `searchWordList = [操作类型关键字, batchNo]`
+  2. `traceId = 入口日志的 id 字段值`
+- 用户未提供 batchNo 或 traceId 时，必须用 `AskUserQuestion` 反问用户提供，**禁止用税号、账号、类名、接口名等其他参数替代**
+- 查不到结果时**禁止换词重试**，直接反问用户或进入下一步
 
 ---
 
@@ -39,6 +44,8 @@ etaxbill callback params{"errcode":"3367","data":{"batchNo":"2041785801885925376
 ```
 
 `errcode` 为 `"0000"` 表示成功，其他值表示失败，`description` 为具体原因。
+
+**查不到回调日志时**：禁止更换关键词重试，直接进入 Task-Step 2。
 
 ---
 
