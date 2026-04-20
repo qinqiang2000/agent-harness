@@ -1,8 +1,9 @@
 """Claude SDK streaming response processor."""
 
+import json
 import logging
 import re
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 from claude_agent_sdk import (
     ClaudeSDKClient,
     AssistantMessage,
@@ -142,10 +143,12 @@ class StreamProcessor:
         for block in msg.content:
             if isinstance(block, TextBlock):
                 self.sdk_logger.log_text_block(block)
-                yield format_sse_message("assistant_message", block.text)
+                if block.text and block.text.strip() and block.text.strip() != "(empty)":
+                    yield format_sse_message("assistant_message", block.text)
 
             elif isinstance(block, ToolUseBlock):
                 self.sdk_logger.log_tool_use(block)
+                yield format_sse_message("tool_use", {"name": block.name, "input": block.input})
 
                 # Extract and emit todos
                 if block.name == "TodoWrite":
@@ -158,7 +161,14 @@ class StreamProcessor:
                 elif block.name == "AskUserQuestion":
                     if isinstance(block.input, dict):
                         questions = block.input.get("questions", [])
-                        if questions:
+                        if isinstance(questions, str):
+                            try:
+                                questions = json.loads(questions)
+                            except (json.JSONDecodeError, ValueError):
+                                logger.error(f"[AskUserQuestion] Failed to parse questions string: {questions[:100]}")
+                                yield format_sse_message("assistant_message", "抱歉，agent异常，请稍后再试。")
+                                questions = []
+                        if questions and isinstance(questions, list):
                             logger.info(f"[AskUserQuestion] Emitting {len(questions)} question(s)")
                             yield format_sse_message("ask_user_question", {
                                 "questions": questions
@@ -206,3 +216,8 @@ class StreamProcessor:
 
         # Log result message with enhanced formatting
         self.sdk_logger.log_result_message(msg)
+
+        # 节点 6：全部完成，打印 SDK 统计的 API 耗时供对比
+        t = PerfTimer.current()
+        if t:
+            t.mark(f"DONE (sdk_api={msg.duration_api_ms}ms turns={msg.num_turns})")

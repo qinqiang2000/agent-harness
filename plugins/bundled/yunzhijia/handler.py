@@ -30,6 +30,12 @@ class YunzhijiaHandler:
     STOP_KEYWORDS = ["停止", "stop", "取消", "cancel"]
     MAX_STOP_COMMAND_LENGTH = 10
 
+    # 重置会话命令
+    RESET_COMMAND = "/clear"
+
+    # 追问句式识别：以这些词开头且 B 无活跃 session 时，自动继承群内最近会话
+    FOLLOWUP_PREFIXES = ["/经验总结", "/continue","/followup"]
+
     # FAQ 配置：预定义问答，不走 agent
     FAQ_MAP = {
         "你好，你能做什么呢?": '"0幻觉"回答发票云知识',
@@ -89,8 +95,26 @@ class YunzhijiaHandler:
                 await self._handle_stop_command(yzj_token, msg.operatorOpenid, yzj_session_id)
                 return
 
+            # 2.5 检测重置命令 /clear
+            if self._is_reset_command(msg.content):
+                self.session_mapper.remove(yzj_session_id)
+                await self.message_sender.send_text(yzj_token, msg.operatorOpenid, "✅ 会话已重置，下次提问将开启新对话")
+                logger.info(f"[YZJ] Session reset by user: {yzj_session_id}")
+                return
+
             # 3. 获取或创建 agent session
             agent_session_id = self.session_mapper.get_or_create(yzj_session_id)
+
+            # 3.5 追问继承：B 无活跃 session + 追问句式 + 群内有可继承会话
+            if agent_session_id is None and self._is_followup(msg.content):
+                shared = self.session_mapper.get_group_shared(yzj_token)
+                if shared:
+                    self.session_mapper.update_activity(yzj_session_id, shared.agent_session_id)
+                    agent_session_id = shared.agent_session_id
+                    logger.info(
+                        f"[YZJ] Auto-inherited session from {shared.source_operator}: "
+                        f"{shared.agent_session_id}"
+                    )
             if agent_session_id:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
@@ -126,6 +150,7 @@ class YunzhijiaHandler:
             await self._process_agent_stream(
                 request, yzj_token, msg.operatorOpenid,
                 yzj_session_id, robot_name,
+                operator_name=msg.operatorName or "",
             )
 
         except Exception as e:
@@ -143,6 +168,7 @@ class YunzhijiaHandler:
         operator_openid: str,
         yzj_session_id: str,
         robot_name: str,
+        operator_name: str = "",
     ):
         """处理 Agent 消息流"""
         message_count = 0
@@ -224,6 +250,10 @@ class YunzhijiaHandler:
                 else:
                     logger.error("[YZJ] No result content in ResultMessage")
 
+                # 记录群内可继承会话，供其他用户追问时继承
+                if agent_session_id:
+                    self.session_mapper.set_group_shared(yzj_token, agent_session_id, operator_name)
+
                 logger.info(
                     f"[YZJ] Completed: session={result_data.get('session_id')}, "
                     f"duration={result_data.get('duration_ms')}ms, "
@@ -284,6 +314,15 @@ class YunzhijiaHandler:
         """清理消息内容（去除 @提及）"""
         cleaned = re.sub(r'@\S+\s*', '', content)
         return cleaned.strip()
+
+    def _is_reset_command(self, content: str) -> bool:
+        """判断是否为重置会话命令"""
+        return self._clean_content(content).strip() == self.RESET_COMMAND
+
+    def _is_followup(self, content: str) -> bool:
+        """判断是否为追问句式（以追问词开头）"""
+        cleaned = self._clean_content(content)
+        return any(cleaned.startswith(prefix) for prefix in self.FOLLOWUP_PREFIXES)
 
     def _is_stop_command(self, content: str) -> bool:
         """判断是否为停止命令"""

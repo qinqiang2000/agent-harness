@@ -21,6 +21,15 @@ class SessionInfo:
     pending_questions: Optional[list] = None  # AskUserQuestion awaiting reply
 
 
+@dataclass
+class GroupSharedSession:
+    """群内最近一次完成的会话，供其他用户继承."""
+
+    agent_session_id: str
+    created_at: float
+    source_operator: str  # 原始提问者名称，用于日志
+
+
 class PluginSessionMapper:
     """Generic session mapper for channel plugins.
 
@@ -37,6 +46,7 @@ class PluginSessionMapper:
         self.timeout_seconds = timeout_seconds
         self.channel_id = channel_id
         self.session_map: Dict[str, SessionInfo] = {}
+        self.group_shared: Dict[str, GroupSharedSession] = {}  # group_key → 群内最近完成的会话
 
     def get_or_create(self, external_session_id: str) -> Optional[str]:
         """Get valid agent_session_id or None if expired/new.
@@ -77,6 +87,16 @@ class PluginSessionMapper:
             last_active=time.time(),
         )
 
+    def remove(self, external_session_id: str) -> None:
+        """移除指定用户的 session 映射，下次提问将开启新对话.
+
+        Args:
+            external_session_id: External platform session ID
+        """
+        if external_session_id in self.session_map:
+            info = self.session_map.pop(external_session_id)
+            logger.info(f"[{self.channel_id}] Session removed: external={external_session_id}, agent={info.agent_session_id}")
+
     def set_pending_questions(self, external_session_id: str, questions: list) -> None:
         """Store pending AskUserQuestion questions for a session.
 
@@ -104,6 +124,39 @@ class PluginSessionMapper:
             self.session_map[external_session_id].pending_questions = None
         return questions
 
+    def set_group_shared(self, group_key: str, agent_session_id: str, operator_name: str) -> None:
+        """记录群内最近完成的会话，供其他用户继承.
+
+        Args:
+            group_key: 群唯一标识（yzj_token）
+            agent_session_id: 完成的 agent session ID
+            operator_name: 原始提问者名称
+        """
+        self.group_shared[group_key] = GroupSharedSession(
+            agent_session_id=agent_session_id,
+            created_at=time.time(),
+            source_operator=operator_name,
+        )
+        logger.info(f"[{self.channel_id}] Group shared session set: group={group_key[:8]}, agent={agent_session_id}, operator={operator_name}")
+
+    def get_group_shared(self, group_key: str) -> Optional[GroupSharedSession]:
+        """获取群内可继承的会话，超时则删除返回 None.
+
+        Args:
+            group_key: 群唯一标识（yzj_token）
+
+        Returns:
+            未过期的 GroupSharedSession，或 None
+        """
+        shared = self.group_shared.get(group_key)
+        if not shared:
+            return None
+        if time.time() - shared.created_at > self.timeout_seconds:
+            del self.group_shared[group_key]
+            logger.info(f"[{self.channel_id}] Group shared session expired: group={group_key[:8]}")
+            return None
+        return shared
+
     def cleanup_expired(self) -> None:
         """Remove all expired sessions."""
         current_time = time.time()
@@ -121,8 +174,17 @@ class PluginSessionMapper:
             )
             del self.session_map[sid]
 
-        if expired:
-            logger.info(f"[{self.channel_id}] Cleaned {len(expired)} expired sessions")
+        # 同步清理过期的群共享会话
+        expired_groups = [
+            gk
+            for gk, shared in self.group_shared.items()
+            if (current_time - shared.created_at) > self.timeout_seconds
+        ]
+        for gk in expired_groups:
+            del self.group_shared[gk]
+
+        if expired or expired_groups:
+            logger.info(f"[{self.channel_id}] Cleaned {len(expired)} expired sessions, {len(expired_groups)} expired group shares")
 
     def get_stats(self) -> dict:
         """Get session statistics."""
