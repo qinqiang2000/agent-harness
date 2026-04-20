@@ -198,7 +198,7 @@ class ApifoxSyncService:
             lines.append("```")
 
         file_path.write_text("\n".join(lines), encoding="utf-8")
-        logger.info("Written endpoint to %s", file_path)
+        # logger.info("Written endpoint to %s", file_path)
         return file_path
 
     def _collect_doc_nodes(self, nodes: list[dict], path_parts: list[str] | None = None) -> list[dict]:
