@@ -5,7 +5,20 @@
 **状态说明**：
 - `pending_review`：待人工审核
 - `merged`：已合并到 FAQ 或 SKILL.md
-- `rejected`：审核不通过，已废弃
+- `rejected`：审核不通过或 answer_confidence 降至 0.1 以下，已废弃
+- `promoted`：confirmed_count >= 3 且 answer_confidence >= 0.9，建议合并到 FAQ
+
+**字段说明**：
+- `match_confidence`：与当前问题的相似度阈值（用于 Step 1.5 匹配决策）
+- `answer_confidence`：结论可信程度，驱动 Step 1.5 行为
+  - 0.9：用户主动录入 / confirmed_count 累积提升
+  - 0.8：用户显式纠正并给出完整正确路径
+  - 0.5：用户显式纠正但只给出方向
+  - 0.3：隐式纠正推断
+  - 用户确认"解决了" → +0.1（上限 0.95）
+  - 用户纠正命中此 case 的结论 → -0.2（降至 0.1 以下则标记 rejected）
+- `confirmed_count`：用户明确确认"解决了/对的"的累计次数
+- `last_confirmed`：最近一次用户确认时间（YYYY-MM-DD）
 
 ---
 
@@ -19,7 +32,10 @@
   1. 根因：星瀚系统收票通道配置有误，通道被配置为"软证书"模式，但实际未开启软证书
   2. 处置：进入星瀚系统 → 收票通道配置 → 检查当前通道类型是否为"软证书"，若是，改为"下数电"或"乐企"通道即可
 - 适用条件: 报错含"没有开启软证书模式"，且系统为星瀚（xinghan），场景为收票通道配置
-- 置信度: 0.7
+- match_confidence: 0.8
+- answer_confidence: 0.9
+- confirmed_count: 0
+- last_confirmed: null
 - 状态: pending_review
 - 创建时间: 2026-04-10
 
@@ -36,6 +52,9 @@
   2. 若一致（说明是 Redis 缓存了错误角色），联系值班人员清除 Redis 中该账号的 NEW_ERA_LOGIN_SUCCESS_ROLE_CODE 缓存，再让用户重新手动登录一次
   3. 若不一致，让用户在电子税局补充对应角色权限后重试
 - 适用条件: 报错含"数电账号里维护的电子税局身份有误"或 errcode=0702034，且用户反映账号角色配置正确
-- 置信度: 0.7
+- match_confidence: 0.8
+- answer_confidence: 0.8
+- confirmed_count: 0
+- last_confirmed: null
 - 状态: pending_review
 - 创建时间: 2026-04-10

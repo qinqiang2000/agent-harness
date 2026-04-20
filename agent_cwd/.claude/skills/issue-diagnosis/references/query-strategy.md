@@ -5,6 +5,7 @@
 - 有 traceId → 仅传 `traceId` 字段，**禁止**将 traceId 放入 `searchWordList`，**禁止**同时传 `searchWordList`
   - traceId 查询返回结果后，必须先完整分析返回的所有日志条目，再决定下一步
   - **严禁**在未充分分析 traceId 查询结果的情况下发起扩展查询或关键词查询
+  - traceId 查询返回空结果 → **立即停止，禁止改用关键词查询**，直接用 `AskUserQuestion` 反问用户："未找到 traceId `{traceId}` 对应的日志，请提供问题发生的准确时间（精确到分钟）及确认环境是否正确（生产/测试/演示）"，收到回答后重新查询 traceId
 - 无 traceId → 仅传 `searchWordList` 关键词，不传 `traceId`
 - **FAQ 命中且标注了「日志关键字」时（最高优先级）**：必须将 FAQ 中的关键字数组原样复制到 searchWordList，将 `<占位符>` 替换为用户提供的实际值，**严禁替换、增删或自行猜测关键词**。例：FAQ 写 `["发送邮件验证码sendVerifyCode param", "<邮箱地址>"]`，则 searchWordList 必须是 `["发送邮件验证码sendVerifyCode param", "qwe@163.com"]`，不得改为 `["sendVerifyCode", "邮箱绑定"]` 等变体
 - **严禁自行添加 `projectList` 参数**：即使你能从上下文推断出服务名，也绝对不允许自行传 `projectList`。`projectList` 仅在 [invoice-task-log-keywords.md](invoice-task-log-keywords.md) 中明确指定时才可使用，其他所有场景一律不传

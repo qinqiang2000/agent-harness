@@ -15,6 +15,7 @@ logging.basicConfig(
     level=getattr(logging, log_level.upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Import after logging is configured
@@ -72,9 +73,12 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Apifox sync [%s] failed", project_name)
 
-        # 启动时立即同步一次
-        loop = asyncio.get_event_loop()
-        loop.create_task(_run_sync())
+        # 启动时立即同步一次（可通过 APIFOX_SYNC_ON_STARTUP=true 开启，默认关闭）
+        if os.getenv("APIFOX_SYNC_ON_STARTUP", "false").lower() in ("1", "true", "yes"):
+            loop = asyncio.get_event_loop()
+            loop.create_task(_run_sync())
+        else:
+            logger.info("Apifox startup sync skipped (set APIFOX_SYNC_ON_STARTUP=true to enable)")
         scheduler.add_job(_run_sync, "interval", minutes=interval_minutes, id="apifox_sync")
         logger.info("Apifox sync scheduled every %d minutes for %d projects", interval_minutes, len(sync_services))
 
