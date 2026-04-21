@@ -8,7 +8,7 @@
   "mcpServers": {
     "elastic": {
       "type": "http",
-      "url": "http://172.31.26.9:9228/mcp"
+      "url": "http://jump-test.piaozone.com:9228/mcp"
     }
   }
 }
