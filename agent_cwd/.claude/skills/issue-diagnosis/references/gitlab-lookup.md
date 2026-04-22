@@ -1,21 +1,21 @@
 # GitLab 源码动态定位策略
 
-## 一、从 fields.project 推断仓库
+## 一、从 project 推断仓库
 
 日志中 `project` 即服务名（如 `smkp`）。按以下顺序查找仓库：
 
 **方式 A（优先）：查映射表**
 
-先读取 [references/service-repo-map.md](references/service-repo-map.md)，在表中精确匹配 `fields.project`，直接获得 `project_id`。
+先读取 [references/service-repo-map.md](references/service-repo-map.md)，在表中精确匹配 `project`，直接获得 `project_id`。
 这是最可靠的方式，因为日志服务名与 GitLab 仓库名可能不一致（如 `smkp` → `kingdee/bill-smkp`）。
 
 **方式 B（降级）：搜索仓库**
 
 映射表未命中时，调用搜索：
 ```
-mcp__gitlab__search_repositories(search="{fields.project 的值}")
+mcp__gitlab__search_repositories(search="{project 的值}")
 ```
-**注意**：search 参数必须传 `fields.project` 的值（服务名），禁止传类名、方法名或其他关键词。
+**注意**：search 参数必须传 `project` 的值（服务名），禁止传类名、方法名或其他关键词。
 取名称最接近的结果，获得完整 `project_id`（格式：`namespace/repo-name`）。
 
 **无法定位时**：跳过本步骤，不影响日志分析结论输出。

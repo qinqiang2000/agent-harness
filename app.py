@@ -19,9 +19,12 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Import after logging is configured
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from api.routers.agent import router
 from api.routers.plugins import router as plugins_router
 from api.constants import DATA_DIR, AGENT_CWD
@@ -117,6 +120,49 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    if request.url.path.startswith("/open-api/"):
+        errcode = "100003" if exc.status_code == 401 else str(exc.status_code)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"errcode": errcode, "description": exc.detail, "data": None},
+        )
+    raise exc
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if request.url.path.startswith("/open-api/"):
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"errcode": "500000", "description": "服务内部错误，请稍后重试", "data": None},
+        )
+    raise exc
+
+
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if request.url.path.startswith("/open-api/"):
+        errcode = "100003" if exc.status_code == 401 else str(exc.status_code)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"errcode": errcode, "description": str(exc.detail), "data": None},
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/open-api/"):
+        return JSONResponse(
+            status_code=422,
+            content={"errcode": "422", "description": "请求参数错误", "data": None},
+        )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Mount static files
 static_path = Path(__file__).parent / "static"

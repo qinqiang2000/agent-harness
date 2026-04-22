@@ -1,6 +1,13 @@
 {
-  "enabled": ["yunzhijia", "zhichi", "audit"],
+  "enabled": ["yunzhijia", "zhichi", "audit", "open_api"],
   "plugins": {
+    "open_api": {
+      "app_id": "${OPEN_API_APP_ID}",
+      "app_key": "${OPEN_API_APP_KEY}",
+      "session_timeout": 3600,
+      "default_skill": "customer-service",
+      "async_task_ttl": 3600
+    },
     "yunzhijia": {
       "session_timeout": 1800,
       "default_skill": "customer-service",

@@ -74,6 +74,37 @@ class ApifoxSyncService:
         """Replace characters unsafe for filenames."""
         return re.sub(r'[\s/\\:*?"<>|]', "_", name)
 
+    def _format_schema(self, schema: dict, indent: int, label: str = "") -> list[str]:
+        """递归格式化任意 JSON Schema（含 oneOf/anyOf/allOf/properties/items）为 Markdown 列表。"""
+        lines = []
+        prefix = "  " * indent
+
+        # oneOf / anyOf — 多态结构，逐个展开
+        for combiner in ("oneOf", "anyOf"):
+            variants = schema.get(combiner) or []
+            if variants:
+                tag = "oneOf" if combiner == "oneOf" else "anyOf"
+                lines.append(f"{prefix}({tag}, 以下结构之一:)")
+                for i, variant in enumerate(variants):
+                    vtitle = variant.get("title") or variant.get("description", "").split("\n")[0][:60] or f"variant {i+1}"
+                    lines.append(f"{prefix}  [{vtitle}]")
+                    lines.extend(self._format_schema(variant, indent + 2))
+                return lines
+
+        # allOf — 合并所有子 schema
+        all_of = schema.get("allOf") or []
+        if all_of:
+            for sub in all_of:
+                lines.extend(self._format_schema(sub, indent))
+            return lines
+
+        props = schema.get("properties") or {}
+        if props:
+            required_fields = schema.get("required") or []
+            lines.extend(self._format_props(props, required_fields, indent))
+
+        return lines
+
     def _format_props(self, props: dict, required_fields: list, indent: int = 2) -> list[str]:
         """递归格式化 JSON Schema properties 为 Markdown 列表。"""
         lines = []
@@ -84,18 +115,13 @@ class ApifoxSyncService:
             req_mark = "必填" if fname in required_fields else "可选"
             line = f"{prefix}- `{fname}` ({ftype}, {req_mark}){': ' + fdesc if fdesc else ''}"
             lines.append(line)
-            # 展开嵌套 object
-            sub_props = fdef.get("properties") or {}
-            if sub_props:
-                sub_required = fdef.get("required") or []
-                lines.extend(self._format_props(sub_props, sub_required, indent + 1))
+            # 展开嵌套 object / oneOf / anyOf / allOf
+            lines.extend(self._format_schema(fdef, indent + 1))
             # 展开 array items
             items = fdef.get("items") or {}
-            item_props = items.get("properties") or {}
-            if item_props:
-                item_required = items.get("required") or []
+            if items:
                 lines.append(f"{prefix}  (数组元素字段:)")
-                lines.extend(self._format_props(item_props, item_required, indent + 2))
+                lines.extend(self._format_schema(items, indent + 2))
         return lines
 
     def _format_endpoint(self, endpoint: dict) -> str:
@@ -182,20 +208,8 @@ class ApifoxSyncService:
             "",
             f"> 自动同步自 Apifox，最后更新：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            f"**方法**: `{(ep.get('method') or '').upper()}`  ",
-            f"**路径**: `{ep.get('path', '')}`  ",
-            f"**状态**: {ep.get('status', '')}",
-            "",
+            self._format_endpoint(ep),
         ]
-
-        # 完整原始数据（JSON），供 Agent 直接读取
-        raw = {k: ep[k] for k in [
-            "description", "parameters", "requestBody", "responses"
-        ] if ep.get(k)}
-        if raw:
-            lines.append("```json")
-            lines.append(json.dumps(raw, ensure_ascii=False, indent=2))
-            lines.append("```")
 
         file_path.write_text("\n".join(lines), encoding="utf-8")
         # logger.info("Written endpoint to %s", file_path)

@@ -2,10 +2,14 @@
 
 import json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_ENV_VAR_RE = re.compile(r"^\$\{([^}]+)\}$")
 
 
 class PluginConfigService:
@@ -32,11 +36,28 @@ class PluginConfigService:
         if self.config_file.exists():
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    raw = json.load(f)
+                return self._resolve_env_vars(raw)
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading plugin config: {e}")
 
         return {"enabled": [], "plugins": {}}
+
+    def _resolve_env_vars(self, obj: Any) -> Any:
+        """递归将 ${ENV_VAR} 格式的字符串替换为对应环境变量值."""
+        if isinstance(obj, dict):
+            return {k: self._resolve_env_vars(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._resolve_env_vars(v) for v in obj]
+        if isinstance(obj, str):
+            m = _ENV_VAR_RE.match(obj)
+            if m:
+                env_val = os.environ.get(m.group(1))
+                if env_val is None:
+                    logger.warning(f"Environment variable '{m.group(1)}' not set, using empty string")
+                    return ""
+                return env_val
+        return obj
 
     def _save(self) -> None:
         """Save config to file."""

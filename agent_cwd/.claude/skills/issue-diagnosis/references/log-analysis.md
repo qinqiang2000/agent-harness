@@ -27,7 +27,7 @@
 - `message`：日志内容
 - `time`：时间
 - `id`（即 traceId）
-- `project`（即 fields.project/服务名）
+- `project`（服务名）
 - `level`：日志级别（ERROR/WARN/INFO 等）
 按时间倒序排序
 查不到日志时返回空列表。
@@ -56,7 +56,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 **日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的数字型字段，先查 [references/field-glossary.md](references/field-glossary.md)，命中则直接理解继续分析；**未命中且该字段含义影响根因判断** → 进入 Step 4 查询源码定位，禁止自行猜测
 
-从返回的日志列表中，按 `time` 排序，优先关注 `level=ERROR` 条目，其次 `level=WARN`，逐条读取 `message`、`level`、`fields.project`，提取关键信息：
+从返回的日志列表中，按 `time` 排序，优先关注 `level=ERROR` 条目，其次 `level=WARN`，逐条读取 `message`、`level`、`project`，提取关键信息：
 
 | 关键词 | 需提取 | 示例 |
 |---|---|---|

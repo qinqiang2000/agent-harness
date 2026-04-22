@@ -1,0 +1,36 @@
+{
+  "id": "open_api",
+  "name": "Open API Channel",
+  "version": "1.0.0",
+  "description": "对外开放 API 渠道，供第三方系统对接",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "app_id": {
+        "type": "string",
+        "description": "接口凭证 ID"
+      },
+      "app_key": {
+        "type": "string",
+        "description": "接口密钥"
+      },
+      "session_timeout": {
+        "type": "integer",
+        "default": 3600,
+        "description": "会话超时时间（秒）"
+      },
+      "default_skill": {
+        "type": "string",
+        "default": "customer-service",
+        "description": "默认使用的 skill 名称"
+      },
+      "async_task_ttl": {
+        "type": "integer",
+        "default": 300,
+        "description": "异步任务结果保留时间（秒）"
+      }
+    }
+  }
+}
