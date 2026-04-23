@@ -244,7 +244,7 @@ class ApifoxSyncService:
             f"> 自动同步自 Apifox，最后更新：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         )
         file_path.write_text(header + content, encoding="utf-8")
-        logger.info("Written doc to %s", file_path)
+        """logger.info("Written doc to %s", file_path)"""
         return file_path
 
     def _doc_api_base(self) -> str:
