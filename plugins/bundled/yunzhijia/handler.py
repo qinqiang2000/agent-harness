@@ -34,7 +34,7 @@ class YunzhijiaHandler:
     RESET_COMMAND = "/clear"
 
     # 追问句式识别：以这些词开头且 B 无活跃 session 时，自动继承群内最近会话
-    FOLLOWUP_PREFIXES = ["/经验总结", "/continue","/followup"]
+    FOLLOWUP_PREFIXES = ["经验总结", "continue","followup"]
 
     # FAQ 配置：预定义问答，不走 agent
     FAQ_MAP = {
