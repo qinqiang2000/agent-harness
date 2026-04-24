@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from api.routers.agent import router
 from api.routers.plugins import router as plugins_router
+from api.routers.diagnosis import router as diagnosis_router
 from api.constants import DATA_DIR, AGENT_CWD
 
 @asynccontextmanager
@@ -178,6 +179,7 @@ if kb_assets_path.exists():
 # Include API routers
 app.include_router(router)  # Generic /api endpoints
 app.include_router(plugins_router)  # Plugin management API
+app.include_router(diagnosis_router)  # Diagnosis cases API
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 
