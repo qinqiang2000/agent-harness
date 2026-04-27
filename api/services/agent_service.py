@@ -177,102 +177,112 @@ class AgentService:
 
             cache = get_cache()
             cache_key = request.session_id  # 只有 resume 时才有值
-            healthy = True
 
-            if cache and cache_key:
-                client = await cache.get_or_create(cache_key, options)
-                t = PerfTimer.current()
-                if t:
-                    t.mark("SDK_CACHE_HIT")
-            else:
-                client = ClaudeSDKClient(options=options)
-                await client.connect()
-                t = PerfTimer.current()
-                if t:
-                    t.mark("SDK_COLD_START")
+            for attempt in range(2):
+                healthy = True
 
-            async def _on_session_id(real_sid: str) -> None:
-                nonlocal cache_key
-                if cache and not cache_key:
-                    async with cache._lock:
-                        if real_sid not in cache._cache:
-                            cache._cache[real_sid] = CachedSession(client=client, in_use=True)
-                    cache_key = real_sid
-                    logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
+                if cache and cache_key:
+                    client = await cache.get_or_create(cache_key, options)
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("SDK_CACHE_HIT" if attempt == 0 else "SDK_CACHE_RETRY")
+                else:
+                    client = ClaudeSDKClient(options=options)
+                    await client.connect()
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("SDK_COLD_START")
 
-            asked_user_question = False
-            try:
-                # 节点 3：SDK 初始化完成（兼容旧节点名）
-                t = PerfTimer.current()
-                if t:
-                    t.mark("SDK_CONNECTED")
-                yield format_sse_message("heartbeat", {"status": "connected"})
+                async def _on_session_id(real_sid: str) -> None:
+                    nonlocal cache_key
+                    if cache and not cache_key:
+                        async with cache._lock:
+                            if real_sid not in cache._cache:
+                                cache._cache[real_sid] = CachedSession(client=client, in_use=True)
+                        cache_key = real_sid
+                        logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
 
-                await client.query(prompt, session_id=request.session_id or "default")
-                t = PerfTimer.current()
-                if t:
-                    t.mark("QUERY_SENT")
-                logger.info(f"Query sent: {prompt[:80]}...")
-                yield format_sse_message("heartbeat", {"status": "processing"})
+                asked_user_question = False
+                got_message = False
+                try:
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("SDK_CONNECTED")
+                    yield format_sse_message("heartbeat", {"status": "connected"})
 
-                # Use StreamProcessor to handle message stream
-                processor = StreamProcessor(
-                    client=client, request=request, session_service=self.session_service,
-                    on_session_id=_on_session_id if not request.session_id else None,
-                )
+                    await client.query(prompt, session_id=request.session_id or "default")
+                    t = PerfTimer.current()
+                    if t:
+                        t.mark("QUERY_SENT")
+                    logger.info(f"Query sent: {prompt[:80]}...")
+                    yield format_sse_message("heartbeat", {"status": "processing"})
 
-                answer_parts = []
+                    processor = StreamProcessor(
+                        client=client, request=request, session_service=self.session_service,
+                        on_session_id=_on_session_id if not request.session_id else None,
+                    )
 
-                async for message in processor.process():
-                    event = message.get("event")
-                    if event == "assistant_message":
+                    answer_parts = []
+
+                    async for message in processor.process():
+                        got_message = True
+                        event = message.get("event")
+                        if event == "assistant_message":
+                            try:
+                                answer_parts.append(json.loads(message["data"]).get("content", ""))
+                            except Exception:
+                                pass
+                        elif event == "ask_user_question":
+                            asked_user_question = True
+                        elif event == "result":
+                            try:
+                                data = json.loads(message["data"])
+                                answer = "".join(answer_parts)
+                                await interaction_logger.log({
+                                    "question": request.prompt,
+                                    "answer": answer,
+                                    "skill": request.skill,
+                                    "tenant_id": request.tenant_id,
+                                    "session_id": data.get("session_id"),
+                                    "num_turns": data.get("num_turns"),
+                                    "duration_ms": data.get("duration_ms"),
+                                    "status": "error" if data.get("is_error") else "success",
+                                    "has_doc_url": "http" in answer,
+                                    "used_fallback_phrase": FALLBACK_PHRASE in answer,
+                                    "asked_user_question": asked_user_question,
+                                    "product_selected": (request.metadata or {}).get("product_selected"),
+                                })
+                            except Exception as e:
+                                logger.warning(f"Failed to log interaction: {e}")
+                        yield message
+
+                except Exception:
+                    healthy = False
+                    raise
+                except GeneratorExit:
+                    raise
+                except BaseException:
+                    healthy = False
+                    raise
+                finally:
+                    if asked_user_question:
+                        healthy = False
+                    if cache and cache_key:
+                        await cache.release(cache_key, healthy=healthy)
+                    elif not cache:
                         try:
-                            answer_parts.append(json.loads(message["data"]).get("content", ""))
+                            await client.disconnect()
                         except Exception:
                             pass
-                    elif event == "ask_user_question":
-                        asked_user_question = True
-                    elif event == "result":
-                        try:
-                            data = json.loads(message["data"])
-                            answer = "".join(answer_parts)
-                            await interaction_logger.log({
-                                "question": request.prompt,
-                                "answer": answer,
-                                "skill": request.skill,
-                                "tenant_id": request.tenant_id,
-                                "session_id": data.get("session_id"),
-                                "num_turns": data.get("num_turns"),
-                                "duration_ms": data.get("duration_ms"),
-                                "status": "error" if data.get("is_error") else "success",
-                                "has_doc_url": "http" in answer,
-                                "used_fallback_phrase": FALLBACK_PHRASE in answer,
-                                "asked_user_question": asked_user_question,
-                                "product_selected": (request.metadata or {}).get("product_selected"),
-                            })
-                        except Exception as e:
-                            logger.warning(f"Failed to log interaction: {e}")
-                    yield message
 
-            except Exception:
-                healthy = False
-                raise
-            except GeneratorExit:
-                # Consumer stopped iterating early (normal generator cleanup) — keep connection healthy
-                raise
-            except BaseException:
-                healthy = False
-                raise
-            finally:
-                if asked_user_question:
-                    healthy = False
-                if cache and cache_key:
-                    await cache.release(cache_key, healthy=healthy)
-                elif not cache:
-                    try:
-                        await client.disconnect()
-                    except Exception:
-                        pass
+                if got_message:
+                    break
+
+                # 空响应：连接已死，重试一次（仅对 resume 场景有意义）
+                if attempt == 0 and cache and cache_key:
+                    logger.warning(f"Empty response on cached connection, retrying with fresh: {cache_key}")
+                else:
+                    break
 
         except Exception as e:
             # Suppress cancel scope errors from interrupt (expected behavior)

@@ -20,7 +20,9 @@
       "default_skill": "customer-service",
       "token_refresh_buffer_seconds": 300,
       "mock_send": false,
-      "transfer_group": "测试技能组"
+      "transfer_group": "测试技能组",
+      "app_id": "${ZHICHI_APP_ID}",
+      "app_key": "${ZHICHI_APP_KEY}"
     },
     "audit": {
       "max_upload_size_mb": 20,

@@ -11,9 +11,16 @@ from api.services.sdk_pool import get_cache
 from api.services.session_service import SessionService
 from api.utils.perf_timer import PerfTimer
 
+from plugins.bundled.zhichi.agent_status import ZhichiAgentStatusClient
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
 
 # from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
+
+DEFAULT_NO_AGENT_MESSAGE = (
+    "当前无客服在线，人工坐席时间为\n"
+    "周一到周五：8:30~18:00\n"
+    "节假日：9：00~17:30"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +37,16 @@ class ZhichiHandler:
         agent_service: AgentService,
         session_service: SessionService,
         config: dict,
+        agent_status_client: Optional[ZhichiAgentStatusClient] = None,
         # message_sender: ZhichiMessageSender,
     ):
         self.agent_service = agent_service
         self.session_service = session_service
+        self.agent_status_client = agent_status_client
         # self.message_sender = message_sender
         self.default_skill = config.get("default_skill", "customer-service")
         self.transfer_group = config.get("transfer_group", "")
+        self.no_agent_message = config.get("no_agent_message", DEFAULT_NO_AGENT_MESSAGE)
         session_timeout = config.get("session_timeout", 3600)
 
         self.session_mapper = PluginSessionMapper(
@@ -119,12 +129,25 @@ class ZhichiHandler:
                 data = json.loads(event["data"])
                 group_name = self.transfer_group or data.get("group", "通用客服组")
                 reason = data.get("reason", "正在为您转接人工客服，请稍候。")
-                logger.info(f"[Zhichi] Transfer to human: group={group_name}")
+
+                allow_transfer = True
+                if self.agent_status_client is not None:
+                    admin_size = await self.agent_status_client.get_online_admin_size()
+                    logger.info(f"[Zhichi] Online admin_size={admin_size} before transfer")
+                    if not admin_size:
+                        allow_transfer = False
+
                 t = PerfTimer.current()
                 if t:
                     t.done()
                 answered = True
-                yield reason, True, True, group_name
+
+                if allow_transfer:
+                    logger.info(f"[Zhichi] Transfer to human: group={group_name}")
+                    yield reason, True, True, group_name
+                else:
+                    logger.info("[Zhichi] No online agent, refuse transfer and send fallback message")
+                    yield self.no_agent_message, True, False, ""
                 return
 
             elif event_type == "ask_user_question":
