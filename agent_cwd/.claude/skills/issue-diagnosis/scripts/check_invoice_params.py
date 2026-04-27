@@ -30,8 +30,8 @@ def check(data):
 
     for i, item in enumerate(items):
         line = i + 1
-        unit_price = float(item["unitPrice"]) if item.get("unitPrice") is not None else None
-        num = float(item["num"]) if item.get("num") is not None else None
+        unit_price = float(item["unitPrice"]) if item.get("unitPrice") not in (None, "") else None
+        num = float(item["num"]) if item.get("num") not in (None, "") else None
         detail_amount = float(item["detailAmount"]) if item.get("detailAmount") is not None else None
         tax_rate = float(item["taxRate"]) if item.get("taxRate") is not None else None
         tax_amount = float(item["taxAmount"]) if item.get("taxAmount") is not None else None
