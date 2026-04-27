@@ -24,13 +24,17 @@ class ZhichiTokenManager:
         self,
         app_id: str,
         app_key: str,
-        token_api_url: str = "https://www.sobot.com/api/get_token",
+        token_api_url: str = "https://www.soboten.com/api/get_token",
         refresh_buffer_seconds: int = 300,
     ):
         self.app_id = app_id
         self.app_key = app_key
         self.token_api_url = token_api_url
         self.refresh_buffer_seconds = refresh_buffer_seconds
+        logger.info(
+            f"[Zhichi] TokenManager init: app_id={app_id!r}, app_key={app_key!r}, "
+            f"token_api_url={token_api_url}"
+        )
 
         self._token: Optional[str] = None
         self._expires_at: float = 0.0
@@ -87,10 +91,18 @@ class ZhichiTokenManager:
             "sign": sign,
             "create_time": timestamp,
         }
+        logger.info(
+            f"[Zhichi] get_token request: appid={self.app_id!r}, "
+            f"app_key={self.app_key!r}, create_time={timestamp}, sign={sign}"
+        )
 
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(self.token_api_url, params=params)
+                logger.info(
+                    f"[Zhichi] get_token response: status={resp.status_code}, "
+                    f"url={resp.request.url}, body={resp.text}"
+                )
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -106,7 +118,9 @@ class ZhichiTokenManager:
             expires_in = int(item.get("expires_in", 86400))  # 默认 24h
             self._token = token
             self._expires_at = time.time() + expires_in
-            logger.info(f"[Zhichi] Token refreshed, expires in {expires_in}s")
+            logger.info(
+                f"[Zhichi] Token refreshed, token={token[:6]}...{token[-4:]}, expires in {expires_in}s"
+            )
 
         except Exception as e:
             logger.error(f"[Zhichi] Failed to fetch token: {e}", exc_info=True)

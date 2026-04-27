@@ -39,7 +39,7 @@
       "token_api_url": {
         "type": "string",
         "description": "获取 Token 的 API URL",
-        "default": "https://www.sobot.com/api/get_token"
+        "default": "https://www.soboten.com/api/get_token"
       },
       "answer_url_stream": {
         "type": "string",
@@ -50,6 +50,21 @@
         "type": "string",
         "description": "非流式回调 URL（req_stream=false 时使用）",
         "default": "https://www.sobot.com/api/robot/third_algorithm/answer"
+      },
+      "check_agent_online": {
+        "type": "boolean",
+        "description": "转人工前是否查询在线坐席数，无坐席时不转并下发提示",
+        "default": true
+      },
+      "once_data_url": {
+        "type": "string",
+        "description": "查询客服实时数据的 API URL",
+        "default": "https://www.soboten.com/api/chat/5/user/get_once_data"
+      },
+      "no_agent_message": {
+        "type": "string",
+        "description": "无在线坐席时下发给用户的提示文案",
+        "default": "当前无客服在线，人工坐席时间为\n周一到周五：8:30~18:00\n节假日：9：00~17:30"
       }
     },
     "required": []
