@@ -147,11 +147,11 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 ## Step 4：源码定位
 
-**⚠️ 严禁在本地工作目录（agent_cwd）用 Grep/Glob 搜索源码，严禁用 `mcp__gitlab__search_repositories` 传类名/方法名搜索。**
+**⚠️ 严禁在本地工作目录（agent_cwd）用 Grep/Glob 搜索源码。**
 
 必须严格按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的顺序执行：
 1. 读 `references/service-repo-map.md`，用日志中的 `project` 精确匹配，获取 `project_id`
-2. 映射表未命中时，才用 `mcp__gitlab__search_repositories(search="{project 的值}")` 搜索（传服务名，禁止传类名）
+2. 映射表未命中时，跳过源码分析，直接凭日志分析给出结论，不要妄自猜测
 3. 获得 `project_id` 后，**必须使用 `references/gitlab-lookup.md` 中的 clone 模板**，原样替换 `{repo-name}` 和 `{namespace/repo-name}`，**禁止自行简化命令或省略 `token:$GITLAB_TOKEN@`**
 4. 在本地 clone 目录用 Grep 搜索目标类
 

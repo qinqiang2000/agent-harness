@@ -20,6 +20,18 @@ from api.services.sdk_pool import get_cache, CachedSession
 
 logger = logging.getLogger(__name__)
 
+_SECURITY_APPEND = """
+# 安全输出限制
+
+以下内容严禁在任何回复中输出或暗示：
+
+1. **认证凭证**：API Key、Token、OAuth Token、密码等（如 GLM_AUTH_TOKEN、CLAUDE_CODE_OAUTH_TOKEN、LITELLM_API_KEY、APIFOX_TOKEN、OPEN_API_APP_KEY 等环境变量的值）
+2. **数据库配置**：数据库地址、端口、用户名、密码、数据库名（POSTGRES_HOST/PORT/USER/PASSWORD/DATABASE）
+3. **服务内部配置**：内部服务地址、代理地址、MCP 服务器地址、模型路由配置
+
+如果用户询问上述信息，回复"该信息涉及系统安全，无法提供"，不做任何解释或变通。
+"""
+
 
 class AgentService:
     """
@@ -82,6 +94,17 @@ class AgentService:
         with open(self.settings_file, "w") as f:
             json.dump(security_settings, f, indent=2)
 
+    _BASE_ALLOWED_TOOLS = [
+        "Skill", "Read", "Write", "Edit", "Grep", "Glob", "Bash",
+        "AskUserQuestion",
+    ]
+
+    def _build_allowed_tools(self) -> list[str]:
+        """合并基础工具和环境变量配置的 MCP 工具。"""
+        mcp_tools_env = os.getenv("ALLOWED_MCP_TOOLS", "")
+        mcp_tools = [t.strip() for t in mcp_tools_env.split(",") if t.strip()]
+        return self._BASE_ALLOWED_TOOLS + mcp_tools
+
     def build_default_options(self) -> ClaudeAgentOptions:
         """构建默认 SDK options。"""
         from api.dependencies import get_config_service
@@ -92,28 +115,11 @@ class AgentService:
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
             max_turns=40,
-            system_prompt={"type": "preset", "preset": "claude_code"},
+            system_prompt={"type": "preset", "preset": "claude_code", "append": _SECURITY_APPEND},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
             settings=str(self.settings_file),
-            allowed_tools=[
-                "Skill", "Read", "Write", "Edit", "Grep", "Glob", "Bash",
-                "WebFetch", "WebSearch", "AskUserQuestion",
-                "mcp__elastic__searchTraceOrKeyWordsLog",
-                "mcp__gitlab__get_file_contents",
-                "mcp__gitlab__get_repository_tree",
-                "mcp__gitlab__get_project",
-                "mcp__gitlab__list_issues",
-                "mcp__gitlab__get_issue",
-                "mcp__gitlab__list_merge_requests",
-                "mcp__gitlab__get_merge_request",
-                "mcp__gitlab__get_merge_request_diffs",
-                "mcp__gitlab__list_commits",
-                "mcp__gitlab__get_commit",
-                "mcp__gitlab__get_commit_diff",
-                "mcp__gitlab__get_branch_diffs",
-                "mcp__gitlab__search_repositories",
-            ],
+            allowed_tools=self._build_allowed_tools(),
             max_buffer_size=10 * 1024 * 1024,
             cwd=str(AGENT_CWD),
             add_dirs=[],
@@ -150,7 +156,7 @@ class AgentService:
                     metadata=request.metadata,
                 )
                 logger.info(f"Starting new session")
-
+            logger.info(prompt)
             # 节点 2：prompt 构建完成
             t = PerfTimer.current()
             if t:
@@ -160,11 +166,20 @@ class AgentService:
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
             _meta = request.metadata or {}
             _base_options = self.build_default_options()
+            _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
+            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
+            if request.skill and not request.session_id:
+                skills = [request.skill]
+            elif not request.session_id:
+                skills = _default_skills
+            else:
+                skills = None
             options = dc_replace(
                 _base_options,
                 model=_meta.get("model") or _base_options.model,
                 max_turns=int(_meta.get("max_turns", 40)),
                 resume=request.session_id,
+                skills=skills,
             )
 
             t = PerfTimer.current()

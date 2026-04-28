@@ -9,15 +9,6 @@
     "elastic": {
       "type": "http",
       "url": "http://jump-test.piaozone.com:9228/mcp"
-    },
-    "gitlab": {
-      "command": "npx",
-      "args": ["-y", "@zereight/mcp-gitlab"],
-      "env": {
-        "GITLAB_PERSONAL_ACCESS_TOKEN": "bs7dHMy-sU4YS6ZwHEaj",
-        "GITLAB_API_URL": "https://test-master.piaozone.com/git/api/v4",
-        "GITLAB_READ_ONLY_MODE": "false"
-      }
     }
   }
 }

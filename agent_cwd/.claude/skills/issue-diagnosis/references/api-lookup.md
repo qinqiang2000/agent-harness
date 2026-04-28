@@ -67,7 +67,7 @@ data/kb/接口文档/
 
 按 [references/gitlab-lookup.md](gitlab-lookup.md) 的流程执行：
 1. 读取 [references/service-repo-map.md](service-repo-map.md)，用服务名精确匹配，获取 `project_id`
-2. 映射表未命中时，用 `mcp__gitlab__search_repositories(search="{服务名}")` 搜索
+2. 映射表未命中时，跳过源码分析，告知用户无法定位仓库
 3. 获得 `project_id` 后，clone 仓库到本地
 
 ---
