@@ -14,7 +14,7 @@ from claude_agent_sdk import (
 )
 
 from api.models.requests import QueryRequest
-from api.utils import format_sse_message, extract_todos_from_tool
+from api.utils import format_sse_message, extract_todos_from_tool, redact, should_redact
 from api.utils.sdk_logger import SDKLogger
 from api.utils.perf_timer import PerfTimer
 logger = logging.getLogger(__name__)
@@ -144,7 +144,8 @@ class StreamProcessor:
             if isinstance(block, TextBlock):
                 self.sdk_logger.log_text_block(block)
                 if block.text and block.text.strip() and block.text.strip() != "(empty)":
-                    yield format_sse_message("assistant_message", block.text)
+                    text = redact(block.text) if should_redact(self.request.skill, self.request.tenant_id) else block.text
+                    yield format_sse_message("assistant_message", text)
 
             elif isinstance(block, ToolUseBlock):
                 self.sdk_logger.log_tool_use(block)

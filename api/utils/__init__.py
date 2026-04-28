@@ -6,6 +6,7 @@ from .context_storage import save_context
 from .todo_extractor import extract_todos_from_tool
 from .image_utils import extract_images_from_content
 from .perf_timer import PerfTimer
+from .redactor import redact, should_redact
 
 __all__ = [
     'format_sse_message',
@@ -14,4 +15,6 @@ __all__ = [
     'extract_todos_from_tool',
     'extract_images_from_content',
     'PerfTimer',
+    'redact',
+    'should_redact',
 ]
