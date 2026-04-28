@@ -230,7 +230,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 ### 确认请求
 
 输出结论后追加：
-> 以上分析是否帮助你解决了问题？请回复 1 解决  2 未解决。
+> 以上分析是否帮助您解决了问题？请回复 1 解决  2 未解决。
 
 ### 输出原则
 
