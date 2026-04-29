@@ -45,6 +45,7 @@ class AgentService:
         # 从项目 settings.json 加载 MCP 服务器配置和权限配置
         self.mcp_servers: dict = {}
         extra_allow: list = []
+        extra_deny: list = []
         if self.CLAUDE_SETTINGS_FILE.exists():
             try:
                 with open(self.CLAUDE_SETTINGS_FILE, encoding="utf-8") as f:
@@ -55,27 +56,37 @@ class AgentService:
                 extra_allow = claude_settings.get("permissions", {}).get("allow", [])
                 if extra_allow:
                     logger.info(f"Loaded extra allow permissions: {extra_allow}")
+                extra_deny = claude_settings.get("permissions", {}).get("deny", [])
+                if extra_deny:
+                    logger.info(f"Loaded extra deny permissions: {extra_deny}")
             except Exception:
                 logger.warning("Failed to load MCP server config from settings.json", exc_info=True)
 
         # 创建安全配置文件
+        _base_deny = [
+            "Read(**/.env)",
+            "Read(**/.env.*)",
+            "Read(**/secrets/**)",
+            "Read(**/*.pem)",
+            "Read(**/*.key)",
+            "Bash(printenv)",
+            "Bash(export)",
+            "Read(**/settings*.json)",
+            "Write(**/settings*.json)",
+            "Edit(**/settings*.json)",
+            "Bash(rm **/settings*.json)",
+            "Bash(mv **/settings*.json *)",
+            "Bash(cat **/settings*.json)",
+            "Bash(cat **/.env*)",
+            "Bash(cat **/*.pem)",
+            "Bash(cat **/*.key)",
+            "Bash(grep * **/.env*)",
+            "Bash(grep * **/settings*.json)",
+        ]
         security_settings = {
             "permissions": {
                 "allow": extra_allow,
-                "deny": [
-                    "Read(/.env)",
-                    "Read(/.env.*)",
-                    "Read(/secrets/**)",
-                    "Read(/*.pem)",
-                    "Read(/*.key)",
-                    "Bash(printenv)",
-                    "Bash(export)",
-                    "Read(/**/settings*.json)",
-                    "Write(/**/settings*.json)",
-                    "Edit(/**/settings*.json)",
-                    "Bash(rm /**/settings*.json)",
-                    "Bash(mv /**/settings*.json *)",
-                ]
+                "deny": _base_deny + extra_deny,
             }
         }
         self.settings_file = AGENTS_ROOT / self.SETTINGS_FILE_NAME
@@ -83,7 +94,9 @@ class AgentService:
             json.dump(security_settings, f, indent=2)
 
     _BASE_ALLOWED_TOOLS = [
-        "Skill", "Read", "Write", "Edit", "Grep", "Glob", "Bash",
+        "Skill", "Read", "Grep", "Glob", "Bash",
+        "Write(**/data/issue-diagnosis/instincts/**)",
+        "Edit(**/data/issue-diagnosis/instincts/**)",
         "AskUserQuestion",
     ]
 

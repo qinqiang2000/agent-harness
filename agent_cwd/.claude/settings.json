@@ -3,6 +3,21 @@
     "allow": [
       "Write(**/data/issue-diagnosis/instincts/**)",
       "Edit(**/data/issue-diagnosis/instincts/**)"
+    ],
+    "deny": [
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout -b*)",
+      "Bash(git branch -d*)",
+      "Bash(git branch -D*)",
+      "Bash(git reset*)",
+      "Bash(git rebase*)",
+      "Bash(git merge*)",
+      "Bash(git tag*)",
+      "Bash(git stash*)",
+      "Edit(/tmp/gitlab/**)",
+      "Write(/tmp/gitlab/**)"
     ]
   },
   "hooks": {
@@ -13,6 +28,15 @@
           {
             "type": "command",
             "command": "../.venv/bin/python3 .claude/hooks/inject-time-range.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../.venv/bin/python3 .claude/hooks/restrict-edit-write.py"
           }
         ]
       }

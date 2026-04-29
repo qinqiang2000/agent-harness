@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-PreToolUse hook: 自动为 mcp__elastic__searchTraceOrKeyWordsLog 注入时间范围参数。
-若调用参数中缺少 startTime 或 endTime，通过 hookSpecificOutput.updatedInput 返回修改后的参数。
+PreToolUse hook: 自动为 mcp__elastic__searchTraceOrKeyWordsLog 的关键词查询注入时间范围参数。
+仅对 searchWordList 查询生效，traceId 查询不注入时间范围（traceId 全量索引，无需时间过滤）。
+注入时间后通过 additionalContext 告知 Agent，避免 Agent 误判"查不到"。
 """
 import json
 import sys
@@ -22,6 +23,10 @@ def main():
     tool_input = event.get("tool_input", {})
     req = tool_input.get("collectorLogRequest", {})
 
+    # traceId 查询不注入时间范围
+#     if req.get("traceId"):
+#         return
+
     now = datetime.now()
     fmt = "%Y-%m-%d %H:%M:%S"
 
@@ -38,7 +43,8 @@ def main():
         result = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "updatedInput": tool_input
+                "updatedInput": tool_input,
+                "additionalContext": f"[系统已自动注入时间范围] startTime={req['startTime']}, endTime={req['endTime']}。若查询无结果，请考虑问题是否发生在此时间范围之外，可向用户确认具体时间后重新查询。"
             }
         }
         sys.stdout.write(json.dumps(result, ensure_ascii=False))
