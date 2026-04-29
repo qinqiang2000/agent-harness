@@ -5,6 +5,19 @@
       "Edit(**/data/issue-diagnosis/instincts/**)"
     ]
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__elastic__searchTraceOrKeyWordsLog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../.venv/bin/python3 .claude/hooks/inject-time-range.py"
+          }
+        ]
+      }
+    ]
+  },
   "mcpServers": {
     "elastic": {
       "type": "http",

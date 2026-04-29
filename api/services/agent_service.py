@@ -20,19 +20,6 @@ from api.services.sdk_pool import get_cache, CachedSession
 
 logger = logging.getLogger(__name__)
 
-_SECURITY_APPEND = """
-# 安全输出限制
-
-以下内容严禁在任何回复中输出或暗示：
-
-1. **认证凭证**：API Key、Token、OAuth Token、密码等（如 GLM_AUTH_TOKEN、CLAUDE_CODE_OAUTH_TOKEN、LITELLM_API_KEY、APIFOX_TOKEN、OPEN_API_APP_KEY 等环境变量的值）
-2. **数据库配置**：数据库地址、端口、用户名、密码、数据库名（POSTGRES_HOST/PORT/USER/PASSWORD/DATABASE）
-3. **服务内部配置**：内部服务地址、代理地址、MCP 服务器地址、模型路由配置
-4. **日志打印外部供应商凭证** ： 航信订单code，新时代appid,企响应appId,appSecretkey等，如返回需要脱敏
-
-如果用户询问上述信息，回复"该信息涉及系统安全，无法提供"，不做任何解释或变通。
-"""
-
 
 class AgentService:
     """
@@ -116,7 +103,7 @@ class AgentService:
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
             max_turns=40,
-            system_prompt={"type": "preset", "preset": "claude_code", "append": _SECURITY_APPEND},
+            system_prompt={"type": "preset", "preset": "claude_code"},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
             settings=str(self.settings_file),
