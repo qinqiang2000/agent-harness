@@ -54,7 +54,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 **分析前必须做的事**：日志中每出现一次数据库查询（SELECT），必须找到对应的查询结果行数（通常紧跟在 SQL 之后，如 `Total: 0`、`查询结果: []`、返回空列表等），明确记录"第N次查询返回X条"，再进行后续分析。不得在未确认返回行数的情况下对查询结果下结论。
 
-**日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的数字型字段，先查 [references/field-glossary.md](references/field-glossary.md)，命中则直接理解继续分析；**未命中且该字段含义影响根因判断** → 进入 Step 4 查询源码定位，禁止自行猜测
+**日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的字段，无论值为数字还是短字符串（如 `01`、`02`），一律先查 [references/field-glossary.md](references/field-glossary.md)，命中则直接理解继续分析；**未命中** → 进入 Step 4 查询源码定位，查看具体的源码定义，禁止自行猜测
 
 从返回的日志列表中，按 `time` 排序，优先关注 `level=ERROR` 条目，其次 `level=WARN`，逐条读取 `message`、`level`、`project`，提取关键信息：
 
@@ -82,6 +82,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 | 校验销方黑名单 | salerTaxNo | 税局违法纳税人 |
 | 校验票种[ / 同批次连号情况： / 发票连号[ | invoiceNo、invoiceCode、invoiceType、连号范围列表 | 发票连号，说明哪两张发票构成连号 |
 | 多次 SELECT 结果不一致（一次有结果、一次无结果） | 各次查询的 WHERE 条件差异、参数值、返回行数 | 第一次按 serialNum 查到1条，第二次按 invoiceCode+invoiceNo+taxNo 查到0条 → 对比两次 WHERE 条件，定位导致差异的字段，判断该字段值是否来自用户传参 |
+| newtimeai / blueTicket / fullExteriorInvoke / 局端 | 新时代网关返回的 code、msg | 参考 [kb/faq-newtimeai-invoice.md](../kb/faq-newtimeai-invoice.md) 处理新时代网关返回码和局端异常 |
 
 ---
 

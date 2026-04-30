@@ -150,7 +150,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - 字段值异常（某字段被置为 0/null/默认值，或处理前后值不一致）
 - 根因指向代码逻辑（字段映射、数据转换、赋值逻辑、枚举转化等）
 - 日志有业务结果或拒绝描述（如"发票已作废"、状态流转记录），但不清楚为何走到该分支
-- **日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的数字型字段，先查 [.claude/skills/issue-diagnosis/references/field-glossary.md](.claude/skills/issue-diagnosis/references/field-glossary.md)，命中则直接理解继续分析；**未命中且该字段含义影响根因判断** → 进入 Step 4，禁止自行猜测
+- **日志含无法理解的枚举值或状态码**：出现形如 `xxxType=N`、`xxxStatus=N`、`errorCode=N`、`xxxSource=N` 的字段，无论值为数字还是短字符串（如 `01`、`02`），一律先查 [.claude/skills/issue-diagnosis/references/field-glossary.md](.claude/skills/issue-diagnosis/references/field-glossary.md)，命中则直接理解继续分析；**未命中** → 进入 Step 4 查询源码定位，查看具体的源码定义，禁止自行猜测
 - **不确定是否满足例外条件时** → 默认进入 Step 4
 
 **以下情况可跳过 Step 4，直接进入 Step 6**（须同时满足：不触发上方任何一条）：
@@ -225,6 +225,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - 税号（纳税人识别号）→ 保留前4后2，中间脱敏
 - 发票号码 → 脱敏
 - 发票代码 → 脱敏
+- 结论中涉及的所有枚举值（含状态码、类型码）必须已查过 field-glossary.md 或源码确认含义，未经确认的枚举值不得直接输出中文解释
 
 **输出格式**（只输出有内容的模块）：
 
