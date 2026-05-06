@@ -57,6 +57,14 @@ async def lifespan(app: FastAPI):
     cache = init_cache()
     await cache.start()
 
+    # 初始化 FAQ 数据库表
+    try:
+        from api.db import init_faq_table, close_faq_pool
+        await init_faq_table()
+        logger.info("FAQ table initialized")
+    except Exception:
+        logger.warning("FAQ table init failed (PG may not be available)", exc_info=True)
+
     # APScheduler for Apifox sync
     scheduler = AsyncIOScheduler()
     sync_services = create_sync_services()
@@ -86,6 +94,18 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_run_sync, "interval", minutes=interval_minutes, id="apifox_sync")
         logger.info("Apifox sync scheduled every %d minutes for %d projects", interval_minutes, len(sync_services))
 
+    if os.getenv("FAQ_AUTO_PUBLISH", "false").lower() in ("1", "true", "yes"):
+        from api.services.faq_publisher import publish_all as _faq_publish_all
+        async def _run_faq_publish():
+            try:
+                results = await _faq_publish_all()
+                logger.info("FAQ auto-publish: %s", results)
+            except Exception:
+                logger.exception("FAQ auto-publish failed")
+        faq_interval = int(os.getenv("FAQ_PUBLISH_INTERVAL_HOURS", "24"))
+        scheduler.add_job(_run_faq_publish, "interval", hours=faq_interval, id="faq_publish")
+        logger.info("FAQ auto-publish scheduled every %d hours", faq_interval)
+
     try:
         scheduler.start()
     except Exception:
@@ -98,6 +118,12 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down AI Agent Service")
     await plugin_manager.stop_all()
+
+    try:
+        from api.db import close_faq_pool
+        await close_faq_pool()
+    except Exception:
+        pass
 
     from api.services.sdk_pool import get_cache
     cache = get_cache()
@@ -168,7 +194,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Mount static files
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
-    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+    app.mount("/static", StaticFiles(directory=str(static_path), html=True), name="static")
 
 # Mount knowledge base assets for image access
 kb_assets_path = DATA_DIR / "kb" / "产品与交付知识" / "assets"
@@ -180,6 +206,8 @@ if kb_assets_path.exists():
 app.include_router(router)  # Generic /api endpoints
 app.include_router(plugins_router)  # Plugin management API
 app.include_router(diagnosis_router)  # Diagnosis cases API
+from api.routers.faq import router as faq_router
+app.include_router(faq_router)
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 
