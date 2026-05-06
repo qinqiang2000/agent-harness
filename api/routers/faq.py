@@ -22,7 +22,7 @@ class DraftSubmit(BaseModel):
     question: str        # qa 类型为问题标题，section 类型为段落标题
     answer: str          # qa 类型为答案，section 类型为段落内容
     submitter: str
-    sort_order: int = 1000
+    sort_order: int | None = None
 
 
 class DraftUpdate(BaseModel):
@@ -90,10 +90,18 @@ async def submit_draft(body: DraftSubmit):
         raise HTTPException(status_code=400, detail=f"无效分类，可选：{FAQ_CATEGORIES}")
     pool = await get_faq_pool()
     async with pool.acquire() as conn:
+        if body.sort_order is None:
+            max_order = await conn.fetchval(
+                "SELECT COALESCE(MAX(sort_order), 0) FROM faq_items WHERE category = $1",
+                body.category,
+            )
+            sort_order = max_order + 10
+        else:
+            sort_order = body.sort_order
         row = await conn.fetchrow(
             """INSERT INTO faq_items (category, type, question, answer, submitter, sort_order)
                VALUES ($1, $2, $3, $4, $5, $6) RETURNING *""",
-            body.category, body.type, body.question, body.answer, body.submitter, body.sort_order
+            body.category, body.type, body.question, body.answer, body.submitter, sort_order
         )
     return _row_to_dict(row)
 
