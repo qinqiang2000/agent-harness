@@ -127,6 +127,16 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         auth_env_target="api_key",  # LiteLLM uses standard API key, not OAuth token
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
     ),
+    "minimax": ModelConfig(
+        name="minimax",
+        description="MiniMax 模型 (Anthropic 兼容接口)",
+        base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic"),
+        auth_token_env="MINIMAX_API_KEY",
+        timeout_ms=600000,
+        proxy_env=None,
+        auth_env_target="api_key",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    ),
 }
 
 # Validate that the default config exists
