@@ -20,19 +20,6 @@ from api.services.sdk_pool import get_cache, CachedSession
 
 logger = logging.getLogger(__name__)
 
-_SECURITY_APPEND = """
-# 安全输出限制
-
-以下内容严禁在任何回复中输出或暗示：
-
-1. **认证凭证**：API Key、Token、OAuth Token、密码等（如 GLM_AUTH_TOKEN、CLAUDE_CODE_OAUTH_TOKEN、LITELLM_API_KEY、APIFOX_TOKEN、OPEN_API_APP_KEY 等环境变量的值）
-2. **数据库配置**：数据库地址、端口、用户名、密码、数据库名（POSTGRES_HOST/PORT/USER/PASSWORD/DATABASE）
-3. **服务内部配置**：内部服务地址、代理地址、MCP 服务器地址、模型路由配置
-4. **日志打印外部供应商凭证** ： 航信订单code，新时代appid,企响应appId,appSecretkey等，如返回需要脱敏
-
-如果用户询问上述信息，回复"该信息涉及系统安全，无法提供"，不做任何解释或变通。
-"""
-
 
 class AgentService:
     """
@@ -58,6 +45,7 @@ class AgentService:
         # 从项目 settings.json 加载 MCP 服务器配置和权限配置
         self.mcp_servers: dict = {}
         extra_allow: list = []
+        extra_deny: list = []
         if self.CLAUDE_SETTINGS_FILE.exists():
             try:
                 with open(self.CLAUDE_SETTINGS_FILE, encoding="utf-8") as f:
@@ -68,27 +56,37 @@ class AgentService:
                 extra_allow = claude_settings.get("permissions", {}).get("allow", [])
                 if extra_allow:
                     logger.info(f"Loaded extra allow permissions: {extra_allow}")
+                extra_deny = claude_settings.get("permissions", {}).get("deny", [])
+                if extra_deny:
+                    logger.info(f"Loaded extra deny permissions: {extra_deny}")
             except Exception:
                 logger.warning("Failed to load MCP server config from settings.json", exc_info=True)
 
         # 创建安全配置文件
+        _base_deny = [
+            "Read(**/.env)",
+            "Read(**/.env.*)",
+            "Read(**/secrets/**)",
+            "Read(**/*.pem)",
+            "Read(**/*.key)",
+            "Bash(printenv)",
+            "Bash(export)",
+            "Read(**/settings*.json)",
+            "Write(**/settings*.json)",
+            "Edit(**/settings*.json)",
+            "Bash(rm **/settings*.json)",
+            "Bash(mv **/settings*.json *)",
+            "Bash(cat **/settings*.json)",
+            "Bash(cat **/.env*)",
+            "Bash(cat **/*.pem)",
+            "Bash(cat **/*.key)",
+            "Bash(grep * **/.env*)",
+            "Bash(grep * **/settings*.json)",
+        ]
         security_settings = {
             "permissions": {
                 "allow": extra_allow,
-                "deny": [
-                    "Read(/.env)",
-                    "Read(/.env.*)",
-                    "Read(/secrets/**)",
-                    "Read(/*.pem)",
-                    "Read(/*.key)",
-                    "Bash(printenv)",
-                    "Bash(export)",
-                    "Read(/**/settings*.json)",
-                    "Write(/**/settings*.json)",
-                    "Edit(/**/settings*.json)",
-                    "Bash(rm /**/settings*.json)",
-                    "Bash(mv /**/settings*.json *)",
-                ]
+                "deny": _base_deny + extra_deny,
             }
         }
         self.settings_file = AGENTS_ROOT / self.SETTINGS_FILE_NAME
@@ -96,7 +94,9 @@ class AgentService:
             json.dump(security_settings, f, indent=2)
 
     _BASE_ALLOWED_TOOLS = [
-        "Skill", "Read", "Write", "Edit", "Grep", "Glob", "Bash",
+        "Skill", "Read", "Grep", "Glob", "Bash",
+        "Write(**/data/issue-diagnosis/instincts/**)",
+        "Edit(**/data/issue-diagnosis/instincts/**)",
         "AskUserQuestion",
     ]
 
@@ -116,7 +116,7 @@ class AgentService:
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
             max_turns=40,
-            system_prompt={"type": "preset", "preset": "claude_code", "append": _SECURITY_APPEND},
+            system_prompt={"type": "preset", "preset": "claude_code"},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
             settings=str(self.settings_file),
