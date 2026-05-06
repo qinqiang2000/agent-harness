@@ -124,6 +124,8 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         auth_token_env="LITELLM_API_KEY",
         timeout_ms=600000,
         proxy_env=None,
+        model=os.getenv("LITELLM_MODEL") or None,
+        small_fast_model=os.getenv("LITELLM_SMALL_FAST_MODEL") or os.getenv("LITELLM_MODEL") or None,
         auth_env_target="api_key",  # LiteLLM uses standard API key, not OAuth token
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
     ),
