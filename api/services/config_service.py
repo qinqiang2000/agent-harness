@@ -139,6 +139,36 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         auth_env_target="api_key",
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
     ),
+    "tencentmaas": ModelConfig(
+        name="tencentmaas",
+        description="腾讯云 MaaS DeepSeek-V4-Flash",
+        base_url=os.getenv("TENCENTMAAS_BASE_URL", "https://tokenhub.tencentmaas.com"),
+        auth_token_env="TENCENTMAAS_API_KEY",
+        timeout_ms=600000,
+        proxy_env=None,
+        model="deepseek-v4-flash",
+        small_fast_model="deepseek-v4-flash",
+        sonnet_model="deepseek-v4-flash",
+        opus_model="deepseek-v4-flash",
+        haiku_model="deepseek-v4-flash",
+        auth_env_target="api_key",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    ),
+    "deepseek": ModelConfig(
+        name="deepseek",
+        description="DeepSeek 官方 API (Anthropic 兼容接口)",
+        base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
+        auth_token_env="DEEPSEEK_API_KEY",
+        timeout_ms=600000,
+        proxy_env=None,
+        model="deepseek-v4-flash",
+        small_fast_model="deepseek-v4-flash",
+        sonnet_model="deepseek-v4-flash",
+        opus_model="deepseek-v4-flash",
+        haiku_model="deepseek-v4-flash",
+        auth_env_target="api_key",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    ),
 }
 
 # Validate that the default config exists
