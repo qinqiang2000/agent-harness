@@ -32,3 +32,7 @@ rich>=13.7.0              # Terminal formatting
 PyMuPDF>=1.24.0
 rapidocr-onnxruntime>=1.4.0  # OCR fallback for image-based PDFs
 apscheduler>=3.10.0
+
+# WeCom Plugin
+wecom-sdk==1.0.0
+pycryptodome>=3.20.0

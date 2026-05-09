@@ -1,0 +1,44 @@
+{
+  "id": "wecom",
+  "name": "企业微信",
+  "version": "1.0.0",
+  "description": "企业微信自建应用消息接收与回复集成",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "corp_id": {
+        "type": "string",
+        "description": "企业ID（corpid），在企业微信管理后台「我的企业」页面获取"
+      },
+      "corp_secret": {
+        "type": "string",
+        "description": "应用的凭证密钥（corpsecret）"
+      },
+      "agent_id": {
+        "type": "integer",
+        "description": "应用ID（agentid）"
+      },
+      "token": {
+        "type": "string",
+        "description": "消息接收配置中的 Token"
+      },
+      "encoding_aes_key": {
+        "type": "string",
+        "description": "消息接收配置中的 EncodingAESKey（43位）"
+      },
+      "session_timeout": {
+        "type": "integer",
+        "default": 3600,
+        "description": "会话超时时间（秒）"
+      },
+      "default_skill": {
+        "type": "string",
+        "default": "customer-service",
+        "description": "默认使用的 Skill 名称"
+      }
+    },
+    "required": ["corp_id", "corp_secret", "agent_id", "token", "encoding_aes_key"]
+  }
+}
