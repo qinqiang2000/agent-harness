@@ -1,5 +1,6 @@
 """企业微信群机器人 Channel Plugin 入口."""
 
+import json
 import logging
 import os
 import xml.etree.ElementTree as ET
@@ -97,18 +98,23 @@ class WecomGroupChannelPlugin(ChannelPlugin):
         ):
             """企业微信群机器人消息接收接口."""
             body = await request.body()
-            xml_body = body.decode("utf-8")
+            raw_body = body.decode("utf-8")
 
             logger.info(
                 f"[WeComGroup] POST callback: msg_signature={msg_signature}, "
-                f"timestamp={timestamp}, nonce={nonce}, body={xml_body[:200]}"
+                f"timestamp={timestamp}, nonce={nonce}, body={raw_body[:200]}"
             )
 
+            # 群机器人发 JSON，自建应用发 XML，兼容两种格式
             try:
-                root = ET.fromstring(xml_body)
-                encrypt = root.findtext("Encrypt") or ""
+                if raw_body.strip().startswith("{"):
+                    data = json.loads(raw_body)
+                    encrypt = data.get("encrypt", "")
+                else:
+                    root = ET.fromstring(raw_body)
+                    encrypt = root.findtext("Encrypt") or ""
             except Exception as e:
-                logger.error(f"[WeComGroup] Failed to parse XML: {e}")
+                logger.error(f"[WeComGroup] Failed to parse body: {e}")
                 return PlainTextResponse("parse error", status_code=400)
 
             if not crypto.verify_signature(msg_signature, timestamp, nonce, encrypt):
@@ -119,7 +125,7 @@ class WecomGroupChannelPlugin(ChannelPlugin):
                 return PlainTextResponse("invalid signature", status_code=403)
 
             try:
-                plaintext, _ = crypto.decrypt_message(xml_body)
+                plaintext, _ = crypto._decrypt(encrypt)
             except Exception as e:
                 logger.error(f"[WeComGroup] Failed to decrypt message: {e}")
                 return PlainTextResponse("decrypt error", status_code=500)
