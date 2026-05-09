@@ -24,9 +24,10 @@ class WecomGroupMessageSender:
 
     async def _post_response(self, response_url: str, content: str) -> bool:
         """通过智能机器人 response_url 回复."""
+        # 智能机器人 response_url 用 markdown 类型
         data = {
-            "msgtype": "text",
-            "text": {"content": content},
+            "msgtype": "markdown",
+            "markdown": {"content": content},
         }
         try:
             async with aiohttp.ClientSession() as session:
