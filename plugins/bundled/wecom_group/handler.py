@@ -44,10 +44,10 @@ class WecomGroupHandler:
     async def process_message(self, msg: WecomGroupMessage, skill: Optional[str] = None):
         """处理群机器人消息（后台任务）."""
         user_id = msg.from_user_name
-        # 用 chat_id + user_id 作为会话 key，同一用户在不同群里会话隔离
         session_key = f"{msg.chat_id}:{user_id}" if msg.chat_id else user_id
         content = (msg.content or "").strip()
         effective_skill = skill or self.default_skill
+        response_url = msg.response_url or ""
         webhook_url = msg.webhook_url or ""
 
         logger.info(
@@ -61,6 +61,7 @@ class WecomGroupHandler:
             if msg.msg_type != "text":
                 await self.message_sender.send_text(
                     f"<@{user_id}> 暂时只支持文字消息，请发送文字内容。",
+                    response_url=response_url,
                     webhook_url=webhook_url,
                 )
                 return
@@ -72,12 +73,13 @@ class WecomGroupHandler:
                 self.session_mapper.remove(session_key)
                 await self.message_sender.send_text(
                     f"<@{user_id}> ✅ 会话已重置，下次提问将开启新对话。",
+                    response_url=response_url,
                     webhook_url=webhook_url,
                 )
                 return
 
             if self._is_stop_command(content):
-                await self._handle_stop_command(user_id, session_key, webhook_url)
+                await self._handle_stop_command(user_id, session_key, response_url, webhook_url)
                 return
 
             agent_session_id = self.session_mapper.get_or_create(session_key)
@@ -95,16 +97,24 @@ class WecomGroupHandler:
                 session_id=agent_session_id,
             )
 
-            await self._process_agent_stream(request, user_id, session_key, webhook_url)
+            await self._process_agent_stream(request, user_id, session_key, response_url, webhook_url)
 
         except Exception as e:
             logger.error(f"[WeComGroup] Error processing message: {e}", exc_info=True)
             await self.message_sender.send_text(
                 f"<@{user_id}> 抱歉，处理消息时出现错误，请稍后再试。",
+                response_url=response_url,
                 webhook_url=webhook_url,
             )
 
-    async def _process_agent_stream(self, request: QueryRequest, user_id: str, session_key: str, webhook_url: str):
+    async def _process_agent_stream(
+        self,
+        request: QueryRequest,
+        user_id: str,
+        session_key: str,
+        response_url: str,
+        webhook_url: str,
+    ):
         """消费 agent 事件流并回复到群."""
         agent_session_id = request.session_id
         answered = False
@@ -126,7 +136,11 @@ class WecomGroupHandler:
             elif event_type == "transfer_human":
                 data = json.loads(event["data"])
                 reason = data.get("reason", "正在为您转接人工客服，请稍候。")
-                await self.message_sender.send_text(f"<@{user_id}> {reason}", webhook_url=webhook_url)
+                await self.message_sender.send_text(
+                    f"<@{user_id}> {reason}",
+                    response_url=response_url,
+                    webhook_url=webhook_url,
+                )
                 answered = True
                 t = PerfTimer.current()
                 if t:
@@ -145,6 +159,7 @@ class WecomGroupHandler:
                 for question in questions:
                     await self.message_sender.send_text(
                         f"<@{user_id}> {self._format_question(question)}",
+                        response_url=response_url,
                         webhook_url=webhook_url,
                     )
                 answered = True
@@ -157,7 +172,11 @@ class WecomGroupHandler:
                 result_data = json.loads(event.get("data", "{}"))
                 answer = result_data.get("result", "")
                 if answer:
-                    await self.message_sender.send_text(f"<@{user_id}> {answer}", webhook_url=webhook_url)
+                    await self.message_sender.send_text(
+                        f"<@{user_id}> {answer}",
+                        response_url=response_url,
+                        webhook_url=webhook_url,
+                    )
                     answered = True
                 t = PerfTimer.current()
                 if t:
@@ -167,6 +186,7 @@ class WecomGroupHandler:
                 error_data = json.loads(event.get("data", "{}"))
                 await self.message_sender.send_text(
                     f"<@{user_id}> 抱歉，处理时出现错误：{error_data.get('message', '未知错误')}",
+                    response_url=response_url,
                     webhook_url=webhook_url,
                 )
                 answered = True
@@ -177,22 +197,37 @@ class WecomGroupHandler:
         if not answered:
             await self.message_sender.send_text(
                 f"<@{user_id}> 抱歉，未能获取到答案，请稍后再试。",
+                response_url=response_url,
                 webhook_url=webhook_url,
             )
             t = PerfTimer.current()
             if t:
                 t.done()
 
-    async def _handle_stop_command(self, user_id: str, session_key: str, webhook_url: str):
+    async def _handle_stop_command(
+        self, user_id: str, session_key: str, response_url: str, webhook_url: str
+    ):
         agent_session_id = self.session_mapper.get_or_create(session_key)
         if agent_session_id:
             success = await self.session_service.interrupt(agent_session_id)
             if success:
-                await self.message_sender.send_text(f"<@{user_id}> ✅ 已停止当前任务。", webhook_url=webhook_url)
+                await self.message_sender.send_text(
+                    f"<@{user_id}> ✅ 已停止当前任务。",
+                    response_url=response_url,
+                    webhook_url=webhook_url,
+                )
             else:
-                await self.message_sender.send_text(f"<@{user_id}> ⚠️ 停止失败，会话可能已结束。", webhook_url=webhook_url)
+                await self.message_sender.send_text(
+                    f"<@{user_id}> ⚠️ 停止失败，会话可能已结束。",
+                    response_url=response_url,
+                    webhook_url=webhook_url,
+                )
         else:
-            await self.message_sender.send_text(f"<@{user_id}> 当前没有正在运行的任务。", webhook_url=webhook_url)
+            await self.message_sender.send_text(
+                f"<@{user_id}> 当前没有正运行的任务。",
+                response_url=response_url,
+                webhook_url=webhook_url,
+            )
 
     def _is_stop_command(self, content: str) -> bool:
         if len(content) > MAX_STOP_COMMAND_LENGTH:
