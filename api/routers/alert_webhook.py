@@ -20,6 +20,8 @@ router = APIRouter(prefix="/api", tags=["alert"])
 
 # alertname 关键词 → 告警类型映射
 ALERT_TYPE_MAP = [
+    ("IO", "磁盘IO利用率高"),
+    ("io", "磁盘IO利用率高"),
     ("CPU", "CPU使用率高"),
     ("cpu", "CPU使用率高"),
     ("内存", "内存使用率高"),
@@ -27,9 +29,7 @@ ALERT_TYPE_MAP = [
     ("memory", "内存使用率高"),
     ("硬盘", "磁盘空间不足"),
     ("Disk", "磁盘空间不足"),
-    ("disk", "磁盘空间不足"),
-    ("IO", "磁盘IO利用率高"),
-    ("io", "磁盘IO利用率高"),
+    ("disk", "磁盘空间不足")
 ]
 
 
