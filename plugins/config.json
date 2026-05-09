@@ -1,5 +1,5 @@
 {
-  "enabled": ["yunzhijia", "zhichi", "audit", "open_api"],
+  "enabled": ["yunzhijia", "zhichi", "audit", "open_api", "wecom"],
   "plugins": {
     "open_api": {
       "app_id": "${OPEN_API_APP_ID}",
@@ -28,6 +28,15 @@
       "max_upload_size_mb": 20,
       "default_skill": "financial-audit",
       "session_timeout": 3600
+    },
+    "wecom": {
+      "corp_id": "${WECOM_CORP_ID}",
+      "corp_secret": "${WECOM_CORP_SECRET}",
+      "agent_id": "${WECOM_AGENT_ID}",
+      "token": "${WECOM_TOKEN}",
+      "encoding_aes_key": "${WECOM_ENCODING_AES_KEY}",
+      "session_timeout": 3600,
+      "default_skill": "customer-service"
     }
   }
 }
