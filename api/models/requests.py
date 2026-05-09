@@ -1,7 +1,7 @@
 """Request models for API endpoints."""
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class QueryRequest(BaseModel):
@@ -17,6 +17,10 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="会话ID (续会话用)")
     context: Optional[str] = Field(None, description="附加上下文数据")
     metadata: Optional[Dict[str, Any]] = Field(None, description="扩展元数据")
+    images: Optional[List[str]] = Field(
+        None,
+        description="图片 URL 列表，最多 5 张，每轮均可传",
+    )
 
     @field_validator('prompt')
     @classmethod
@@ -31,6 +35,18 @@ class QueryRequest(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError('language cannot be empty string')
         return v.strip() if v else None
+
+    @field_validator('images')
+    @classmethod
+    def validate_images(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if not v:
+            return None
+        if len(v) > 5:
+            raise ValueError('images 最多 5 张')
+        for url in v:
+            if not url.startswith(('http://', 'https://')):
+                raise ValueError(f'图片 URL 必须以 http:// 或 https:// 开头: {url}')
+        return v
 
     @model_validator(mode='after')
     def validate_new_session_requirements(self):

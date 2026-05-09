@@ -1,8 +1,8 @@
 """Open API 请求/响应数据模型."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class BaseResp(BaseModel):
@@ -31,6 +31,19 @@ class AnswerReq(BaseModel):
     skill: Optional[str] = None  # 指定 skill，不传则使用默认 skill
     callback_url: Optional[str] = None
     params: Optional[Dict[str, Any]] = None
+    images: Optional[List[str]] = None  # 图片 URL 列表，最多 5 张
+
+    @field_validator('images')
+    @classmethod
+    def validate_images(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if not v:
+            return None
+        if len(v) > 5:
+            raise ValueError('images 最多 5 张')
+        for url in v:
+            if not url.startswith(('http://', 'https://')):
+                raise ValueError(f'图片 URL 必须以 http:// 或 https:// 开头: {url}')
+        return v
 
 
 class AnswerRespItem(BaseModel):

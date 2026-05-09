@@ -28,6 +28,9 @@ class ModelConfig:
     haiku_model: Optional[str] = None
     proxy_env: Optional[str] = None  # Environment variable name for proxy URL
     auth_env_target: str = "auth_token"  # "auth_token", "api_key", or "both"
+    supports_vision: Optional[bool] = None  # True/False 明确标注，None 表示未知不拦截
+    vision_helper: Optional[str] = None  # 指向另一个 config 名，用于图片识别降级
+    vision_model: Optional[str] = None  # 作为 vision_helper 被调用时使用的模型 ID
     extra_env: Dict[str, str] = field(default_factory=dict)
 
     def get_auth_token(self) -> str:
@@ -77,8 +80,8 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         base_url="https://open.bigmodel.cn/api/anthropic",
         auth_token_env="GLM_AUTH_TOKEN",
         timeout_ms=3000000,
-        proxy_env=None,  # No proxy needed
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        proxy_env=None,
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
     "kimi": ModelConfig(
         name="kimi",
@@ -93,7 +96,9 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         opus_model="kimi-k2.5",
         haiku_model="kimi-k2.5",
         auth_env_target="api_key",
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        supports_vision=False,
+        vision_helper="litellm",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
     "claude-router": ModelConfig(
         name="claude-router",
@@ -115,6 +120,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         timeout_ms=600000,
         proxy_env="CLAUDE_PROXY",  # Optional proxy for official API
         small_fast_model=os.getenv("ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001"),  # 子 agent（Explore 等）用 Haiku
+        supports_vision=True,
         extra_env={}
     ),
     "litellm": ModelConfig(
@@ -126,18 +132,26 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         proxy_env=None,
         model=os.getenv("LITELLM_MODEL") or None,
         small_fast_model=os.getenv("LITELLM_SMALL_FAST_MODEL") or os.getenv("LITELLM_MODEL") or None,
-        auth_env_target="api_key",  # LiteLLM uses standard API key, not OAuth token
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        auth_env_target="api_key",
+        vision_model=os.getenv("LITELLM_VISION_MODEL", "claude-haiku-4-5-20251001"),
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
     "minimax": ModelConfig(
         name="minimax",
-        description="MiniMax 模型 (Anthropic 兼容接口)",
+        description="MiniMax M2.7 (Anthropic 兼容接口，纯文本)",
         base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic"),
         auth_token_env="MINIMAX_API_KEY",
         timeout_ms=600000,
         proxy_env=None,
+        model="MiniMax-M2.7",
+        small_fast_model="MiniMax-M2.7",
+        sonnet_model="MiniMax-M2.7",
+        opus_model="MiniMax-M2.7",
+        haiku_model="MiniMax-M2.7",
         auth_env_target="api_key",
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        supports_vision=False,
+        vision_helper="litellm",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
     "tencentmaas": ModelConfig(
         name="tencentmaas",
@@ -152,7 +166,9 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         opus_model="deepseek-v4-flash",
         haiku_model="deepseek-v4-flash",
         auth_env_target="api_key",
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        supports_vision=False,
+        vision_helper="litellm",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
     "deepseek": ModelConfig(
         name="deepseek",
@@ -167,7 +183,9 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         opus_model="deepseek-v4-flash",
         haiku_model="deepseek-v4-flash",
         auth_env_target="api_key",
-        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        supports_vision=False,
+        vision_helper="litellm",
+        extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
     ),
 }
 

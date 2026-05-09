@@ -240,3 +240,22 @@ https://jdpiaozone.yuque.com/nbklz3/dn5ehb/oghbn3vph14nz4ss?singleDoc#
 > 请求 URL 中 token 参数名为 `accesstoken`，网关期望 `access_token`（带下划线），参数名不匹配导致网关无法识别 token，返回 401。
 
 ---
+
+## Q40: 切换企业失败，请稍后再试（errcode=1808）
+
+> **根因**：Redis 分布式锁 `newera_switch_taxNo_Lock:{cityCode}:{account}` 被同账号其他请求占用，当前请求获取锁超时。
+
+### 诊断步骤
+1. **从日志中提取锁 key 和账号**
+   - 用提供的 traceId 查 bill-websocket 日志
+   - 查找 `lockKey=newera_switch_taxNo_Lock` 找到锁 key，确定 `cityCode` 和 `account`
+2. **查询同一锁的竞争请求**
+searchWordList: ["newera_switch_taxNo_Lock:{cityCode}:{account}"]（将 `{cityCode}:{account}` 替换为实际值）
+3. **分析竞争请求**
+   - 从返回日志中提取 `requestPath` — 确定是什么业务（`/recvinv`=收票勾选查询、`/fpdk/etax/bill/invoice/create`=开票等）
+   - 从 `taxNo` 字段获取占用锁的税号
+   - 观察请求频率 — 若间隔 < 锁等待超时时间（默认 2 分钟），说明持续占用
+4. **根因结论**
+   - 告知用户哪个税号正在通过什么业务占用该锁
+   - 建议稍后重试，或协调控制该税号的并发请求
+

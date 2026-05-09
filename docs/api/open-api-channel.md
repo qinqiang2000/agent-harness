@@ -32,6 +32,7 @@
 | `100003` | token 无效或已过期 |
 | `500000` | 服务内部错误 |
 | `500001` | 异步任务处理失败 |
+| `500002` | 图片识别失败（URL 不可达、图片过大、MIME 不支持、vision 服务异常等） |
 
 ---
 
@@ -170,7 +171,10 @@ POST /open-api/ask/answer_no_stream
   "user_name": "张三",
   "show_question": "你好",
   "msg_type": "TEXT",
-  "params": {}
+  "params": {},
+  "images": [
+    "https://your-cdn.com/screenshots/error-1.png"
+  ]
 }
 ```
 
@@ -184,6 +188,7 @@ POST /open-api/ask/answer_no_stream
 | show_question | string | 否 | 展示用问题文本 |
 | msg_type | string | 否 | 消息类型，默认 `TEXT` |
 | params | object | 否 | 自定义扩展参数 |
+| images | string[] | 否 | 图片 URL 列表（`http://` / `https://`），最多 5 张，每轮均可传；详见[图片问答说明](#图片问答说明) |
 
 ### 请求示例
 
@@ -192,6 +197,23 @@ curl -X POST \
   -H "token: 4ac37cb2e9c740dba4b75a34d5358802" \
   -H "Content-Type: application/json" \
   -d '{"question":"你好","ai_agent_cid":"17ad7f4ab65b4aedadb3b72caf6a86cd"}' \
+  "http://host/open-api/ask/answer_no_stream"
+```
+
+#### 带图片的同步问答
+
+```bash
+curl -X POST \
+  -H "token: 4ac37cb2e9c740dba4b75a34d5358802" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "这个报错怎么解决？",
+    "ai_agent_cid": "17ad7f4ab65b4aedadb3b72caf6a86cd",
+    "images": [
+      "https://your-cdn.com/screenshots/error-1.png",
+      "https://your-cdn.com/screenshots/error-2.png"
+    ]
+  }' \
   "http://host/open-api/ask/answer_no_stream"
 ```
 
@@ -258,7 +280,10 @@ POST /open-api/ask/answer_async
   "uid": "user_001",
   "user_name": "张三",
   "msg_type": "TEXT",
-  "params": {}
+  "params": {},
+  "images": [
+    "https://your-cdn.com/screenshots/error-1.png"
+  ]
 }
 ```
 
@@ -273,6 +298,7 @@ POST /open-api/ask/answer_async
 | show_question | string | 否 | 展示用问题文本 |
 | msg_type | string | 否 | 消息类型，默认 `TEXT` |
 | params | object | 否 | 自定义扩展参数 |
+| images | string[] | 否 | 图片 URL 列表（`http://` / `https://`），最多 5 张，每轮均可传；详见[图片问答说明](#图片问答说明) |
 
 ### 请求示例
 
@@ -469,6 +495,58 @@ curl -X POST \
   "data": null
 }
 ```
+
+---
+
+## 图片问答说明
+
+同步问答、异步问答接口均支持在请求 Body 里传入 `images` 字段，让 AI 结合图片内容作答。典型场景：用户上传报错截图、界面截图、发票图片等。
+
+### 请求格式
+
+```json
+{
+  "question": "这个报错怎么解决？",
+  "ai_agent_cid": "...",
+  "images": [
+    "https://your-cdn.com/screenshots/error-1.png",
+    "https://your-cdn.com/screenshots/error-2.jpg"
+  ]
+}
+```
+
+### 字段约束
+
+| 约束项 | 说明 |
+|--------|------|
+| 协议 | 仅支持 `http://` / `https://`，不接受 data URI、文件路径或 base64 |
+| 数量 | 单次请求最多 5 张，超出直接拒绝 |
+| 大小 | 单张不超过 5MB，超出当张作废 |
+| 格式 | `image/png` / `image/jpeg` / `image/gif` / `image/webp`；未知 MIME 默认按 PNG 处理，明确不支持的类型（如 SVG）作废 |
+| 可访问性 | URL 必须从服务端可访问（公网或 Agent 所在内网可达）；签名 URL 需保证在请求处理期间未过期 |
+
+### 处理流程
+
+1. 服务端并发下载所有图片，校验大小 / MIME 后转 base64
+2. 根据当前模型配置的多模态能力，走下列三条路径之一：
+   - **原生多模态**（如 `claude`）：base64 图片随消息一同送达模型
+   - **降级到 vision_helper**（如 `deepseek` 配置 helper 为 `litellm`）：先由 helper 识别出文字描述，再把描述拼进 prompt 交给主模型
+   - **明确不支持且未配 helper**：直接返回错误
+3. 每张图的描述会结合当前 `question` 做针对性识别（报错信息、traceId、接口名、界面状态等），避免输出与问题无关的噪声
+
+### 续会话带图
+
+在续会话中（即使用同一个 `ai_agent_cid` 发起的后续请求）也可以继续传入 `images`，本轮图片会以本轮消息附件形式送达，不会污染前几轮的上下文。
+
+### 常见错误
+
+| 现象 | 原因 | 解决 |
+|------|------|------|
+| 立即返回 "当前模型 xxx 不支持图片识别" | 当前模型无多模态能力且未配 vision_helper | 联系运维切换多模态模型，或配置 vision_helper |
+| 返回 "图片识别失败: ..." | vision_helper 调用失败（网关错误、鉴权失败、超时） | 检查 vision_helper 配置及网络连通性 |
+| 返回 "图片超过 5MB 上限" | 单张图片过大 | 客户端压缩后再传 |
+| 返回 "images 最多 5 张" | 超过数量限制 | 合并或拆分为多次请求 |
+| 返回 "图片 URL 必须以 http:// 或 https:// 开头" | URL 协议不合法 | 使用公网或服务端可达的 HTTP/HTTPS URL |
 
 ---
 

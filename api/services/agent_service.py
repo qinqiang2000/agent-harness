@@ -17,6 +17,8 @@ from api.utils.perf_timer import PerfTimer
 from api.utils.interaction_logger import interaction_logger, FALLBACK_PHRASE
 from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
 from api.services.sdk_pool import get_cache, CachedSession
+from api.utils.image_loader import load_image_blocks, ImageLoadError
+from api.services.vision_service import describe_images, VisionFallbackError
 
 logger = logging.getLogger(__name__)
 
@@ -144,17 +146,70 @@ class AgentService:
 
         try:
             # Build prompt
+            _meta = request.metadata or {}
+
+            # Vision capability gate:
+            # - supports_vision=True:  直接放行（下方 load_image_blocks 会构造 inline base64）
+            # - supports_vision=False + vision_helper: 走降级（由 helper 识图 → 文字注入 prompt → 清空 images）
+            # - supports_vision=False + 无 helper:   立即返回 error
+            vision_descriptions: list[str] = []
+            if request.images:
+                from api.dependencies import get_config_service
+                from api.services.config_service import PREDEFINED_CONFIGS
+                _cfg = get_config_service().get_current_config()
+                if _cfg.supports_vision is False:
+                    helper_name = _cfg.vision_helper
+                    if not helper_name:
+                        msg = f"当前模型 {_cfg.name} 不支持图片识别，请切换到 claude 等多模态模型后重试。"
+                        logger.warning(msg)
+                        yield format_sse_message("error", {"message": msg})
+                        return
+                    helper_cfg = PREDEFINED_CONFIGS.get(helper_name)
+                    if helper_cfg is None:
+                        msg = f"vision_helper 配置 '{helper_name}' 不存在"
+                        logger.error(msg)
+                        yield format_sse_message("error", {"message": msg})
+                        return
+                    logger.info(
+                        f"Vision fallback: {_cfg.name} → {helper_cfg.name} "
+                        f"(model={helper_cfg.vision_model})"
+                    )
+                    try:
+                        image_blocks_for_helper = await load_image_blocks(request.images)
+                        vision_descriptions = await describe_images(
+                            image_blocks_for_helper, request.prompt, helper_cfg
+                        )
+                    except (ImageLoadError, VisionFallbackError) as e:
+                        logger.warning(f"Vision fallback failed: {e}")
+                        yield format_sse_message("error", {"message": f"图片识别失败: {e}"})
+                        return
+                    # 降级路径：把图片描述拼进 prompt，images 清空
+                    desc_block = "\n\n".join(
+                        f"【用户上传的图片 {i + 1} 识别结果】\n{d}"
+                        for i, d in enumerate(vision_descriptions)
+                    )
+                    request = request.model_copy(update={
+                        "prompt": f"{request.prompt}\n\n{desc_block}",
+                        "images": None,
+                    })
+
+            _base_options = self.build_default_options()
+            _current_model = _base_options.model
+
             if request.session_id:
                 prompt = request.prompt
+                if request.images:
+                    prompt += f"\n\n（本轮附带 {len(request.images)} 张图片，已随消息一同送达，请直接识别分析。）"
                 logger.info(f"Resuming session: {request.session_id}")
             else:
-                prompt = build_initial_prompt(
+                prompt = await build_initial_prompt(
                     tenant_id=request.tenant_id,
                     user_prompt=request.prompt,
                     skill=request.skill,
                     language=request.language,
                     context_file_path=context_file_path,
                     metadata=request.metadata,
+                    images=request.images,
                 )
                 logger.info(f"Starting new session")
             logger.info(prompt)
@@ -165,8 +220,6 @@ class AgentService:
 
             # Configure Claude SDK
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
-            _meta = request.metadata or {}
-            _base_options = self.build_default_options()
             _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
             _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
             if request.skill and not request.session_id:
@@ -190,6 +243,11 @@ class AgentService:
             logger.info(
                 f"Claude SDK config: cwd={AGENT_CWD}, tenant={request.tenant_id}"
             )
+
+            image_blocks: list[dict] = []
+            if request.images:
+                image_blocks = await load_image_blocks(request.images)
+                logger.info(f"Loaded {len(image_blocks)} image block(s) as base64")
 
             cache = get_cache()
             cache_key = request.session_id  # 只有 resume 时才有值
@@ -226,7 +284,22 @@ class AgentService:
                         t.mark("SDK_CONNECTED")
                     yield format_sse_message("heartbeat", {"status": "connected"})
 
-                    await client.query(prompt, session_id=request.session_id or "default")
+                    sdk_session_id = request.session_id or "default"
+                    if image_blocks:
+                        content_blocks: list[dict] = [{"type": "text", "text": prompt}]
+                        content_blocks.extend(image_blocks)
+
+                        async def _stream_user_message() -> AsyncGenerator[dict, None]:
+                            yield {
+                                "type": "user",
+                                "message": {"role": "user", "content": content_blocks},
+                                "parent_tool_use_id": None,
+                                "session_id": sdk_session_id,
+                            }
+
+                        await client.query(_stream_user_message(), session_id=sdk_session_id)
+                    else:
+                        await client.query(prompt, session_id=sdk_session_id)
                     t = PerfTimer.current()
                     if t:
                         t.mark("QUERY_SENT")
@@ -299,6 +372,11 @@ class AgentService:
                     logger.warning(f"Empty response on cached connection, retrying with fresh: {cache_key}")
                 else:
                     break
+
+        except ImageLoadError as e:
+            logger.warning(f"Image load error: {e}")
+            yield format_sse_message("error", {"message": str(e)})
+            return
 
         except Exception as e:
             # Suppress cancel scope errors from interrupt (expected behavior)

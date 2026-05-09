@@ -108,6 +108,7 @@ class OpenApiHandler:
             tenant_id="open_api",
             language="中文",
             session_id=agent_session_id,
+            images=req.images,
         )
 
         answer = "抱歉，处理您的问题时出现错误，请稍后再试。"

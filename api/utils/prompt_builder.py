@@ -1,25 +1,22 @@
 """Prompt building utilities for AI Agent queries."""
 
 import logging
-from typing import Optional, Dict, Any
-from pathlib import Path
-
-from api.constants import TENANTS_DIR
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
 
-def build_initial_prompt(
+async def build_initial_prompt(
     tenant_id: str,
     user_prompt: str,
     skill: Optional[str] = None,
     language: str = "中文",
     context_file_path: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    images: Optional[List[str]] = None,
 ) -> str:
     """
     Build generic initial prompt for any skill.
-    Business logic is defined in skill.md files.
 
     Args:
         tenant_id: Tenant identifier
@@ -28,6 +25,7 @@ def build_initial_prompt(
         language: Response language
         context_file_path: Path to saved context file
         metadata: Additional metadata passed from endpoint
+        images: Optional list of image URLs (max 5)
 
     Returns:
         Formatted prompt string
@@ -53,5 +51,8 @@ def build_initial_prompt(
         for key, value in metadata.items():
             if value is not None:
                 parts.append(f"{key}: {value}")
+
+    if images:
+        parts.append(f"\n# 用户上传的图片\n用户本轮附带 {len(images)} 张图片，已随消息一同送达，请直接识别分析其内容。")
 
     return "\n".join(parts)
