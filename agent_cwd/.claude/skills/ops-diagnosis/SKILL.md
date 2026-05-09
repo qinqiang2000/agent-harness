@@ -38,6 +38,7 @@ description: >-
 | ssh_key | SSH 密钥文件名 | ubuntu_test.pem |
 | server_name | 服务器描述 | tke-sit-node01 |
 
+alert_time 优先取当前的中国上海的时间。
 如果 prompt 中未提供 SSH 信息，读取 [references/server-mapping.md](references/server-mapping.md) 根据 IP 查找。
 
 SSH 密钥路径固定为: `/datadisk/rundeck/ssh/{ssh_key}`
