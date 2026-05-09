@@ -105,8 +105,28 @@ class WecomChannelPlugin(ChannelPlugin):
             body = await request.body()
             xml_body = body.decode("utf-8")
 
-            if not crypto.verify_signature(msg_signature, timestamp, nonce):
-                logger.warning("[WeCom] Signature verification failed on POST")
+            logger.info(
+                f"[WeCom] POST callback: msg_signature={msg_signature}, "
+                f"timestamp={timestamp}, nonce={nonce}, body={xml_body[:200]}"
+            )
+
+            # POST 签名是对 Encrypt 字段内容做的，需要先从 XML 里取出来
+            try:
+                import xml.etree.ElementTree as ET
+                root = ET.fromstring(xml_body)
+                encrypt = root.findtext("Encrypt") or ""
+            except Exception as e:
+                logger.error(f"[WeCom] Failed to parse XML: {e}")
+                return PlainTextResponse("parse error", status_code=400)
+
+            logger.info(f"[WeCom] Encrypt field (first 50): {encrypt[:50]}")
+
+            if not crypto.verify_signature(msg_signature, timestamp, nonce, encrypt):
+                logger.warning(
+                    f"[WeCom] Signature verification failed on POST: "
+                    f"token={crypto.token}, timestamp={timestamp}, nonce={nonce}, "
+                    f"encrypt_prefix={encrypt[:20]}"
+                )
                 return PlainTextResponse("invalid signature", status_code=403)
 
             try:
