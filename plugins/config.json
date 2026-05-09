@@ -1,5 +1,5 @@
 {
-  "enabled": ["yunzhijia", "zhichi", "audit", "open_api", "wecom"],
+  "enabled": ["yunzhijia", "zhichi", "audit", "open_api", "wecom", "wecom_group"],
   "plugins": {
     "open_api": {
       "app_id": "${OPEN_API_APP_ID}",
@@ -35,6 +35,13 @@
       "agent_id": "${WECOM_AGENT_ID}",
       "token": "${WECOM_TOKEN}",
       "encoding_aes_key": "${WECOM_ENCODING_AES_KEY}",
+      "session_timeout": 3600,
+      "default_skill": "customer-service"
+    },
+    "wecom_group": {
+      "corp_id": "${WECOM_GROUP_CORP_ID}",
+      "token": "${WECOM_GROUP_TOKEN}",
+      "encoding_aes_key": "${WECOM_GROUP_ENCODING_AES_KEY}",
       "session_timeout": 3600,
       "default_skill": "customer-service"
     }

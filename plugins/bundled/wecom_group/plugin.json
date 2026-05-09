@@ -1,0 +1,36 @@
+{
+  "id": "wecom_group",
+  "name": "企业微信群机器人",
+  "version": "1.0.0",
+  "description": "企业微信群机器人消息接收与回复集成",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "消息接收配置中的 Token"
+      },
+      "encoding_aes_key": {
+        "type": "string",
+        "description": "消息接收配置中的 EncodingAESKey（43位）"
+      },
+      "corp_id": {
+        "type": "string",
+        "description": "企业ID（corpid）"
+      },
+      "session_timeout": {
+        "type": "integer",
+        "default": 3600,
+        "description": "会话超时时间（秒）"
+      },
+      "default_skill": {
+        "type": "string",
+        "default": "customer-service",
+        "description": "默认使用的 Skill 名称"
+      }
+    },
+    "required": ["token", "encoding_aes_key", "corp_id"]
+  }
+}
