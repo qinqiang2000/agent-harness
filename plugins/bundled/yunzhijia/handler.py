@@ -1,5 +1,6 @@
 """云之家消息处理器 - 主协调器."""
 
+import asyncio
 import json
 import logging
 import os
@@ -153,13 +154,11 @@ class YunzhijiaHandler:
                 operator_name=msg.operatorName or "",
             )
 
-        except Exception as e:
+        except BaseException as e:
             logger.error(f"[YZJ] Error processing message: {e}", exc_info=True)
-            await self.message_sender.send_text(
-                yzj_token,
-                msg.operatorOpenid,
-                "抱歉，处理消息时出现错误，请稍后再试。",
-            )
+            await self._notify_user_error(yzj_token, msg.operatorOpenid)
+            if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                raise
 
     async def _process_agent_stream(
         self,
@@ -263,20 +262,17 @@ class YunzhijiaHandler:
 
             elif event_type == "error":
                 error_data = json.loads(event.get("data", "{}"))
-                logger.error(f"[YZJ] Agent error: {error_data.get('message')}")
-                await self.message_sender.send_text(
-                    yzj_token, operator_openid,
-                    f"抱歉，处理时出现错误：{error_data.get('message', '未知错误')}",
-                )
+                err_msg = error_data.get("message", "未知错误")
+                logger.error(f"[YZJ] Agent error: {err_msg}")
+                await self._notify_user_error(yzj_token, operator_openid)
+                message_count += 1
                 t = PerfTimer.current()
                 if t:
                     t.done()
+                break
 
         if message_count == 0:
-            await self.message_sender.send_text(
-                yzj_token, operator_openid,
-                "抱歉，未能获取到答案，请稍后再试。",
-            )
+            await self._notify_user_error(yzj_token, operator_openid)
             t = PerfTimer.current()
             if t:
                 t.done()
@@ -309,6 +305,26 @@ class YunzhijiaHandler:
                 yzj_token, operator_openid, "当前没有正在运行的任务",
             )
             logger.info(f"[YZJ] No active session to interrupt")
+
+    async def _notify_user_error(
+        self,
+        yzj_token: str,
+        operator_openid: str,
+        detail: str = "",
+    ) -> None:
+        """发送异常提示，屏蔽取消信号，保证一定送达。"""
+        text = "抱歉，处理消息时出现错误，请稍后再试。"
+        if detail:
+            text = f"{text}（{detail}）"
+        try:
+            await asyncio.shield(
+                self.message_sender.send_text(yzj_token, operator_openid, text),
+            )
+        except BaseException as notify_err:
+            logger.error(
+                f"[YZJ] Failed to notify user after error: {notify_err}",
+                exc_info=True,
+            )
 
     def _clean_content(self, content: str) -> str:
         """清理消息内容（去除 @提及）"""
