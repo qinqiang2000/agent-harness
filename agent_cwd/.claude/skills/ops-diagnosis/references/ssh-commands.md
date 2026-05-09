@@ -32,6 +32,12 @@ elif command -v crictl &>/dev/null; then
   crictl stats 2>/dev/null | head -20
 fi
 
+# 查看 Java 进程的 GC 状态（确认是否是频繁 Full GC 导致 CPU 飙高）
+jstat -gcutil $HIGH_CPU_JAVA 1000 3 2>/dev/null
+
+# 查看网络连接积压情况（排查被打流或死锁）
+ss -s
+
 echo "=== 高 CPU Java 进程线程栈 ==="
 HIGH_CPU_JAVA=$(ps aux --sort=-%cpu | awk '/java/{print $2; exit}')
 if [ -n "$HIGH_CPU_JAVA" ]; then
@@ -68,6 +74,9 @@ ps aux --sort=-%mem | head -16
 echo "=== 系统负载 ==="
 uptime
 
+# 提取占用内存最大的 10 个 Slab 缓存（排查内核态内存泄漏，如 dentry cache 泄漏）
+slabtop -o | head -15 2>/dev/null
+
 echo "=== 最近 OOM 记录 ==="
 dmesg -T 2>/dev/null | grep -i "oom\|killed process" | tail -10
 
@@ -97,17 +106,20 @@ fi
 ## 磁盘空间不足
 
 ```bash
-echo "=== 磁盘使用率 ==="
-df -h | grep -v "tmpfs\|overlay\|shm"
+echo "=== 分区使用详情（按挂载点） ==="
+df -h --output=target,size,used,avail,pcent | grep -v "tmpfs\|overlay\|shm\|Mounted"
 
 echo "=== 各分区 inode 使用 ==="
 df -i | grep -v "tmpfs\|overlay\|shm"
 
+echo "=== 高使用率挂载点下 Top 子目录 ==="
+for mp in $(df -h --output=target,pcent | grep -v "tmpfs\|overlay\|shm\|Mounted" | awk '{gsub(/%/,"",$2); if($2>=70) print $1}'); do
+  echo "--- $mp ---"
+  du -sh "$mp"/* 2>/dev/null | sort -rh | head -10
+done
+
 echo "=== Top 20 大文件 (>100MB) ==="
 find / -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null | sort -k5 -rh | head -20
-
-echo "=== Top 10 大目录 ==="
-du -sh /* 2>/dev/null | sort -rh | head -10
 
 echo "=== /var/log 日志大小 ==="
 du -sh /var/log/* 2>/dev/null | sort -rh | head -10
@@ -116,6 +128,9 @@ echo "=== Docker 磁盘使用 ==="
 if command -v docker &>/dev/null; then
   docker system df 2>/dev/null
 fi
+
+# 已删除但被进程占用导致空间未释放的幽灵文件
+lsof +L1 2>/dev/null | grep deleted | sort -k7 -rn | head -10
 
 echo "=== 最近 24h 修改的大文件 ==="
 find / -xdev -type f -size +50M -mtime -1 -exec ls -lh {} \; 2>/dev/null | sort -k5 -rh | head -10
