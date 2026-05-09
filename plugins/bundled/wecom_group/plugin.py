@@ -126,6 +126,7 @@ class WecomGroupChannelPlugin(ChannelPlugin):
 
             try:
                 plaintext, _ = crypto._decrypt(encrypt)
+                logger.info(f"[WeComGroup] Decrypted plaintext: {plaintext[:300]}")
             except Exception as e:
                 logger.error(f"[WeComGroup] Failed to decrypt message: {e}")
                 return PlainTextResponse("decrypt error", status_code=500)
