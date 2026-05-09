@@ -5,7 +5,7 @@ for automated root cause analysis.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Request
@@ -132,16 +132,17 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"Alert '{alertname}' no matching type, skipping")
             continue
 
-        # Parse alert time
+        # Parse alert time (convert to Asia/Shanghai UTC+8)
         starts_at = alert.get("startsAt", "")
         if starts_at:
             try:
                 dt = datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
-                alert_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+                dt_shanghai = dt.astimezone(timezone(timedelta(hours=8)))
+                alert_time = dt_shanghai.strftime("%Y-%m-%d %H:%M:%S")
             except (ValueError, TypeError):
-                alert_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                alert_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         else:
-            alert_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            alert_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
 
         prompt = _build_diagnosis_prompt(alert_type, ip, alert_time, alertname)
         logger.info(f"Triggering ops-diagnosis: type={alert_type}, ip={ip}, time={alert_time}")
