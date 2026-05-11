@@ -66,6 +66,26 @@ class AgentService:
 
         # 创建安全配置文件
         _base_deny = [
+            # allowed_tools 只是自动批准列表；不在其中的工具仍可能被调用，
+            # 必须在此显式拒绝以下"与问题定位无关"的能力：
+            # - 联网/检索：WebFetch / WebSearch
+            # - 定时/延迟/调度：ScheduleWakeup / CronCreate / CronList / CronDelete
+            # - 后台任务/监控/远程触发：Monitor / RemoteTrigger
+            # - Jupyter：NotebookEdit
+            # - Worktree / Plan Mode：EnterWorktree / ExitWorktree / EnterPlanMode / ExitPlanMode
+            "WebFetch",
+            "WebSearch",
+            "ScheduleWakeup",
+            "CronCreate",
+            "CronList",
+            "CronDelete",
+            "Monitor",
+            "RemoteTrigger",
+            "NotebookEdit",
+            "EnterWorktree",
+            "ExitWorktree",
+            "EnterPlanMode",
+            "ExitPlanMode",
             "Read(**/.env)",
             "Read(**/.env.*)",
             "Read(**/secrets/**)",
@@ -95,10 +115,25 @@ class AgentService:
         with open(self.settings_file, "w") as f:
             json.dump(security_settings, f, indent=2)
 
+    # 单一事实源：工具及其可选路径模式。
+    # - `tools` 参数只接受裸工具名（Skill/Read/...），决定模型 system prompt 里能看到哪些工具；
+    # - `allowed_tools` 可以带路径模式（`Write(pattern)`），用于自动批准；
+    # 所以这里以"带模式"的形式集中声明，`_build_tools` 会自动剥离模式得到裸名。
     _BASE_ALLOWED_TOOLS = [
         "Skill", "Read", "Grep", "Glob", "Bash",
         "Write(**/data/issue-diagnosis/instincts/**)",
         "Edit(**/data/issue-diagnosis/instincts/**)",
+        "AskUserQuestion",
+    ]
+
+    # 真·工具白名单：传给 SDK 的 `tools` 参数会替换 claude_code preset 的默认工具列表，
+    # 只有列出的工具会进入模型 system prompt —— 未列出的工具模型根本看不见，
+    # 从源头阻止它去"尝试调用 WebFetch / ScheduleWakeup / Monitor / CronCreate 等无关工具"。
+    # 注意：只接受裸工具名，不支持 `Tool(pattern)` 模式；模式匹配仍由 allowed_tools / deny 处理。
+    _BASE_TOOLS = [
+        "Skill",
+        "Read", "Grep", "Glob", "Bash",
+        "Write", "Edit",
         "AskUserQuestion",
     ]
 
@@ -107,6 +142,12 @@ class AgentService:
         mcp_tools_env = os.getenv("ALLOWED_MCP_TOOLS", "")
         mcp_tools = [t.strip() for t in mcp_tools_env.split(",") if t.strip()]
         return self._BASE_ALLOWED_TOOLS + mcp_tools
+
+    def _build_tools(self) -> list[str]:
+        """白名单工具（进入 model system prompt 的工具集）。"""
+        mcp_tools_env = os.getenv("ALLOWED_MCP_TOOLS", "")
+        mcp_tools = [t.strip() for t in mcp_tools_env.split(",") if t.strip()]
+        return self._BASE_TOOLS + mcp_tools
 
     def build_default_options(self) -> ClaudeAgentOptions:
         """构建默认 SDK options。"""
@@ -122,6 +163,7 @@ class AgentService:
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
             settings=str(self.settings_file),
+            tools=self._build_tools(),
             allowed_tools=self._build_allowed_tools(),
             max_buffer_size=10 * 1024 * 1024,
             cwd=str(AGENT_CWD),
