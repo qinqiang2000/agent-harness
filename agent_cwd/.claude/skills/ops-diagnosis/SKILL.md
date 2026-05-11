@@ -164,7 +164,7 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 
 建议:
 {1-2条最直接的恢复建议。}
-
+```
 
 
 ## Step 6：推送云之家
