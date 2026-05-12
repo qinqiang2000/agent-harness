@@ -118,8 +118,10 @@ for mp in $(df -h --output=target,pcent | grep -v "tmpfs\|overlay\|shm\|Mounted"
   du -sh "$mp"/* 2>/dev/null | sort -rh | head -10
 done
 
-echo "=== Top 20 大文件 (>100MB) ==="
-find / -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null | sort -k5 -rh | head -20
+echo "=== Top 20 大文件 (>100MB，仅高使用率挂载点) ==="
+for mp in $(df -h --output=target,pcent | grep -v "tmpfs\|overlay\|shm\|Mounted" | awk '{gsub(/%/,"",$2); if($2>=70) print $1}'); do
+  timeout 30 find "$mp" -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null
+done | sort -k5 -rh | head -20
 
 echo "=== /var/log 日志大小 ==="
 du -sh /var/log/* 2>/dev/null | sort -rh | head -10
@@ -132,8 +134,10 @@ fi
 # 已删除但被进程占用导致空间未释放的幽灵文件
 lsof +L1 2>/dev/null | grep deleted | sort -k7 -rn | head -10
 
-echo "=== 最近 24h 修改的大文件 ==="
-find / -xdev -type f -size +50M -mtime -1 -exec ls -lh {} \; 2>/dev/null | sort -k5 -rh | head -10
+echo "=== 最近 24h 修改的大文件（仅高使用率挂载点） ==="
+for mp in $(df -h --output=target,pcent | grep -v "tmpfs\|overlay\|shm\|Mounted" | awk '{gsub(/%/,"",$2); if($2>=70) print $1}'); do
+  timeout 30 find "$mp" -xdev -type f -size +50M -mtime -1 -exec ls -lh {} \; 2>/dev/null
+done | sort -k5 -rh | head -10
 
 echo "=== PostgreSQL 数据库大小排名 ==="
 if command -v psql &>/dev/null; then

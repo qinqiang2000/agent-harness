@@ -177,11 +177,11 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 
 ## Step 6：推送云之家
 
-将 Step 5 的结论保存为诊断报告并推送摘要到云之家群：
+**🚨 强制执行顺序：必须先 6.1 保存报告拿到 report_id，再 6.2 推送摘要。严禁跳过 6.1 直接推送完整内容到云之家！**
 
-### 6.1 保存完整报告
+### 6.1 保存完整报告（必须执行，不可跳过）
 
-通过 HTTP 接口保存完整诊断报告（包含采集的原始数据和分析过程）：
+通过 HTTP 接口保存完整诊断报告（包含采集的原始数据和分析过程），获取 report_id：
 
 ```bash
 curl -s -X POST "http://127.0.0.1:9090/api/reports/" \
@@ -191,25 +191,28 @@ curl -s -X POST "http://127.0.0.1:9090/api/reports/" \
     "ip": "{target_ip}",
     "alert_type": "{alert_type}",
     "alert_time": "{alert_time}",
-    "summary": "{Step 5 结论的第一行摘要}",
-    "full_report": "{完整诊断内容，包含采集数据和分析}"
+    "summary": "{Step 5 结论的一句话摘要}",
+    "full_report": "{完整诊断内容，包含采集数据和分析过程}"
   }'
 ```
 
-接口返回 `{"report_id": "xxxx"}`。
+接口返回 `{"report_id": "xxxx"}`，**必须提取 report_id 用于下一步**。
 
-### 6.2 推送摘要到云之家
+### 6.2 推送摘要到云之家（严禁推送完整分析内容）
 
-云之家只推送简短摘要 + 详情链接（控制在 150 字以内）：
+**⚠️ 云之家消息只允许推送精简摘要 + 报告链接，严禁将完整根因分析、建议等内容直接推送！**
+
+推送格式（控制在 150 字以内）：
 
 ```bash
 curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={yzj_token}" \
   -H "Content-Type: application/json" \
-  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n\n{一句话根因摘要}\n\n详情: {SERVICE_BASE_URL}/api/reports/{report_id}"}'
+  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: {SERVICE_BASE_URL}/api/reports/{report_id}"}'
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
-**⚠️ SERVICE_BASE_URL 从环境变量获取，格式如 `http://129.226.88.226:9090`。**
+**⚠️ SERVICE_BASE_URL 从环境变量 `$SERVICE_BASE_URL` 获取，格式如 `http://129.226.88.226:9090`。**
+**⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于报告页面中。**
 
 推送完成后，将同样的摘要作为最终回复输出。
 
