@@ -8,7 +8,7 @@ services:
       - "${PORT:-9123}:9123"
     volumes:
       # SSH 密钥挂载（宿主机路径按实际情况改）
-      - ./ssh-keys:/opt/agent-harness/agent_cwd/ssh-keys:ro
+      - ./agent_cwd/ssh-keys:/opt/agent-harness/agent_cwd/ssh-keys:ro
       # .env 文件
       - ./.env:/opt/agent-harness/.env:ro
       # 数据持久化（诊断案例等）
