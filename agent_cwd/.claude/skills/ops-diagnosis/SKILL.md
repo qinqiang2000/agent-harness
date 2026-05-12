@@ -177,17 +177,41 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 
 ## Step 6：推送云之家
 
-将 Step 5 的结论推送到云之家群：
+将 Step 5 的结论保存为诊断报告并推送摘要到云之家群：
+
+### 6.1 保存完整报告
+
+通过 HTTP 接口保存完整诊断报告（包含采集的原始数据和分析过程）：
+
+```bash
+curl -s -X POST "http://127.0.0.1:9090/api/reports/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "server_name": "{server_name}",
+    "ip": "{target_ip}",
+    "alert_type": "{alert_type}",
+    "alert_time": "{alert_time}",
+    "summary": "{Step 5 结论的第一行摘要}",
+    "full_report": "{完整诊断内容，包含采集数据和分析}"
+  }'
+```
+
+接口返回 `{"report_id": "xxxx"}`。
+
+### 6.2 推送摘要到云之家
+
+云之家只推送简短摘要 + 详情链接（控制在 150 字以内）：
 
 ```bash
 curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={yzj_token}" \
   -H "Content-Type: application/json" \
-  -d '{"msgType": 0, "content": "{结论文本，注意转义双引号和换行符}"'
+  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n\n{一句话根因摘要}\n\n详情: {SERVICE_BASE_URL}/api/reports/{report_id}"}'
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
+**⚠️ SERVICE_BASE_URL 从环境变量获取，格式如 `http://129.226.88.226:9090`。**
 
-推送完成后，将同样的结论作为最终回复输出。
+推送完成后，将同样的摘要作为最终回复输出。
 
 ---
 
