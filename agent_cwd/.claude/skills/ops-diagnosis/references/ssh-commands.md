@@ -134,6 +134,23 @@ lsof +L1 2>/dev/null | grep deleted | sort -k7 -rn | head -10
 
 echo "=== 最近 24h 修改的大文件 ==="
 find / -xdev -type f -size +50M -mtime -1 -exec ls -lh {} \; 2>/dev/null | sort -k5 -rh | head -10
+
+echo "=== PostgreSQL 数据库大小排名 ==="
+if command -v psql &>/dev/null; then
+  sudo -u postgres psql -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size FROM pg_database ORDER BY pg_database_size(datname) DESC;" 2>/dev/null
+  echo "=== PostgreSQL 最大表 Top 10（当前最大库） ==="
+  LARGEST_DB=$(sudo -u postgres psql -tAc "SELECT datname FROM pg_database WHERE datname NOT IN ('template0','template1','postgres') ORDER BY pg_database_size(datname) DESC LIMIT 1;" 2>/dev/null)
+  if [ -n "$LARGEST_DB" ]; then
+    echo "最大库: $LARGEST_DB"
+    sudo -u postgres psql -d "$LARGEST_DB" -c "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS total_size, pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS table_only, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename) - pg_relation_size(schemaname||'.'||tablename)) AS indexes_toast FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC LIMIT 10;" 2>/dev/null
+  fi
+  echo "=== WAL 日志大小 ==="
+  sudo -u postgres psql -c "SELECT pg_size_pretty(sum(size)) AS wal_total FROM pg_ls_waldir();" 2>/dev/null
+  echo "=== WAL 归档状态 ==="
+  sudo -u postgres psql -c "SELECT archived_count, failed_count, last_archived_wal, last_archived_time FROM pg_stat_archiver;" 2>/dev/null
+  echo "=== 死元组最多的表 Top 10（需要 VACUUM） ==="
+  sudo -u postgres psql -d "$LARGEST_DB" -c "SELECT schemaname, relname, n_dead_tup, pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) AS size, last_autovacuum FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 10;" 2>/dev/null
+fi
 ```
 
 ---
