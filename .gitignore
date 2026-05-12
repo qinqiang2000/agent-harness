@@ -53,3 +53,8 @@ plugins/bundled/audit/tmp/*
 
 # Skill sensitive config
 agent_cwd/.claude/skills/issue-diagnosis/db/db_config.json
+
+# SSH keys (only .gitkeep tracked)
+agent_cwd/ssh-keys/**/*.pem
+agent_cwd/ssh-keys/**/*_rsa
+agent_cwd/ssh-keys/**/*.key
