@@ -40,7 +40,7 @@ description: >-
 
 如果 prompt 中未提供 SSH 信息，读取 [references/server-mapping.md](references/server-mapping.md) 根据 IP 查找。
 
-SSH 密钥路径固定为: `/datadisk/rundeck/ssh/{ssh_key}`
+SSH 密钥路径固定为: `./agent_cwd/ssh-keys/tencent或aws/{ssh_key}`
 
 ---
 
