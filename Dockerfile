@@ -18,6 +18,7 @@ COPY . .
 # SSH 密钥目录（运行时通过 volume 挂载）
 RUN mkdir -p agent_cwd/ssh-keys/aws agent_cwd/ssh-keys/tencent
 
-EXPOSE 9090
+EXPOSE 9123
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "9090"]
+# 容器内固定 9123，宿主机端口通过 docker-compose.yml 的 PORT 环境变量映射
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "9123"]

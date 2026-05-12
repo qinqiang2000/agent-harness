@@ -36,7 +36,7 @@ fi
 set +a
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-9090}"
+PORT="${PORT:-9123}"
 
 # Colors for output
 RED='\033[0;31m'

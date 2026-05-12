@@ -50,7 +50,7 @@ GLM_AUTH_TOKEN=your_glm_token_here
 CLAUDE_ROUTER_AUTH_TOKEN=test # 不需要配置
 
 # 配置服务端口
-PORT=9090
+PORT=9123
 
 # 其他配置...
 ```
@@ -73,12 +73,12 @@ PORT=9090
 ./run.sh restart
 ```
 
-服务启动后，默认运行在 9090 端口（可通过 `PORT` 环境变量配置）。
+服务启动后，默认运行在 9123 端口（可通过 `PORT` 环境变量配置）。
 
 访问以下地址：
-- API 根路径: http://localhost:9090
-- API 文档: http://localhost:9090/docs
-- 健康检查: http://localhost:9090/api/health
+- API 根路径: http://localhost:9123
+- API 文档: http://localhost:9123/docs
+- 健康检查: http://localhost:9123/api/health
 
 日志文件位于 `log/app.log`。
 
@@ -155,7 +155,7 @@ Skills 是从 `agent_cwd/.claude/skills/` 加载的 [Agent Skills](https://platf
 ### 通用查询接口
 
 ```bash
-curl -X POST "http://localhost:9090/api/query" \
+curl -X POST "http://localhost:9123/api/query" \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "test-user",
@@ -181,7 +181,7 @@ curl -X POST "http://localhost:9090/api/query" \
 ### 中断会话
 
 ```bash
-curl -X POST "http://localhost:9090/api/interrupt/{session_id}"
+curl -X POST "http://localhost:9123/api/interrupt/{session_id}"
 ```
 
 ## 插件系统
@@ -239,7 +239,7 @@ CLAUDE_ROUTER_AUTH_TOKEN=xxx
 CLAUDE_ROUTER_PROXY=http://127.0.0.1:7890  # 可选
 
 # 服务配置
-PORT=9090
+PORT=9123
 LOG_LEVEL=INFO
 
 # 插件额外搜索路径（可选，冒号分隔）

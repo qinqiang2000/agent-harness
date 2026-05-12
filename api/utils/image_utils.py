@@ -23,10 +23,10 @@ def convert_relative_to_url(relative_path: str, base_url: str) -> str:
 
     Args:
         relative_path: 如 ../../../../assets/abc/1234.png
-        base_url: 如 http://host:9090
+        base_url: 如 http://host:9123
 
     Returns:
-        完整 URL，如 http://host:9090/kb/assets/abc/1234.png
+        完整 URL，如 http://host:9123/kb/assets/abc/1234.png
     """
     # 提取 assets/xxx/yyy.png 部分
     match = re.search(r'assets/([^/]+/[^)\s]+)', relative_path)

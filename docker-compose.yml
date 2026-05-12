@@ -5,7 +5,7 @@ services:
     build: .
     container_name: agent-harness
     ports:
-      - "${PORT:-9090}:9090"
+      - "${PORT:-9123}:9123"
     volumes:
       # SSH 密钥挂载（宿主机路径按实际情况改）
       - ./ssh-keys:/opt/agent-harness/agent_cwd/ssh-keys:ro
