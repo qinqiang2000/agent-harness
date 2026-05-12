@@ -72,20 +72,20 @@ class AgentService:
             # - 定时/延迟/调度：ScheduleWakeup / CronCreate / CronList / CronDelete
             # - 后台任务/监控/远程触发：Monitor / RemoteTrigger
             # - Jupyter：NotebookEdit
-            # - Worktree / Plan Mode：EnterWorktree / ExitWorktree / EnterPlanMode / ExitPlanMode
-            "WebFetch",
-            "WebSearch",
-            "ScheduleWakeup",
-            "CronCreate",
-            "CronList",
-            "CronDelete",
-            "Monitor",
-            "RemoteTrigger",
-            "NotebookEdit",
-            "EnterWorktree",
-            "ExitWorktree",
-            "EnterPlanMode",
-            "ExitPlanMode",
+            # - Worktree / Plan Mode:EnterWorktree / ExitWorktree / EnterPlanMode / ExitPlanMode
+            "WebFetch(*)",
+            "WebSearch(*)",
+            "ScheduleWakeup(*)",
+            "CronCreate(*)",
+            "CronList(*)",
+            "CronDelete(*)",
+            "Monitor(*)",
+            "RemoteTrigger(*)",
+            "NotebookEdit(*)",
+            "EnterWorktree(*)",
+            "ExitWorktree(*)",
+            "EnterPlanMode(*)",
+            "ExitPlanMode(*)",
             "Read(**/.env)",
             "Read(**/.env.*)",
             "Read(**/secrets/**)",
@@ -124,17 +124,18 @@ class AgentService:
         "Write(**/data/issue-diagnosis/instincts/**)",
         "Edit(**/data/issue-diagnosis/instincts/**)",
         "AskUserQuestion",
+        "Task",
     ]
 
-    # 真·工具白名单：传给 SDK 的 `tools` 参数会替换 claude_code preset 的默认工具列表，
-    # 只有列出的工具会进入模型 system prompt —— 未列出的工具模型根本看不见，
-    # 从源头阻止它去"尝试调用 WebFetch / ScheduleWakeup / Monitor / CronCreate 等无关工具"。
-    # 注意：只接受裸工具名，不支持 `Tool(pattern)` 模式；模式匹配仍由 allowed_tools / deny 处理。
+    # 真·工具白名单：传给 SDK 的 `tools` 参数对应 CLI --tools，决定 CLI 加载哪些内置工具
+    # (从而减少模型 system prompt 的 token 消耗)。未列出的工具模型根本看不见。
+    # 注意：`tools` 只接受裸工具名，路径模式/匹配仍由 allowed_tools / deny 处理。
     _BASE_TOOLS = [
         "Skill",
         "Read", "Grep", "Glob", "Bash",
         "Write", "Edit",
         "AskUserQuestion",
+        "Task",
     ]
 
     def _build_allowed_tools(self) -> list[str]:
@@ -144,7 +145,7 @@ class AgentService:
         return self._BASE_ALLOWED_TOOLS + mcp_tools
 
     def _build_tools(self) -> list[str]:
-        """白名单工具（进入 model system prompt 的工具集）。"""
+        """白名单工具（进入模型 system prompt 的工具集）。"""
         mcp_tools_env = os.getenv("ALLOWED_MCP_TOOLS", "")
         mcp_tools = [t.strip() for t in mcp_tools_env.split(",") if t.strip()]
         return self._BASE_TOOLS + mcp_tools

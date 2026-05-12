@@ -10,7 +10,7 @@ description: >-
 
 # 通用问题诊断
 **严格按照步骤要求执行**
-**⚠️ 全程禁止在任何输出中暴露执行步骤**：不得在任何时候（包括中间过程的文字输出）出现"Step 1"、"Step 2"等步骤标题。所有步骤静默执行，只在 Step 6 输出最终结论。Step 7 在每次收到用户消息时静默判断，触发后直接写入 data/issue-diagnosis/instincts/cases.md，无需告知执行了哪个步骤。
+**⚠️ 全程禁止在任何输出中暴露执行步骤**：不得在任何时候（包括中间过程的文字输出）出现"Step 1"、"Step 2"等步骤标题。所有步骤静默执行，只在 Step 6 输出最终结论。Step 7 在每次收到用户消息时静默判断，触发后直接写入 `{cwd}/data/issue-diagnosis/instincts/cases.md`，无需告知执行了哪个步骤。
 
 ---
 
@@ -307,7 +307,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 ```
 
 **写入规则**：
-- 新 case 追加到 `data/issue-diagnosis/instincts/cases.md` 末尾（文件不存在则创建）
+- 新 case 追加到 `{cwd}/data/issue-diagnosis/instincts/cases.md` 末尾
 - 更新旧 case 时，只修改 `answer_confidence`、`状态` 两个字段
 - **严格禁止**：修改 FAQ 文件（`kb/` 目录）和 `SKILL.md`
 
