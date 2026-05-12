@@ -207,11 +207,11 @@ curl -s -X POST "http://127.0.0.1:9123/api/reports/" \
 ```bash
 curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={yzj_token}" \
   -H "Content-Type: application/json" \
-  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: {SERVICE_BASE_URL}/api/reports/{report_id}"}'
+  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: http://42.193.101.189:9123/api/reports/{report_id}"}'
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
-**⚠️ SERVICE_BASE_URL 从环境变量 `$SERVICE_BASE_URL` 获取，格式如 `http://42.193.101.189:9123`。**
+**⚠️ SERVICE_BASE_URL 固定为 `http://42.193.101.189:9123`，直接硬编码到 URL 中，不要使用环境变量。**
 **⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于报告页面中。**
 
 推送完成后，将同样的摘要作为最终回复输出。
