@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# 使用国内镜像源加速
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null
+
 # 安装 SSH 客户端和基础工具
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
@@ -10,7 +14,7 @@ WORKDIR /opt/agent-harness
 
 # 先装依赖（利用 Docker 缓存）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 复制项目代码
 COPY . .
