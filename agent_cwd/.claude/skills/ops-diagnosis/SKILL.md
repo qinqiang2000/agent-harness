@@ -33,7 +33,7 @@ description: >-
 | alert_type | 告警类型 | CPU / Memory / Disk / IO |
 | target_ip | 目标服务器 IP | 172.31.36.31 |
 | alert_time | 告警触发时间 | 2026-05-06 14:30:00 |
-| yzj_token | 云之家群机器人 Token | token_for_test_46_xxx |
+| yzj_token | 云之家群机器人 Token（从环境变量 `$YZJ_ALERT_WEBHOOK_TOKEN` 获取） | e74c5794... |
 | ssh_user | SSH 用户 | ubuntu |
 | ssh_key | SSH 密钥文件名 | ubuntu_test.pem |
 | server_name | 服务器描述 | tke-sit-node01 |
@@ -157,7 +157,8 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 **输出结论格式**（纯文本）：
 
 ```text
-【{alert_type}告警诊断】{server_name} ({target_ip})
+【{alert_type}告警诊断】
+{server_name} ({target_ip})
 时间: {alert_time}
 
 状态: 
@@ -205,13 +206,14 @@ curl -s -X POST "http://127.0.0.1:9123/api/reports/" \
 推送格式（控制在 150 字以内）：
 
 ```bash
-curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={yzj_token}" \
+curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=$YZJ_ALERT_WEBHOOK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: http://42.193.101.189:9123/api/reports/{report_id}"}'
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
-**⚠️ SERVICE_BASE_URL 固定为 `http://42.193.101.189:9123`，直接硬编码到 URL 中，不要使用环境变量。**
+**⚠️ `$YZJ_ALERT_WEBHOOK_TOKEN` 从环境变量获取，是云之家群机器人的 token。**
+**⚠️ SERVICE_BASE_URL 固定为 `http://42.193.101.189:9123`，直接硬编码到 URL 中。**
 **⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于报告页面中。**
 
 推送完成后，将同样的摘要作为最终回复输出。

@@ -4,7 +4,7 @@ SSH 连接信息。根据目标 IP 查找对应配置。
 
 SSH 密钥基础目录: `ssh-keys/`（相对于 agent_cwd）
 
-云之家 Webhook（所有服务器统一）: `https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=e74c5794699d43b1b8beeabc6d5bc8f7`
+云之家 Webhook（所有服务器统一）: 从环境变量 `$YZJ_ALERT_WEBHOOK_TOKEN` 获取，完整 URL 为 `https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=$YZJ_ALERT_WEBHOOK_TOKEN`
 
 ---
 
