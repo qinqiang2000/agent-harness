@@ -154,7 +154,7 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 2. **限定分析范围**：根因分析必须限定在触发告警的特定对象内。例如：如果 `/datadisk` 告警，只分析 `/datadisk` 目录下的超大文件或目录，**绝对忽略**其他分区（如 `/root` 或 `/var`）下的大文件。
 3. 关联代码变更：如果告警时间与某次部署时间高度吻合（部署后 0-60 分钟内）且找到代码匹配，才输出可疑代码变更。否则不输出代码部分。
 
-**输出结论格式**（纯文本，严格控制在 300 字以内）：
+**输出结论格式**（纯文本）：
 
 ```text
 【{alert_type}告警诊断】{server_name} ({target_ip})
@@ -184,7 +184,7 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 通过 HTTP 接口保存完整诊断报告（包含采集的原始数据和分析过程），获取 report_id：
 
 ```bash
-curl -s -X POST "http://127.0.0.1:9090/api/reports/" \
+curl -s -X POST "http://127.0.0.1:9123/api/reports/" \
   -H "Content-Type: application/json" \
   -d '{
     "server_name": "{server_name}",
@@ -211,7 +211,7 @@ curl -s -X POST "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
-**⚠️ SERVICE_BASE_URL 从环境变量 `$SERVICE_BASE_URL` 获取，格式如 `http://129.226.88.226:9090`。**
+**⚠️ SERVICE_BASE_URL 从环境变量 `$SERVICE_BASE_URL` 获取，格式如 `http://42.193.101.189:9123`。**
 **⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于报告页面中。**
 
 推送完成后，将同样的摘要作为最终回复输出。
