@@ -124,7 +124,8 @@ class SDKSessionCache:
                 )
             else:
                 self._cache.pop(session_id)
-                asyncio.create_task(self._disconnect(entry.client))
+                t = asyncio.create_task(self._disconnect(entry.client))
+                t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                 logger.warning(f"[SessionCache] 丢弃不健康连接: {session_id}")
 
     async def _reaper(self) -> None:
@@ -144,7 +145,8 @@ class SDKSessionCache:
                     logger.info(f"[SessionCache] TTL 过期，回收连接: {sid}")
 
             for client in clients_to_close:
-                asyncio.create_task(self._disconnect(client))
+                t = asyncio.create_task(self._disconnect(client))
+                t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
     @staticmethod
     async def _disconnect(client: ClaudeSDKClient) -> None:

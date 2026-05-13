@@ -404,7 +404,10 @@ class AgentService:
                     if asked_user_question:
                         healthy = False
                     if cache and cache_key:
-                        await cache.release(cache_key, healthy=healthy)
+                        try:
+                            await cache.release(cache_key, healthy=healthy)
+                        except Exception as _e:
+                            logger.warning(f"[SessionCache] release error (ignored): {_e}")
                     elif not cache:
                         try:
                             await client.disconnect()

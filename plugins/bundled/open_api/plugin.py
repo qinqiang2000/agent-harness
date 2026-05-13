@@ -62,8 +62,10 @@ class OpenApiChannelPlugin(ChannelPlugin):
             session_service=api.session_service,
             config=self.config,
         )
-        self._async_tasks: Dict[str, Any] = {}  # task_id -> {result, done_at}
-        self._task_ttl: int = self.config.get("async_task_ttl", 300)
+        self._async_tasks: Dict[str, Any] = {}  # task_id -> {result, done_at, created_at}
+        self._task_ttl: int = self.config.get("async_task_ttl", 1800)
+        self._task_pending_ttl: int = self.config.get("async_task_pending_ttl", 1800)
+        self._cleanup_task: Any = None
 
     def get_meta(self) -> ChannelMeta:
         return ChannelMeta(
@@ -92,11 +94,18 @@ class OpenApiChannelPlugin(ChannelPlugin):
         now = time.time()
         expired = [
             tid for tid, entry in self._async_tasks.items()
-            if entry["result"].status != "PENDING"
-            and now - (entry.get("done_at") or now) > self._task_ttl
+            if (
+                entry["result"].status != "PENDING"
+                and now - (entry.get("done_at") or now) > self._task_ttl
+            ) or (
+                entry["result"].status == "PENDING"
+                and now - entry.get("created_at", now) > self._task_pending_ttl
+            )
         ]
         for tid in expired:
             del self._async_tasks[tid]
+        if expired:
+            logger.info(f"[OpenAPI] Cleaned {len(expired)} expired async tasks")
 
     def create_router(self) -> APIRouter:
         router = APIRouter(tags=["open-api"])
@@ -152,7 +161,7 @@ class OpenApiChannelPlugin(ChannelPlugin):
                 status="PENDING",
                 ai_agent_cid=req.ai_agent_cid,
             )
-            self._async_tasks[task_id] = {"result": result, "done_at": None}
+            self._async_tasks[task_id] = {"result": result, "done_at": None, "created_at": time.time()}
 
             async def _run():
                 try:
@@ -175,7 +184,8 @@ class OpenApiChannelPlugin(ChannelPlugin):
                     except Exception as e:
                         logger.error(f"[OpenAPI] Callback failed for task {task_id}: {e}")
 
-            asyncio.create_task(_run())
+            task = asyncio.create_task(_run())
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
             return BaseResp(data=AsyncAnswerRespData(
                 task_id=task_id,
                 ai_agent_cid=req.ai_agent_cid,
@@ -222,10 +232,22 @@ class OpenApiChannelPlugin(ChannelPlugin):
         return False
 
     async def on_start(self) -> None:
+        self._cleanup_task = asyncio.create_task(self._background_cleanup())
         logger.info("[OpenAPI] Plugin started")
 
     async def on_stop(self) -> None:
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
         logger.info("[OpenAPI] Plugin stopped")
+
+    async def _background_cleanup(self) -> None:
+        while True:
+            await asyncio.sleep(3600)
+            self._cleanup_tasks()
 
 
 def register(api: PluginAPI) -> OpenApiChannelPlugin:
