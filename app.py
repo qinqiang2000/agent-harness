@@ -9,6 +9,30 @@ from dotenv import load_dotenv
 # Load environment variables from .env
 load_dotenv('.env')
 
+# Patch claude_agent_sdk to tolerate missing 'signature' in thinking blocks
+# (DeepSeek returns thinking blocks without this Anthropic-specific field)
+try:
+    from claude_agent_sdk._internal import message_parser as _mp
+    _orig_parse = _mp.parse_message
+
+    def _patched_parse(data):
+        if isinstance(data, dict) and data.get("type") == "assistant":
+            msg = data.get("message", {})
+            for block in msg.get("content", []):
+                if block.get("type") == "thinking":
+                    sig = block.get("signature")
+                    logging.getLogger(__name__).debug(
+                        f"[SDK patch] thinking block signature={'<missing>' if sig is None else repr(sig[:20]) if sig else '<empty>'}"
+                    )
+                    if sig is None:
+                        block["signature"] = ""
+        return _orig_parse(data)
+
+    _mp.parse_message = _patched_parse
+    logging.getLogger(__name__).info("[SDK patch] message_parser patched for missing thinking signature")
+except Exception as e:
+    logging.getLogger(__name__).warning(f"[SDK patch] failed to patch message_parser: {e}")
+
 # Configure logging BEFORE importing any modules that use logger
 log_level = os.getenv('LOG_LEVEL', 'DEBUG')
 logging.basicConfig(
