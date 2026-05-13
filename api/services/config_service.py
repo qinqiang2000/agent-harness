@@ -32,6 +32,7 @@ class ModelConfig:
     vision_helper: Optional[str] = None  # 指向另一个 config 名，用于图片识别降级
     vision_model: Optional[str] = None  # 作为 vision_helper 被调用时使用的模型 ID
     extra_env: Dict[str, str] = field(default_factory=dict)
+    disable_thinking: bool = False
 
     def get_auth_token(self) -> str:
         """Get auth token from environment variable."""
@@ -169,6 +170,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         supports_vision=False,
         vision_helper="litellm",
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
+        disable_thinking=True,
     ),
     "deepseek": ModelConfig(
         name="deepseek",
@@ -186,6 +188,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         supports_vision=False,
         vision_helper="litellm",
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
+        disable_thinking=True,
     ),
 }
 

@@ -169,6 +169,10 @@ class AgentService:
             max_buffer_size=10 * 1024 * 1024,
             cwd=str(AGENT_CWD),
             add_dirs=[],
+            thinking={"type": "disabled"} if (
+                _current_config.disable_thinking or
+                os.getenv("DISABLE_THINKING", "").lower() in ("1", "true", "yes")
+            ) else None,
         )
 
     async def process_query(
