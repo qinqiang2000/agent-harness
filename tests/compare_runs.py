@@ -66,6 +66,7 @@ def main():
     if b_ver != c_ver and b_ver != "unknown":
         print(f"\n  Skill 变更: {b_ver} → {c_ver}")
 
+    # LLM 评分维度对比
     print(f"\n{'维度':<14} {'基准':>8} {'候选':>8} {'变化':>14}")
     print("-" * 48)
 
@@ -95,6 +96,49 @@ def main():
     print(f"{'综合分':<14} {b_avg_q:>8.2f} {c_avg_q:>8.2f} {sign}{delta_q:>6.2f}/10")
     print(f"{'Bad cases':<14} {b_bad:>8} {c_bad:>8} {c_bad-b_bad:>+8}")
 
+    # 行为验证对比
+    b_bcheck = [r for r in b_results if r.get("behavior_pass") is not None]
+    c_bcheck = [r for r in c_results if r.get("behavior_pass") is not None]
+    if b_bcheck and c_bcheck:
+        b_bpass = sum(1 for r in b_bcheck if r.get("behavior_pass")) / len(b_bcheck) * 100
+        c_bpass = sum(1 for r in c_bcheck if r.get("behavior_pass")) / len(c_bcheck) * 100
+        delta_b = c_bpass - b_bpass
+        sign_b = "+" if delta_b >= 0 else ""
+        marker_b = " ★★" if abs(delta_b) > 5 else ""
+        print(f"{'行为验证通过率':<14} {b_bpass:>7.1f}% {c_bpass:>7.1f}% {sign_b}{delta_b:>5.1f}%{marker_b}")
+
+    # 工具调用效率对比
+    def tool_avg(results, name):
+        counts = [sum(1 for tc in (r.get("tool_calls") or []) if tc.get("name") == name)
+                  for r in results]
+        return sum(counts) / len(counts) if counts else 0
+
+    b_grep = tool_avg(b_results, "Grep")
+    c_grep = tool_avg(c_results, "Grep")
+    b_read = tool_avg(b_results, "Read")
+    c_read = tool_avg(c_results, "Read")
+    if b_grep > 0 or c_grep > 0:
+        delta_grep = c_grep - b_grep
+        sign_g = "+" if delta_grep >= 0 else ""
+        print(f"{'Grep次数/题':<14} {b_grep:>8.1f} {c_grep:>8.1f} {sign_g}{delta_grep:>+7.1f}")
+    if b_read > 0 or c_read > 0:
+        delta_read = c_read - b_read
+        sign_r = "+" if delta_read >= 0 else ""
+        print(f"{'Read次数/题':<14} {b_read:>8.1f} {c_read:>8.1f} {sign_r}{delta_read:>+7.1f}")
+
+    # 速度对比
+    b_durations = [r.get("duration_ms", 0) for r in b_results if r.get("duration_ms", 0) > 0]
+    c_durations = [r.get("duration_ms", 0) for r in c_results if r.get("duration_ms", 0) > 0]
+    if b_durations and c_durations:
+        b_avg_ms = sum(b_durations) / len(b_durations)
+        c_avg_ms = sum(c_durations) / len(c_durations)
+        b_p90_ms = sorted(b_durations)[int(len(b_durations) * 0.9)]
+        c_p90_ms = sorted(c_durations)[int(len(c_durations) * 0.9)]
+        delta_ms = c_avg_ms - b_avg_ms
+        sign_ms = "+" if delta_ms >= 0 else ""
+        print(f"{'响应时间(avg)':<14} {b_avg_ms/1000:>7.1f}s {c_avg_ms/1000:>7.1f}s  {sign_ms}{delta_ms/1000:.1f}s")
+        print(f"{'响应时间(p90)':<14} {b_p90_ms/1000:>7.1f}s {c_p90_ms/1000:>7.1f}s")
+
     # 决策建议
     print(f"\n{'='*60}")
     print("决策建议:")
@@ -110,6 +154,13 @@ def main():
         accepts.append(f"Bad case 减少 {b_bad - c_bad} 个")
     elif c_bad > b_bad + 2:
         rejects.append(f"Bad case 增加 {c_bad - b_bad} 个")
+
+    # 行为验证是硬性门槛
+    if b_bcheck and c_bcheck:
+        if c_bpass > b_bpass + 5:
+            accepts.append(f"行为验证通过率提升 {delta_b:+.1f}%")
+        elif c_bpass < b_bpass - 5:
+            rejects.append(f"行为验证通过率下降 {delta_b:.1f}%（硬性回退）")
 
     if rejects:
         print(f"  ❌ REJECT - {'; '.join(rejects)}")
@@ -127,16 +178,26 @@ def main():
 
     regressions = []
     improvements = []
+    behavior_regressions = []
     for q in common:
-        b_s = b_by_q[q].get("quality_score", -1)
-        c_s = c_by_q[q].get("quality_score", -1)
-        if b_s < 0 or c_s < 0:
-            continue
-        diff = c_s - b_s
-        if diff < -1.5:
-            regressions.append((q, b_s, c_s, diff))
-        elif diff > 1.5:
-            improvements.append((q, b_s, c_s, diff))
+        b_r = b_by_q[q]
+        c_r = c_by_q[q]
+        b_s = b_r.get("quality_score", -1)
+        c_s = c_r.get("quality_score", -1)
+        if b_s >= 0 and c_s >= 0:
+            diff = c_s - b_s
+            if diff < -1.5:
+                regressions.append((q, b_s, c_s, diff))
+            elif diff > 1.5:
+                improvements.append((q, b_s, c_s, diff))
+        # 行为验证回退
+        if b_r.get("behavior_pass") is True and c_r.get("behavior_pass") is False:
+            behavior_regressions.append(q)
+
+    if behavior_regressions:
+        print(f"\n  🚨 行为验证回退 (基准通过但候选失败):")
+        for q in behavior_regressions[:5]:
+            print(f"     {q[:60]}...")
 
     if regressions:
         print(f"\n  ⚠️  回归警告 (候选比基准下降 > 1.5 分):")
