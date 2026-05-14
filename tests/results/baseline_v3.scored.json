@@ -1,0 +1,4162 @@
+{
+  "_meta": {
+    "name": "qa_questions",
+    "timestamp": "20260513_172146",
+    "total": 32,
+    "asked_product_count": 14,
+    "has_fallback_count": 0,
+    "avg_duration_ms": 37448.1,
+    "tool_call_summary": {
+      "Grep": 146,
+      "Read": 97,
+      "Skill": 31,
+      "total": 331
+    },
+    "scored_at": "2026-05-13T17:31:11.134398",
+    "avg_quality_score": 7.665,
+    "bad_case_count": 7
+  },
+  "results": [
+    {
+      "question": "金蝶云星空旗舰版公有云的发票云账号每天都要重新登录是怎么回事",
+      "answer": "用户明确提到了 **星空旗舰版**，这是一个售后支持问题 — 发票云账号每天都需要重新登录，属于登录态/Token过期相关的故障排查。\n\n我现在搜索知识库查找相关信息。Found a relevant document about tax bureau system upgrade causing login issues. Let me read it.文档已找到，这是税局系统升级后对登录态限制的通用指引，适用于星空旗舰版。我现在整理最终答案。\n\n根据 [关于税局系统升级后账号登录次数限制以及频繁掉线的通知及应对指引](https://www.yuque.com/nbklz3/tadboa/iku831gido72566g) 文档，这是由于**税务系统升级后对电子税局账号的在线状态做了强制限制**，属于税局侧的安全策略，并非发票云本身的问题：\n\n**主要原因：**\n1. **在线时长限制**：电子税局强制会话超时，单一业务场景下账号在线时间不超过12小时，因此每天至少需要重新登录一次。\n2. **切换次数限制**：同一账号每小时内切换企业不得超过5次，每天累计不超过50次，超限会被强制下线。\n\n**建议方案：**\n- **一企一账号**：为每个税号配置独立的电子税局登录账号，避免多企业共用同一账号被频繁切换下线\n- **升级乐企**：开通乐企自用或乐企联用通道，可实现免登录开票，从根本上解决掉线问题\n- **开票/收票账号分离**：如有条件，可为开票与收票业务分别开设专用账号\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "96d6b1b9-556f-4d43-9ee1-75716f7f24b3",
+      "rounds": 1,
+      "duration_ms": 45933.555,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "金蝶云星空旗舰版公有云的发票云账号每天都要重新登录是怎么回事"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|token过期|登录态|session过期|自动登录",
+            "path": "data/kb/产品与交付知识/11-常见问题"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|token过期|登录态|session过期|自动登录",
+            "path": "data/kb/产品与交付知识/01-交付赋能"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|token过期|登录态",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|token|登录态|session",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "data/kb/产品与交付知识/11-常见问题/一问一答/星空旗舰版/**/*"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|掉线|登录|session|token",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/星空旗舰版/开票.md",
+            "-C": 10,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|登录过期|掉线|登录|session|token",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/星空旗舰版/收票.md",
+            "-C": 10,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "每天|每日|频繁|经常|掉线|session|超时|免登录|自动登录|保活",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/星空旗舰版",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "每天|每日|频繁|经常|掉线|session|超时|免登录|自动登录|保活",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "电子税局.*登录|登录.*电子税局|账号.*掉线|掉线.*账号",
+            "path": "data/kb/产品与交付知识/11-常见问题",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "登录|过期|超时|掉线|失效",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新登录|重复登录|每天|每日|频繁|经常掉线",
+            "path": "data/kb/产品与交付知识",
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/税务系统升级适配期间临时处理方案/关于税局系统升级后账号登录次数限制以及频繁掉线的通知及应对指引.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.52,
+      "failure_reasons": [
+        "回答开头暴露了内部思考过程（'用户明确提到了星空旗舰版，这是一个售后支持问题'、'我现在搜索知识库'等内部流程泄漏到输出中）",
+        "字数超过300字限制，内容偏长",
+        "产品识别提到星空旗舰版但未明确说明该文档是否专门针对旗舰版还是通用适用，存在轻微产品适用范围模糊"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "标准版发票云如何开通扫码开票功能",
+      "answer": "标准版发票云，如何开通扫码开票功能，这是一个售后配置问题，我来搜索知识库。Now let me check the FAQ for more details on开通.标准版发票云支持扫码开票功能，但**仅限已开通托管电票或区块链电票的客户使用**。\n\n开通步骤如下：\n\n1. **联系实施人员开通配置**：联系金蝶发票云实施人员，完成扫码开票的后台配置\n2. **设置开票项目**：在商户运营平台中配置好开票项目\n3. **生成二维码**：选择开票项目并输入金额，点击\"生成微信二维码\"\n4. **打印二维码**（可选）：配置打印机后打印二维码供消费者扫描\n\n配置完成后，消费者通过微信扫描二维码即可自助开票。\n\n详细操作参见 [商家运营平台_销项管理操作手册.md](data/kb/产品与交付知识/06-构建阶段/产品初始化配置/标准版发票云/商户运营平台/商家运营平台_销项管理操作手册.md) 中的扫码开票章节。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "50509f60-77db-451d-9321-67e0db6b9bd5",
+      "rounds": 1,
+      "duration_ms": 31868.429,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "标准版发票云如何开通扫码开票功能"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码开票",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/标准版",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码开票",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/标准版发票云/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码开票",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/标准版发票云/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码开票",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/标准版/",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "扫码",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/标准版发票云/商户运营平台/商家运营平台_销项管理操作手册.md",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 3
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/标准版发票云/商户运营平台/商家运营平台_销项管理操作手册.md",
+            "offset": 544,
+            "limit": 120
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/标准版/开票.md",
+            "offset": 165,
+            "limit": 80
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答开头暴露了内部思考过程（'这是一个售后配置问题，我来搜索知识库。Now let me check the FAQ...'），属于内部流程泄漏"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "星瀚旗舰版 - 星瀚发票云，产品激活网站内分配开票管理许可选不到对应单位",
+      "answer": "Now, let me re-read the key part of the activation document for the exact steps.根据[产品激活及参数获取](https://www.yuque.com/nbklz3/tadboa/sf09ttllvsbpkyae)文档，在激活网站分配权益时选不到对应单位，请按以下步骤排查：\n\n1. **是否已点击【新增企业】** — 进入权益分配界面后，需先点击\"新增企业\"维护企业名称和税号信息，然后才能在分配时选到该单位。输入企业名称后系统会自动获取工商信息，如未自动获取请手动填充。\n\n2. **企业是否已绑定其他租户** — 如果该企业（税号）已在其他租户下存在数据，系统会提示\"一个企业只能绑定一个租户\"，此时需要联系客服处理企业变更租户流程。\n\n3. **确认企业税号是否填写正确** — 税号是后台验证的唯一ID，请确保税号准确无误。\n\n如果以上步骤都已操作仍无法解决，建议提供报错页面截图，联系人工进一步排查。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "d0a57a25-1b77-4e87-9c75-1b111710cd12",
+      "rounds": 1,
+      "duration_ms": 68815.888,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "用户请求: 星瀚旗舰版 - 星瀚发票云，产品激活网站内分配开票管理许可选不到对应单位\n\n# 上下文\n租户ID: batch-test\n响应语言: 中文\nsource: batch-test"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活|许可.*分配|开票管理许可|分配.*单位|选不到",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活|许可.*分配|开票管理许可|分配.*单位",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活|许可.*分配|开票管理许可|分配.*单位|选不到",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "glob": "*.md",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/发票云基础文档/产品激活及参数获取.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/发票云订单问题/激活与权益FAQ.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "选不到|选不中|无法选择|找不到.*单位|找不到.*企业|分配.*许可|单位.*不存在",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "选不到|选不中|无法选择|找不到.*单位|找不到.*企业",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "选不到|选不中|无法选择|找不到.*单位",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "选不到|选不中|无法选择|找不到.*单位",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "选不到|选不中|无法选择|找不到.*单位",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/标准版发票云问题/商家运营平台FAQ.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "分配.*许可|开票管理许可|权益.*分配|分配.*权益|选.*对应|选.*单位|新.*企业.*不|企业.*没有|没有.*企业",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚开票（旗舰版）/开票管理配置.md",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "分配|许可|激活|权益|企业|单位",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/基础资料/许可授权.md",
+            "output_mode": "content",
+            "-C": 2
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/基础资料/企业管理/企业信息.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "引入|引入组织|企业管理|组织.*来源|同步.*组织|新增.*组织",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚发票云基础配置.md",
+            "-C": 3,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚发票云基础配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/发票云基础文档/产品激活及参数获取.md",
+            "offset": 36,
+            "limit": 30
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答开头包含内部调试痕迹'Now, let me re-read the key part of the activation document for the exact steps.'，属于内部流程泄漏到输出"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "星瀚旗舰版影像附件支持的格式",
+      "answer": "根据 [电子影像（旗舰版）功能清单](https://www.yuque.com/nbklz3/pgrkef/nd6ufdfs1w1kb8cl)，星瀚旗舰版影像附件支持以下格式：\n\n**本地导入/采集支持：** 图片、PDF、Word、Excel、PPT、Ofd、XML 等格式。\n\n**在线预览支持：** 图片、PDF、Word、Excel、PPT、Ofd、XML。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "53465ac0-0501-41e6-a770-81abf86475e2",
+      "rounds": 1,
+      "duration_ms": 27077.974000000002,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星瀚旗舰版影像附件支持的格式"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "影像.*格式|附件.*格式|支持.*格式|图片格式|文件格式|jpg|png|pdf|图片类型",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "附件.*格式|影像附件|影像.*格式|支持.*格式",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品功能清单/电子影像（旗舰版）功能清单.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "格式|jpg|png|pdf|bmp|tif|图片|附件|类型|文件",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚影像（旗舰版）",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/项目调研/项目调研报告模板/电子影像需求调研指南.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/产品逻辑说明（专项说明）/影像产品/如何选择影像模式？三种采集影像模式说明 副本.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 3,
+        "missing_handling": -1
+      },
+      "quality_score": 10.0,
+      "failure_reasons": [],
+      "is_bad_case": false
+    },
+    {
+      "question": "星空企业版发票校验失败，未设置收票地址",
+      "answer": "\n[产品询问] 您提到的「星空企业版」不是已知的产品名称，请问您使用的是以下哪款产品？ 选项: 星空旗舰版, 星瀚旗舰版, 标准版\n您好，您提到的「星空企业版」不是已知的产品名称，请问您使用的是 **星空旗舰版、星瀚旗舰版** 还是 **标准版** 呢？确认后我帮您定位问题。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，感谢确认。您的问题是星瀚旗舰版发票校验失败，提示未设置收票地址，我来搜索相关知识库。根据知识库文档，星瀚旗舰版发票校验提示\"未设置收票地址\"，通常是 **企业信息中未配置收票通道** 导致的。\n\n请按以下步骤操作：\n\n1. 进入 **发票云 → 基础资料 → 企业管理 → 企业信息**\n2. 点击对应组织的编码进入编辑\n3. 在 **开收票通道** 字段中，除使用乐企外，直接选择 **\"新电子服务平台\"**（参考 [星瀚发票云基础配置](https://www.yuque.com/nbklz3/tadboa/yq1xe0pg6dmn3fgp)）\n4. 保存后重新进行发票校验\n\n此外，如需使用全量发票同步等功能，还需在 **数电账号配置** 中设置默认收票账号（参考 [收票管理配置](https://www.yuque.com/nbklz3/tadboa/zabzxce5n94bpe47)）。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "1f150c7a-8b9d-4ff5-a741-4f04350c8e87",
+      "rounds": 2,
+      "duration_ms": 52867.531,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星空企业版发票校验失败，未设置收票地址"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "您提到的「星空企业版」不是已知的产品名称，请问您使用的是以下哪款产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云旗舰版"
+                  },
+                  {
+                    "label": "标准版",
+                    "description": "标准版发票云 / AWS发票云 / 商家平台"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "您提到的「星空企业版」不是已知的产品名称，请问您使用的是以下哪款产品？",
+            "options": [
+              "星空旗舰版",
+              "星瀚旗舰版",
+              "标准版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票地址",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "校验失败",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚收票（旗舰版）/收票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/收票管理/基础设置/合规性校验配置.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票地址|收票配置|收票通道",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）",
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票地址",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/产品逻辑说明（专项说明）/收票产品/发票云进项管理.md",
+            "output_mode": "content",
+            "-C": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "未设置收票",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚发票云基础配置.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": false,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": true,
+          "pass": false
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 4.0,
+      "failure_reasons": [
+        "产品上下文已明确为旗舰版，AI仍主动询问产品确认，属于不该问却问了，但最终基于正确产品作答，故轻微扣分",
+        "回答字数超过300字限制，格式略显冗长",
+        "行为验证失败: {'product_ask': {'expected': False, 'actual': True, 'pass': False}, 'fallback': {'expected': False, 'actual': False, 'pass': True}}"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "星空旗舰版发票红冲后仍可上传，星空旗舰版如何配置禁止全部红冲发票导入",
+      "answer": "支持，星空旗舰版可通过**合规性校验配置**中的\"发票红冲\"校验项来控制。配置路径如下（参考 [收票管理配置](https://www.yuque.com/nbklz3/tadboa/axl2ua22gz13mdg4) 和 [合规性校验配置](https://www.yuque.com/nbklz3/tadboa/rvv9xmeebllkultb)）：\n\n**路径**：`发票服务 → 收票管理 → 基础设置 → 合规性校验配置`\n\n**配置步骤**：\n1. 新增或编辑合规性校验方案\n2. 在\"基础管控\"中找到 **发票红冲** 字段\n3. 将控制级别设置为 **严格管控**（选择后，已红冲的发票将被禁止导入，系统提示错误）\n4. 保存并启用方案\n\n其他控制级别说明：**中度警示**（红框提示但允许导入）、**轻度提醒**（黄框提示）、**不控制**（无任何提示）。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "3ce22622-6179-4469-929f-d7d976e2b7b5",
+      "rounds": 1,
+      "duration_ms": 26924.012000000002,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星空旗舰版发票红冲后仍可上传，星空旗舰版如何配置禁止全部红冲发票导入"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "红冲.*禁止|禁止.*红冲|全部红冲|红冲发票.*导入",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "禁止.*导入|导入.*限制|红冲.*上传|上传.*红冲",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星空旗舰版发票云/收票管理（星空旗舰版）/收票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/收票管理/基础设置/合规性校验配置.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "红冲.*禁|禁.*红冲|全部红冲|红冲发票.*导入|已红冲|红冲状态",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星空旗舰版发票云/",
+            "output_mode": "content"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的满意度调查，属于多余内容，略超简洁要求"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "金蝶云星空旗舰版中，如何开具运输费发票，需要在备注中输入地址信息，应如何操作开票",
+      "answer": "星空旗舰版支持开具货物运输作为数电发票的特殊票种，可在销售发票单或单张开票中操作。关于在备注中输入地址信息：\n\n**方式一：通过销售发票单下推（推荐）**\n操作路径：【财务会计】→【发票管理】→【销售发票列表】\n1. 新增销售发票单，在\"特殊票种\"字段选择\"货物运输\"\n2. 点击\"预览开票\"进入数电开票工作台（或点击\"下推开票申请单\"再进入工作台）\n3. 在工作台的方案处理页面，**备注**字段可直接填写地址信息（参见 [数电开票工作台](https://www.yuque.com/nbklz3/tadboa/efwyufy8k04otgai)）\n4. 点击\"下一步\"预览确认后开票\n\n**方式二：通过单张开票**\n1. 选择发票类型为\"数电发票（增值税专用发票）\"，特殊票种选\"货物运输\"\n2. 依次填写基本信息、购方信息、项目明细\n3. 在**步骤4（填写备注、收款人、复核人）**中，直接在备注栏输入地址信息（参见 [单张开票](https://www.yuque.com/nbklz3/tadboa/iidgpghdcqi6s608)）\n4. 点击\"开票\"\n\n**注意**：货物运输特殊票种还支持在数电工作台方案处理环节修改特定运输信息（如运输工具等信息），详情见销售发票单操作手册中的特殊票种说明（参见 [星空旗舰版销售发票单](https://www.yuque.com/nbklz3/tadboa/hburl5igwg91uydf)）。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "d3993dbd-c16f-4df6-afc0-deb16e5458b6",
+      "rounds": 1,
+      "duration_ms": 56735.829000000005,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "金蝶云星空旗舰版中，如何开具运输费发票，需要在备注中输入地址信息，应如何操作开票"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|运输费|运输发票",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|运输费",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|运输费|备注",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星空旗舰版/开票管理FAQ.md",
+            "output_mode": "content",
+            "-n": true,
+            "context": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|运输费|运输发票",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "output_mode": "content",
+            "-n": true,
+            "context": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|备注|地址",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-n": true,
+            "pattern": "运输|货物运输|备注",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/单据开票/开票申请单/数电开票工作台.md",
+            "output_mode": "content",
+            "context": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-n": true,
+            "pattern": "运输|货物运输|备注",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_operation手册/星空旗舰版发票云/开票管理/无单据开票/手工开票/单张开票.md",
+            "output_mode": "content",
+            "context": 5
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "运输|货物运输|备注|address",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/无单据开票/手工开票",
+            "output_mode": "content",
+            "-n": true,
+            "context": 5
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/单据开票/开票申请单/数电开票工作台.md",
+            "offset": 140,
+            "limit": 60
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星空旗舰版/开票管理FAQ.md",
+            "offset": 110,
+            "limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "货物运输|运输服务|运输费",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云",
+            "context": 3,
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "货物运输|运输发票",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星空旗舰版",
+            "context": 5,
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "货物运输|运输发票|特定业务类型",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/其他/星空旗舰版销售发票单.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/单据开票/开票申请单/数电开票工作台.md",
+            "offset": 85,
+            "limit": 75
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/无单据开票/手工开票/单张开票.md",
+            "offset": 55,
+            "limit": 70
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星空旗舰版发票云/开票管理/开票过程管理/开票过程监控.md",
+            "offset": 145,
+            "limit": 30
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.15,
+      "failure_reasons": [
+        "回答超过300字，格式要求简洁但内容过长",
+        "结论未完全前置，操作步骤较为冗长",
+        "货物运输发票备注中地址信息的具体格式要求（如起运地、到达地的填写规范）未明确说明，可能存在信息不完整"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "星瀚旗舰版开票产品如何进行数电升级?",
+      "answer": "星瀚旗舰版开票产品支持数电升级，操作步骤如下：\n\n1. **登录星瀚**，进入 **发票云 → 基础资料 → 数电配置** 页面，点击 **\"升级数电票\"** 按钮。\n2. **选择企业**：在弹出的列表中选择需要升级的企业，确认操作。\n3. **接收邮件**：输入一个有效的邮箱地址，系统将向该邮箱发送包含 **激活码** 和配置指引的邮件。\n4. **配置账号**：根据邮件指引，前往 **金蝶发票云微信公众号** 完成数电开票账号的绑定与配置。\n5. **导入激活码**：公众号配置完成后，回到星瀚的 **数电配置** 界面，导入邮件中的激活码，完成最终绑定。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "b48d679b-fbe6-4c72-ab00-d1db58b9997b",
+      "rounds": 1,
+      "duration_ms": 25466.757,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电升级|数电票升级|全面数字化|全电",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches",
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电.*升级|升级.*数电|全面数字化电子发票",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches",
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电|全电|数字化升级|升级方案",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电|全电|数字化升级|升级方案",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/开票管理配置FAQ.md",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电|全电|数字化升级|升级方案",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚开票（旗舰版）/开票管理配置.md",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "offset": 535,
+            "limit": 25
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "offset": 520,
+            "limit": 20
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 1,
+        "accuracy": 1,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 5.19,
+      "failure_reasons": [
+        "答案缺乏知识库文档链接或明确KB引用依据，步骤内容存在潜在编造风险（如'金蝶发票云微信公众号'配置流程、激活码导入步骤等细节无法核实）",
+        "数电升级流程中'接收邮件→激活码→公众号配置'的具体步骤链条未经KB验证，可能与实际操作流程不符"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "星空旗舰版发票云开票配置，哪些是必须配置的",
+      "answer": "星空旗舰版发票云开票必须配置的项如下：\n\n**一、前置基础配置（发票服务基础配置.md）**\n1. **发票服务模块** — 确保订单已交付、发票服务模块已部署\n2. **基础服务云配置** — 创建行政组织、业务单元（须设为\"核算组织\"）、人员及全功能授权\n3. **发票授权配置** — 配置 url、Client id、Client Secret、Encrypt Key（来自授权邮件），需连接测试成功\n4. **发票回调配置** — 配置请求地址、数据中心id、第三方应用（invoiceupload）及认证信息\n\n**二、企业信息配置**\n5. **引入组织** — 将使用发票服务的组织引入发票云\n6. **企业基础信息维护** — 维护企业名称、税号等工商信息，选择开收票通道\n7. **数电配置** — 使用电子税局通道开具数电票时必须配置\n\n**三、开票业务配置（开票管理配置.md）**\n8. **销项许可授权（企业授权）** — **是否必需：是**。为组织分配开票许可，否则提示\"当前组织无发票云特性分组许可\"\n9. **开票项管理** — 维护商品/服务的税收分类编码、税率\n10. **开票抬头管理** — 维护购方企业信息\n11. **发票推送邮箱设置** — **是否必需：是**。用于开票后向客户推送发票邮件\n\n以上配置完成后，再根据实际业务需要配置开票业务管控（通道调用策略、开票业务类型、企业开票业务管控）、拆合配置、备注设置等。\n\n参考文档：[开票管理配置](https://www.yuque.com/nbklz3/tadboa/veg7fwb9sfbkzwr0)、[发票服务基础配置](https://www.yuque.com/nbklz3/tadboa/slot60zhg1eieb9m)\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "eb235ceb-bffc-4574-832f-d474688aa916",
+      "rounds": 1,
+      "duration_ms": 25314.873,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星空旗舰版发票云开票配置，哪些是必须配置的"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "开票配置|必须配置|初始化配置|必要配置",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星空旗舰版发票云/开票管理（星空旗舰版）/开票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星空旗舰版发票云/开票管理（星空旗舰版）.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星空旗舰版发票云/发票服务基础配置.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.15,
+      "failure_reasons": [
+        "回答篇幅远超300字，格式要求不符",
+        "结论未前置，直接列举配置项而非先给出核心结论",
+        "发票推送邮箱设置标注为必须配置，但实际是否为强制项需进一步核实，存在轻微准确性风险"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "激活码在哪里，激活码失效了找不到更新的地方",
+      "answer": "您好，您的问题是关于激活码的使用，这涉及到具体产品的配置。请问您使用的是哪款产品？\n\n1. **标准版发票云**\n2. **星瀚旗舰版**\n3. **星空旗舰版**\n4. **国际版**\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，您使用的是**星瀚旗舰版**。让我搜索知识库中关于激活码的相关信息。根据知识库中[产品激活及参数获取](https://www.yuque.com/nbklz3/tadboa/sf09ttllvsbpkyae)文档：\n\n**激活码获取方式：**\n订购产品后，激活链接和操作密钥（激活码）会发送到您下单时填写的联系邮箱中，点击邮件中的激活链接并输入操作密钥即可完成激活。\n\n**激活码失效/未收到，处理步骤：**\n1. 先联系销售人员确认订单是否已交付\n2. 检查邮箱是否有拦截（包括垃圾邮件箱）\n3. 若仍未收到，联系在线客服提供下单企业全称及订单号，申请**重新推送激活邮件**\n\n> 注意：分配权益时税号需谨慎填写，如分配错误，需通过【云之家-智能审批-发票云产品使用企业变更申请】申请权益替换。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "eff85856-1ee6-48a0-ae96-9d09df624177",
+      "rounds": 2,
+      "duration_ms": 28960.303,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "用户请求: 激活码在哪里，激活码失效了找不到更新的地方\n\n上下文:\n租户ID: batch-test\n响应语言: 中文\nsource: batch-test"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活码|激活",
+            "path": "data/kb/产品与交付知识/11-常见问题/星瀚旗舰版",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活码|激活",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/发票云基础文档/产品激活及参数获取.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/接口对接FAQ.md",
+            "limit": 100
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活码|激活.*失效|激活.*过期|失效|过期",
+            "path": "data/kb/产品与交付知识/11-常见问题/星瀚旗舰版",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "激活码|激活.*邮件|重新推送|重新激活",
+            "path": "data/kb/产品与交付知识/06-构建阶段",
+            "output_mode": "files_with_matches"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 7.78,
+      "failure_reasons": [
+        "产品识别偏差：用户上下文已明确为旗舰版发票云，AI仍询问产品版本，且选项中出现'星瀚旗舰版'与'星空旗舰版'两个旗舰版选项，增加用户困惑",
+        "格式问题：回答超过300字，内容偏长；末尾附加税号变更申请的注意事项与用户问题相关性较低，属于冗余信息"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云分配的时候租户分配错了，可以重新分配吗？订单应该分配给A公司使用，现在要分配给B公司使用。",
+      "answer": "\n[产品询问] 您好，请问您使用的是哪款发票云产品？ 选项: 标准版发票云, 星瀚旗舰版, 星空旗舰版\n我已经向您发送了产品确认问题，请告知您使用的是哪款发票云产品，这样我才能为您准确查询租户重新分配的相关信息。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，感谢确认！我来搜索星瀚旗舰版关于租户/订单重新分配的相关知识。根据 [订单常见问题](https://www.yuque.com/nbklz3/tadboa/gkipb04g04exq7sl) 文档：\n\n产品许可权益一旦分配确认，**不支持直接在系统中撤销或修改重新分配**。需要通过正式的变更审批流程处理：\n\n1. 登录 **云之家**，进入 **智能审批** 模块。\n2. 选择对应流程：\n   - **开票产品**调整：发起\"发票云开票产品使用企业名称税号税盘变更申请\"\n   - **收票产品**调整：发起\"金蝶发票云收票产品使用企业变更流程\"\n3. 按流程要求填写信息并提交，等待审批和后台处理。\n\n如无云之家智能审批权限，请联系您的金蝶分公司对接老师代为提交申请。\n\n---\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "bd05f4b0-3d63-4221-86fc-05ebd6a80a16",
+      "rounds": 2,
+      "duration_ms": 33599.055,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云分配的时候租户分配错了，可以重新分配吗？订单应该分配给A公司使用，现在要分配给B公司使用。"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "您好，请问您使用的是哪款发票云产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "标准版发票云",
+                    "description": "AWS发票云、标准版、商家平台"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "您好，请问您使用的是哪款发票云产品？",
+            "options": [
+              "标准版发票云",
+              "星瀚旗舰版",
+              "星空旗舰版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "重新分配|租户分配|订单分配|重新分",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "租户|分配|订单",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/订单常见问题.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/发票云基础文档/租户权益查询.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": false,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": true,
+          "pass": false
+        },
+        "fallback": {
+          "expected": true,
+          "actual": false,
+          "pass": false
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 4.0,
+      "failure_reasons": [
+        "产品识别偏差：上下文已明确标注'旗舰版发票云'，AI仍发起产品询问，属于不该问却问了；但最终基于星瀚旗舰版作答，故扣1分而非最低分",
+        "格式问题：回答超过300字，内容偏长；结论前置做到了但整体略显冗余",
+        "准确性存疑：回答区分了'开票产品'和'收票产品'两条变更流程，逻辑合理且有文档链接支撑，但无法确认两条流程名称是否与KB完全一致，存在轻微不确定性",
+        "行为验证失败: {'product_ask': {'expected': False, 'actual': True, 'pass': False}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "从电子税局下载回来的发票为什么还是未签收状态？如何实现自动签收？",
+      "answer": "为了准确回答您的问题，我需要先确认您使用的是哪款产品？\n[产品询问] 您使用的是哪款发票云产品？ 选项: 星瀚旗舰版, 星空旗舰版, 标准版, 国际版\n请选择您使用的产品版本，这样我能为您提供准确的解答。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，我来搜索相关知识库为您解答。从电子税局下载的发票显示\"未签收\"是因为未开启自动签收的配置，这是一个可配置的系统参数。参考 [收票管理配置FAQ](https://www.yuque.com/nbklz3/tadboa/ci5ls5gcrr1ht3xy) 和 [收票](https://www.yuque.com/nbklz3/tadboa/kn41k126kfdt01pd) 文档：\n\n**实现自动签收的方法：**\n\n针对**税局下载**的发票，需开启系统参数 **\"税局文件下载到后是否自动签收\"**（对应参数名：`tax_file_auto_sign`）。\n\n配置路径：**基础服务云 → 公共设置 → 参数配置 → 系统参数 → 发票云**，找到该参数开启即可。\n\n另外，如果是**用户上传**的发票要自动签收，则对应参数为 `einvoice_auto_sign`（在 rim_config 中配置）。\n\n**补充说明：** 签收状态仅标记企业是否已确认收到发票源文件，一旦签收，后续上传的版式文件不会覆盖签收时的版本。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "352a10eb-0621-4f6f-8865-bbc51aeaf67b",
+      "rounds": 2,
+      "duration_ms": 29598.904000000002,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "从电子税局下载回来的发票为什么还是未签收状态？如何实现自动签收？\n租户ID: batch-test\n响应语言: 中文\nsource: batch-test"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "您使用的是哪款发票云产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云（旗舰版）"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  },
+                  {
+                    "label": "标准版",
+                    "description": "标准版发票云（AWS/商家平台）"
+                  },
+                  {
+                    "label": "国际版",
+                    "description": "海外发票/国际版"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "您使用的是哪款发票云产品？",
+            "options": [
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "标准版",
+              "国际版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "签收|未签收|自动签收",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches",
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/收票管理配置FAQ.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/收票.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答字数略超300字，包含补充说明和结尾确认语，稍显冗余"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "数电票开红票流程是什么？",
+      "answer": "根据知识库文档，数电票开红票（红冲）必须先申请**红字确认单**，确认单状态为\"无需确认\"或\"双方已确认\"后才能开具红字数电发票（参考[开收票FAQ](https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g)、[数电红冲规则](https://www.yuque.com/nbklz3/tadboa/wsccr4fiqk41s099)）。\n\n**核心流程：**\n\n1. **进入红冲列表** → 操作路径：【发票云】→【开票管理】→【发票逆向处理】→【发票红冲】，勾选需红冲的蓝票，点击【红冲】\n2. **申请红字确认单** → 填写红字确认单信息，提交税局\n3. **根据蓝票状态判断是否需要对方确认**：\n   - 蓝票**未**用途确认/入账 → 开票方发起，**无需对方确认**，可直接红冲\n   - 蓝票**已**用途确认/入账 → 需对方在电子税局或发票云确认后，状态变为\"双方已确认\"方可红冲\n4. **红冲开具** → 确认单通过后，开具红字数电发票，成功后可在发票管理中查看\n\n**关键区别**：数电票红冲不能像税控普票那样直接红冲，必须经过红字确认单环节。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "dd61b20f-28fd-4f66-ab1e-ed617d593603",
+      "rounds": 1,
+      "duration_ms": 48815.773,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "数电票开红票流程是什么？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "数电票.*红|红字.*数电|全电.*红|红冲.*数电",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "红票|红字发票|红冲|负数发票",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/产品逻辑说明（专项说明）/开票产品/数电通用红冲规则/数电红冲规则.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "limit": 100
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/发票红冲.md",
+            "limit": 80
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/发票红冲.md",
+            "offset": 80,
+            "limit": 120
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 9.05,
+      "failure_reasons": [
+        "回答字数明显超过300字限制，正文内容冗长",
+        "结尾附加'以上回复是否已经解决您的问题 1 解决 2 未解决'属于内部交互流程泄漏到输出"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "星瀚旗舰版开票工作台开具红票流程是什么？",
+      "answer": "星瀚旗舰版开票工作台开具红票流程如下（参考 [发票红冲](https://www.yuque.com/nbklz3/tadboa/exyu88g64x78ihgx) 文档）：\n\n操作路径：【发票云】→【开票管理】→【发票逆向处理】→【发票红冲】\n\n根据不同发票类型，流程分为三种：\n\n**1. 税控普通发票（电子/纸质普票）**\n- 进入发票红冲列表，勾选需红冲的蓝票，点击【红冲】\n- 核对信息后再次点击【红冲】完成操作\n\n**2. 税控专用发票（电子/纸质专票）**\n- 先在【红字信息表处理】新增红字信息表，上传税局审核\n- 审核通过后，在红字信息表列表勾选数据，点击【红冲】开具红字专用发票\n\n**3. 数电发票**\n- 先在【红字确认单处理】新增红字确认单，录入税局\n- 根据确认状态（无需确认 / 需对方确认），待确认完成后勾选记录点击【红冲】\n\nV8.0.4 起支持批量选择多张数电蓝票进行批量红冲。\n\n---\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "d72b6096-5924-429c-87cd-4ccf960aa4be",
+      "rounds": 1,
+      "duration_ms": 18090.434999999998,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星瀚旗舰版开票工作台开具红票流程是什么？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "红票|红字发票|红冲|开具红票",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "红票|红字发票|红冲|开具红票",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/星瀚/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/发票红冲.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/红字确认单（数电票）处理.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/红字信息表处理.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答字数超过300字限制，内容偏长"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "星瀚旗舰版，已经在税局勾选的发票，怎么更新系统中的状态",
+      "answer": "产品已确认：星瀚旗舰版。这是一个售后支持问题，涉及收票模块的发票勾选状态更新。让我搜索知识库。支持，可以通过系统从税局同步发票的最新状态来更新。操作路径如下：\n\n**方式一：手动同步（推荐，即时更新）**\n进入 **发票云 → 收票管理 → 进项发票关键要素同步**，手动执行同步任务。系统会从税局抵扣勾选列表中拉取发票的最新勾选状态并更新到系统中。\n\n> 注意：该方式数据源来自税局抵扣勾选列表，需企业为一般纳税人且发票在抵扣勾选列表中才可同步。参考 [收票FAQ](https://www.yuque.com/nbklz3/tadboa/kn41k126kfdt01pd)\n\n**方式二：自动定时同步**\n进入 **发票云 → 收票管理 → 全量发票数据同步设置**，配置定时任务（如\"进项发票状态更新\"），系统会定期自动从税局同步发票的最新状态。数据源为税局全量发票查询，覆盖范围更广。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "d60c7eed-4924-4b65-b574-3a1cbc2199cc",
+      "rounds": 1,
+      "duration_ms": 21793.97,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "星瀚旗舰版，已经在税局勾选的发票，怎么更新系统中的状态"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "勾选|发票状态|勾选状态",
+            "path": "data/kb/产品与交付知识/",
+            "glob": "*.md",
+            "output_mode": "files_with_matches",
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/收票.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/收票管理配置FAQ.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 8.52,
+      "failure_reasons": [
+        "回答包含内部思考过程泄漏（'让我搜索知识库'、'支持，可以通过...'等内部流程语言暴露在输出中）",
+        "字数超过300字限制，格式略显冗长",
+        "方式一和方式二的操作路径细节无法完全验证准确性，存在轻微不确定性"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "统一登录时提示未查询到与该企业的关联关系信息，应该怎么办？",
+      "answer": "您好，请问您在使用的是哪款发票云产品？\n\n- **标准版发票云**（商家平台）\n- **星瀚旗舰版发票云**\n- **星空旗舰版发票云**",
+      "session_id": "800ab71d-044b-49c6-aa65-479a99a54995",
+      "rounds": 1,
+      "duration_ms": 20636.609,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "统一登录时提示未查询到与该企业的关联关系信息，应该怎么办？"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 0,
+        "accuracy": 1,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 3.7,
+      "failure_reasons": [
+        "未提供任何解决步骤或操作指引，仅反问产品版本，未能解答用户问题",
+        "回答无知识库依据，未引用任何KB内容或文档链接",
+        "结论未前置，直接以反问开场而非先给出可操作的解决方向"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "收票标准版发票识别出的税额不对",
+      "answer": "根据 [票据识别字段及准确率参考文档](https://www.yuque.com/nbklz3/tadboa/gwv14n5pu5eknpst)，发票识别属于OCR技术，各字段的准确率不同，**税额字段的识别准确率为L3级（>90%）**，意味着仍存在一定的识别误差，属于正常的技术局限。\n\n主要原因和处理方法：\n\n1. **识别准确率有限**：增值税发票的票面税额（合计行）准确率约90%+，明细行税额准确率约95%+，受图片清晰度、文件格式、票面布局等因素影响，无法保证100%准确。\n2. **手动修正**：对于识别错误的税额字段，可在发票详情页点击 **\"编辑\"**，手动修改为票面正确的税额后保存并重新查验。\n3. **上传清晰文件**：建议上传清晰的PDF或OFD版式文件（而非拍照图片），可有效提升识别准确率。\n\n如需进一步排查是否是特定批次发票的识别问题，建议提供具体发票样本供分析。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "59dc2a29-e122-4f32-a63e-bc249dbfcac7",
+      "rounds": 1,
+      "duration_ms": 31990.23,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "收票标准版发票识别出的税额不对"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税额|税额不对|税额错误|识别.*税额|税额.*识别",
+            "path": "data/kb/产品与交付知识/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税额不对|税额错误|税额.*差异|税额.*不准",
+            "path": "data/kb/产品与交付知识/11-常见问题/标准版/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/产品逻辑说明（专项说明）/收票产品/票据识别字段及准确率参考文档.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/一问一答/标准版/收票.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税额|识别.*错误|识别.*不准|识别.*差异",
+            "path": "data/kb/产品与交付知识/11-常见问题/标准版发票云问题/",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税额.*识别|识别.*税额|税额.*L3|税额.*L2|税额.*准确",
+            "path": "data/kb/产品与交付知识/11-常见问题/标准版发票云问题/",
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "识别.*错误|识别.*不准|编辑.*补全|编辑.*修改|手动.*编辑",
+            "path": "data/kb/产品与交付知识/11-常见问题/一问一答/标准版/收票.md",
+            "output_mode": "content"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 7.62,
+      "failure_reasons": [
+        "回答超过300字，格式要求简洁未达标",
+        "结论未完全前置，主要原因列表放在说明段落之后才给出解决方案",
+        "税额识别准确率数据（合计行90%+、明细行95%+）未能从引用文档中明确核实，存在轻微数据编造风险"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "旗舰版怎么配置收票管理",
+      "answer": "\n[产品询问] 您好，请问您使用的是星瀚旗舰版还是星空旗舰版？ 选项: 星瀚旗舰版, 星空旗舰版\n请问您使用的是**星瀚旗舰版**还是**星空旗舰版**？这样我能为您提供准确的配置指导。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n星瀚旗舰版收票管理的配置主要包括以下步骤，详细操作可参考 [收票管理配置](https://www.yuque.com/nbklz3/tadboa/zabzxce5n94bpe47) 文档：\n\n**1. 进项许可授权**\n路径：**发票云 → 基础资料 → 许可授权**\n选择\"进项/销项开票服务\"，勾选需分配的税号，点击【许可授权】即可。\n\n**2. 发票云配置**（与星瀚费用核算/应付对接时需配置）\n路径：**财务云 → 费用核算 → 发票设置 → 发票云配置**\n新增配置，选择组织、填入企业税号和企业名称。\n\n**3. 合规性校验配置（必需）**\n路径：**发票云 → 收票管理 → 发票云授权配置 → 合规性校验配置**\n新增方案，配置基础管控（抬头/税号校验、发票真伪、重复报销等）、报销期限校验、发票连号校验等。\n\n**4. 收票助手配置**（启用PC/移动端收票）\n先在开发平台搜索 `invoicecloud.invoicecloudxh` 启用星瀚收票助手，再到 **发票云 → 收票管理 → 基础设置 → 收票助手配置** 新增方案。\n\n**5. 自动抵扣勾选配置（可选）**\n路径：**发票云 → 系统管理 → 基础设置 → 自动抵扣勾选配置**\n\n**6. 全量发票数据同步设置（可选）**\n路径：**发票云 → 收票管理 → 发票归集管理 → 全量发票数据同步设置**\n\n另外，完整操作手册可下载 [星瀚发票云收票管理操作手册（上）.pdf](https://jdpiaozone.yuque.com/attachments/yuque/0/2026/pdf/47254879/1772437051275-b56ba149-7ed3-450d-9df6-a18554f031f2.pdf) 和 [星瀚发票云收票管理操作手册（下）.pdf](https://jdpiaozone.yuque.com/attachments/yuque/0/2026/pdf/47254879/1772437051156-343e168d-c7e2-4e06-8a10-89f1a7cd70f2.pdf) 获取更详细的步骤说明。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "336f8d1a-37cb-4e76-8cf6-9538b9083ecb",
+      "rounds": 2,
+      "duration_ms": 25527.522,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "您好，请问您使用的是星瀚旗舰版还是星空旗舰版？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云（星瀚旗舰版）"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "您好，请问您使用的是星瀚旗舰版还是星空旗舰版？",
+            "options": [
+              "星瀚旗舰版",
+              "星空旗舰版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票管理",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票管理",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票管理",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚收票（旗舰版）/收票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/收票管理.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 9.26,
+      "failure_reasons": [
+        "回答超过300字，内容过长，未做精简",
+        "结论未前置，直接列步骤而非先给出核心结论",
+        "包含系统内部批量测试流程标注（[批量测试]、[产品询问]等标签）泄漏到输出内容中"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云怎么配置自动开票？",
+      "answer": "为了确认您使用的产品版本，请问您用的是哪个版本的发票云？\n[产品询问] 请问您使用的是哪个版本的发票云？ 选项: 标准版, 星瀚旗舰版, 星空旗舰版, 不确定\n正在等待您的选择，请告诉我您使用的发票云版本。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，星瀚旗舰版。我现在为您搜索自动开票的配置方案。星瀚旗舰版支持配置自动开票方案，操作路径如下：\n\n**【发票云】→【基础资料】→【开票参数设置】→【自动化方案设置】→【自动开票方案】**\n\n配置步骤（参考 [自动开票方案](https://www.yuque.com/nbklz3/tadboa/bagkxplalzf04oq7)）：\n\n1. **新增方案**：点击\"新增\"创建自动开票规则\n2. **填写基础信息**：设定开票频率（每天/每周/每月）、时间范围、可开票单据性质（正数/负数）、是否合并、下推类型（保存至待开或直接开票）、优先级\n3. **配置匹配条件**：按数据来源、购方名称、纳税人识别号、发票种类等字段设置筛选条件，只有满足条件的单据才会自动开票\n4. **启用方案**：保存后启用即可\n\n执行逻辑：符合条件的开票申请单（申请状态未申请、单据状态正常、审核状态已审核/无需审批、关闭状态未关闭）将按方案配置自动下推开票。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "602e050f-b5c1-41c0-bc75-ec6e31753676",
+      "rounds": 2,
+      "duration_ms": 34849.545999999995,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云怎么配置自动开票？"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "请问您使用的是哪个版本的发票云？",
+                "header": "产品版本",
+                "options": [
+                  {
+                    "label": "标准版",
+                    "description": "aws发票云、商家平台"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  },
+                  {
+                    "label": "不确定",
+                    "description": "我不确定是哪个版本"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "请问您使用的是哪个版本的发票云？",
+            "options": [
+              "标准版",
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "不确定"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "自动开票|自动开具",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "自动开票|自动开具",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "自动开票|自动开具",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚开票（旗舰版）/开票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/基础资料/开票参数设置/自动化方案设置/自动开票方案.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "limit": 100
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 9.26,
+      "failure_reasons": [
+        "回答超过300字，内容冗长",
+        "结论未前置，先描述路径再给步骤，用户需阅读较多内容才能获取核心操作"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "开票失败提示\"税局繁忙\"，如何处理？",
+      "answer": "这是一个开票报错问题，属于售后支持场景。我先搜索知识库。您的问题是关于开票报错的处理，为了给您更准确的答案，请先告诉我您使用的是哪款产品？\n[产品询问] 请问您使用的是哪款发票云产品？ 选项: 标准版发票云, 星瀚旗舰版, 星空旗舰版\n\"税局繁忙\"报错是税务局端返回的提示，表示税局内部系统处理繁忙、网络拥堵或出现临时故障。处理步骤如下：\n\n1. **暂停操作**：立即停止当前开票尝试，勿重复点击\n2. **等待后重试**：间隔约 **30分钟或更久** 后重新提交开票申请\n\n此提示直接来源于税务局端，非发票云系统问题，待税局端恢复后即可正常开票。如多次重试仍失败，请联系发票云在线客服提供开票流水号进一步排查。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n感谢确认！找到了星瀚旗舰版对应的FAQ内容。\n\n\"税局繁忙\"报错（即\"税局请求超时\"）通常表示税务局端的开票服务系统出现临时性异常或网络拥堵，属于外部环境问题，并非您本地操作错误（参考[星瀚旗舰版/开票.md](data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md)）。\n\n处理步骤：\n1. **暂停操作**，等待一段时间后重新尝试提交开票\n2. 如仍报错，间隔更长时间（**半小时至一小时**）后再重试\n3. 若**超过3次重试**仍失败，可能是税局服务较长时间故障，建议联系客服报备确认\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "9311899b-284a-4f38-8d1f-11f08a81523a",
+      "rounds": 2,
+      "duration_ms": 64527.721,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "开票失败提示\"税局繁忙\"，如何处理？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局繁忙|税务局繁忙|税局忙",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局繁忙|税务局繁忙|税局忙",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/06-构建阶段/税局通道",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "繁忙",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局.*超时|税局.*异常|税局.*不通|税局.*失败",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "output_mode": "content",
+            "-C": 3
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "请问您使用的是哪款发票云产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "标准版发票云",
+                    "description": "AWS发票云/商家平台"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "请问您使用的是哪款发票云产品？",
+            "options": [
+              "标准版发票云",
+              "星瀚旗舰版",
+              "星空旗舰版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局.*超时|税局.*繁忙|税局.*请求",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/标准版/开票.md",
+            "offset": 348,
+            "limit": 12
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局.*繁忙|税局.*超时|税局.*请求|税局.*忙",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局.*繁忙|税局.*超时|开票失败",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*星瀚*开票*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*旗舰版*开票*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "繁忙|超时|税局.*请求|税局.*失败|税局.*异常",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/开票管理配置FAQ.md",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "税局.*繁忙|税局.*超时|税局.*忙",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "-C": 5,
+            "output_mode": "content"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 2,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 7.41,
+      "failure_reasons": [
+        "产品识别滞后：已知产品上下文为旗舰版发票云，AI仍在首轮回答中发起产品询问，属于不该问却问了，浪费用户交互轮次",
+        "格式问题1：首轮回答在已有产品上下文的情况下仍输出了产品选项询问，暴露了内部判断流程",
+        "格式问题2：两轮回答合计字数超过300字限制，且存在重复内容（两次给出相似的处理步骤）"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "收票支持识别哪些发票类型？",
+      "answer": "我来搜索相关信息。为了准确回答您的问题，请问您使用的是哪款产品？\n[产品询问] 请问您使用的是哪款发票云产品？ 选项: 星瀚旗舰版, 星空旗舰版, 标准版\n请问您使用的是哪款发票云产品？请选择：\n1. **星瀚旗舰版** — 星瀚发票云（旗舰版）\n2. **星空旗舰版** — 发票云for星空旗舰版\n3. **标准版** — 标准版发票云（商家平台）\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，我来为您查询星瀚旗舰版收票支持的识别发票类型。星瀚旗舰版收票产品的OCR识别能力覆盖了国家法定的主要发票票种，具体如下：\n\n**国内发票（标准支持）：**\n- 增值税发票（专用发票、普通发票、电子发票、区块链发票）\n- 增值税卷票\n- 数电票（全电发票）\n- 机动车销售统一发票、二手车销售统一发票\n- 定额发票\n- 机打发票\n- 出租车发票\n- 火车票（含纸质和电子客票）\n- 航空运输电子客票行程单\n- 客运汽车发票\n- 过路过桥发票\n- 船票\n- 完税证明\n- 非标发票：归类为\"其他发票\"，可识别基础字段，缺失信息需手工补全\n\n**全球发票（需购买文档智能取数服务流量包）：**\n- 英语、日语、越南语等海外发票识别\n\n**查验支持：** 与国税查验平台一致，支持增值税各类发票、全电票、机动车/二手车发票、通行费电子发票、航空行程单、铁路电子客票等近20种常见票种。\n\n参考：\n- [星瀚旗舰版收票FAQ](https://www.yuque.com/nbklz3/tadboa/pbp0r1qxo6w6ykx9)\n- [票据识别字段及准确率参考文档](https://www.yuque.com/nbklz3/tadboa/gwv14n5pu5eknpst)\n- [开收票FAQ](https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g)\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "9cf1857c-31fc-4149-96da-9660cad8ed17",
+      "rounds": 2,
+      "duration_ms": 68896.735,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "收票支持识别哪些发票类型？"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*进项*一纸禅*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*收票*一纸禅*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*一纸禅*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/",
+            "description": "List knowledge base directories"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/",
+            "description": "List marketing knowledge base structure"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01\\ 需求洞察/",
+            "description": "Explore insight directory"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02\\ 项目规划/产品资料/产品功能介绍/ 2>/dev/null || echo \"not found\"",
+            "description": "Explore product features directory"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01\\ 需求洞察/发票云介绍/",
+            "description": "List invoice cloud intro directory"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02\\ 项目规划/产品资料/产品功能介绍/产品功能清单/",
+            "description": "List product feature list directory"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/收票产品核心价值.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "发票类型|识别类型|支持的发票|全电|OFD|PDF|增值税|电子发票|纸质发票",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品功能清单/发票云（旗舰版）发票产品功能清单V6.0.md",
+            "output_mode": "content"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "发票类型.*识别|识别.*发票类型|支持.*发票|发票种类",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-i": true,
+            "head_limit": 50
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "收票.*识别|OCR.*识别|发票采集|发票影像|识别类型",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-i": true,
+            "head_limit": 50
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "请问您使用的是哪款发票云产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云（旗舰版）"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版"
+                  },
+                  {
+                    "label": "标准版",
+                    "description": "标准版发票云（商家平台）"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "请问您使用的是哪款发票云产品？",
+            "options": [
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "标准版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "识别.*发票类型|发票类型.*识别|支持.*识别.*发票|票据识别|OCR识别",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "-i": true,
+            "output_mode": "content",
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "进项.*发票.*类型|收票.*支持.*发票|采集.*发票.*类型|OCR.*支持",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版",
+            "-i": true,
+            "output_mode": "content",
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*票据识别*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/收票.md",
+            "offset": 395,
+            "limit": 30
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/产品逻辑说明（专项说明）/收票产品/票据识别字段及准确率参考文档.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.15,
+      "failure_reasons": [
+        "回答超过300字，格式冗长，不够简洁",
+        "结论未前置，先描述再列举，用户需阅读大量内容才能获取核心信息",
+        "全球发票部分描述'需购买文档智能取数服务流量包'未经KB明确验证，存在轻微幻觉风险",
+        "查验支持'近20种'的表述较模糊，可能与实际KB内容有偏差"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "如何设置开票审批流程？",
+      "answer": "请问您使用的是哪款产品？是**标准版发票云**、**星瀚旗舰版**还是**星空旗舰版**？这样我才能为您查找对应的审批流程设置方法。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，我来为您查找星瀚旗舰版开票审批流程的设置方法。星瀚旗舰版的开票审批流程配置涉及两个方面：\n\n### 1. 配置审批开关（是否需要审批）\n\n路径：**开发平台 → 发票云 → 系统管理 → 云应用参数配置 → 参数配置单据**\n\n新增以下配置项控制开票申请单是否需要审批：\n\n| 配置项类型 | 配置项key | 配置项值说明 |\n|---|---|---|\n| `sim_not_approval_required` | `sim_original_bill` | **A**=暂存（需要审批），**D**=无需审批 |\n\n参考 [开票管理配置](https://www.yuque.com/nbklz3/tadboa/rm8y5s1qwn70gnqk) 文档。\n\n### 2. 配置审批流程（工作流）\n\n如需走审批流，通过**流程服务云 → 工作流服务**配置企业所需的审批流程（审批节点、审批人、条件等），配置完成测试后发布即可。工作流配置详细操作请参考流程服务云对应模块的操作手册。\n\n### 3. 实际效果\n\n- 配置了审批流时：在**所有开票申请单**列表点击**提交**后，自动发起审批流，审批流走完单据自动变为**已审核**\n- 未配置审批流时：点击**提交**仅变更状态，需手动点击**审核**按钮\n\n参考 [所有开票申请单](https://www.yuque.com/nbklz3/tadboa/hctncpyfotmzp3xl) 和 [发票作废](https://www.yuque.com/nbklz3/tadboa/kgx37w5gmyxgvo6v) 文档。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "e6e6d7e7-de71-4ab9-b27a-a93dbf39510b",
+      "rounds": 2,
+      "duration_ms": 43830.909,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "如何设置开票审批流程？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "审批|审批流|审批流程",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "审批|审批流|审批流程",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "审批|审批流|审批流程",
+            "path": "data/kb/产品与交付知识/11-常见问题",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置/星瀚发票云（旗舰版）/星瀚开票（旗舰版）/开票管理配置.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/开票管理配置FAQ.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "审批流|审批流程|工作流|审核流程|审批",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/单据开票",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "审批流|审批流程|工作流|审核流程",
+            "path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理",
+            "output_mode": "content",
+            "-n": true,
+            "head_limit": 50
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/单据开票/开票申请单/所有开票申请单.md",
+            "offset": 1,
+            "limit": 200
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/开票管理/发票逆向处理/发票作废.md",
+            "offset": 100,
+            "limit": 30
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 7.41,
+      "failure_reasons": [
+        "产品识别需用户二次确认才完成，上下文已明确为旗舰版发票云，AI不应再询问产品类型",
+        "回答超过300字，格式冗长，不符合简洁要求",
+        "结论未前置，直接进入配置细节，用户需阅读全文才能了解整体方案",
+        "配置项key与配置项类型的对应关系描述存在歧义，表格列头与内容对应不够清晰"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云支持批量开票吗？",
+      "answer": "感谢您的提问。关于批量开票功能，不同版本的发票云产品支持情况可能有所不同。请问您使用的是哪一款产品？\n[产品询问] 请问您咨询的是哪个版本的发票云产品？ 选项: 标准版发票云, 星瀚旗舰版, 星空旗舰版, 国际版\n请选择您使用的产品版本，以便我为您查找准确的批量开票信息。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n产品已确认：星瀚旗舰版。您的问题是询问批量开票能力，属于售前咨询，我来搜索相关文档。找到相关文档，我来读取详细信息。支持，星瀚旗舰版发票云具备批量开票能力（参考 [发票云（旗舰版）发票产品功能清单V6.0](https://www.yuque.com/nbklz3/pgrkef/gaq1aogwoyll94dd) 和 [发票云（旗舰版）发票产品7.0功能对比](https://www.yuque.com/nbklz3/pgrkef/tucywcqoto1lmbgf)）：\n\n1. **待开发票** — 支持通过 Excel 批量导入开票信息，系统自动计算价格、税额\n2. **开票申请单接口** — 支持批量开票规则校验（含数据长度处理等）\n3. **开票工作台** — 支持批量处理正负单据合并、匹配蓝票与红字确认单流程\n4. **批量交付** — 支持按购方、单据号等维度，定时通过邮箱批量交付发票\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "72e3623b-ee70-457d-a0ee-0a23ade5265e",
+      "rounds": 2,
+      "duration_ms": 39043.112,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云支持批量开票吗？"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "请问您咨询的是哪个版本的发票云产品？",
+                "header": "产品选择",
+                "options": [
+                  {
+                    "label": "标准版发票云",
+                    "description": "标准版发票云（也称 AWS 发票云、商家平台）"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚旗舰版发票云"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云 for 星空旗舰版"
+                  },
+                  {
+                    "label": "国际版",
+                    "description": "海外发票、国际版"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "请问您咨询的是哪个版本的发票云产品？",
+            "options": [
+              "标准版发票云",
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "国际版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "批量开票|批量开具|批量",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "批量开票|批量开具|批量",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品功能清单/发票云（旗舰版）发票产品功能清单V6.0.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品功能清单/发票云（旗舰版）发票产品7.0功能对比.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答字数超过300字限制，列举了4条功能点导致篇幅偏长"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "影像模块支持哪些文件格式上传？",
+      "answer": "您好，请问您使用的是哪款产品的影像模块？\n[产品询问] 您使用的是哪款产品的影像模块？ 选项: 星瀚旗舰版, 星空旗舰版, 标准版\n请您选择您所使用的产品版本，以便我为您查询影像模块支持的文件格式。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n星瀚旗舰版影像模块支持以下文件格式上传，根据 [影像采集](https://www.yuque.com/nbklz3/tadboa/beimwsd7u8dqp5bb) 文档：\n\n**本地导入支持格式**：PDF、OFD、PNG、JPG、WORD、EXCEL、PPT 等（支持一次性上传多个文件）。\n\n**扫描仪采集**：通过外接扫描仪采集，系统自动分类为封面、发票、附件。\n\n**多页发票导入**：支持多页PDF格式发票上传。\n\n注：设为全球发票时，目前仅支持图片和PDF类型文件。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "d052c43c-56a2-4abf-b8f3-8e1324557df2",
+      "rounds": 2,
+      "duration_ms": 35628.301999999996,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "影像模块支持哪些文件格式上传？"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "您使用的是哪款产品的影像模块？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云（旗舰版）的影像模块"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "星空旗舰版发票云的影像模块"
+                  },
+                  {
+                    "label": "标准版",
+                    "description": "标准版发票云（AWS/商家平台）的影像模块"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "您使用的是哪款产品的影像模块？",
+            "options": [
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "标准版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "影像.*格式|文件格式|上传.*格式|图片格式|JPG|JPEG|PNG|PDF|TIFF",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "影像.*上传|影像.*支持.*格式|上传文件",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "影像.*格式|图片.*格式|文件.*格式|jpg|jpeg|png|tiff|bmp|上传.*格式",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*影像*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*影像*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/影像.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/影像管理.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/影像管理/影像采集.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "影像.*一纸禅|影像.*能力|文件格式|上传.*格式|影像.*支持",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/影像管理/系统配置/影像方案配置.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.52,
+      "failure_reasons": [
+        "产品上下文已明确为旗舰版发票云，AI仍主动询问产品版本，属于不必要的产品询问，导致多轮交互",
+        "回答未结论前置，先经过产品询问交互才给出答案，流程冗余",
+        "回答包含系统交互标签如[产品询问]和批量测试自动回复内容泄漏在对话流中，格式不规范"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "如何配置发票抬头信息？",
+      "answer": "\n[产品询问] 请问您使用的是哪款发票云产品？ 选项: 标准版发票云, 星瀚旗舰版, 星空旗舰版, 国际版\n请问您使用的是哪款发票云产品？这样我才能为您提供对应的配置指引。\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n好的，您使用的是**星瀚旗舰版**，我来搜索发票抬头配置的相关文档。配置发票抬头在星瀚旗舰版中通过 **【发票云】→【基础资料】→【开票资料维护】→【开票抬头管理】** 路径操作，详细步骤请参考 [开票抬头管理](https://www.yuque.com/nbklz3/tadboa/scgwhou5ghpxzfag) 文档：\n\n**新增开票抬头**：\n1. 点击\"新增\"按钮，进入编辑界面\n2. 填写编码、购方名称等必填信息，以及税号、组织机构代码等选填信息\n3. 点击\"购方抬头信息\"下方加号，完善地址及电话、开户银行及账号、联系手机、公司邮箱等信息，并设定优先级（数字越低优先级越高）\n4. 如需关联客户，点击\"增行\"从系统服务云客户基础资料中导入，开票时即可根据客户信息自动匹配抬头\n\n**其他操作**：\n- **分配**：选中抬头 → 点击\"分配\" → 选择组织进行分配\n- **禁用/删除**：选中抬头后点击对应按钮\n- **管理**：可编辑信息、变更控制策略、转让管理权\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "20e7a7a7-b465-424f-9674-133c38f44d4b",
+      "rounds": 2,
+      "duration_ms": 23215.989,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "如何配置发票抬头信息？"
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "请问您使用的是哪款发票云产品？",
+                "header": "产品确认",
+                "options": [
+                  {
+                    "label": "标准版发票云",
+                    "description": "AWS发票云/标准版/商家平台"
+                  },
+                  {
+                    "label": "星瀚旗舰版",
+                    "description": "星瀚发票云/星瀚"
+                  },
+                  {
+                    "label": "星空旗舰版",
+                    "description": "发票云for星空旗舰版/星空旗舰版"
+                  },
+                  {
+                    "label": "国际版",
+                    "description": "海外发票/国际版"
+                  }
+                ],
+                "multiSelect": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "AskUserQuestion",
+          "input": {
+            "question": "请问您使用的是哪款发票云产品？",
+            "options": [
+              "标准版发票云",
+              "星瀚旗舰版",
+              "星空旗舰版",
+              "国际版"
+            ]
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "抬头|发票抬头",
+            "path": "data/kb/产品与交付知识/06-构建阶段/产品初始化配置",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "发票抬头|抬头信息",
+            "path": "data/kb/产品与交付知识/01-交付赋能",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/基础资料/开票资料维护/开票抬头管理.md"
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.63,
+      "failure_reasons": [
+        "回答字数超过300字限制，内容较为冗长"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "开票接口调用失败，返回500错误怎么排查？",
+      "answer": "您好，请问您使用的是哪款发票云产品？这样我能更准确地帮您排查接口报错问题。\n\n1. **标准版发票云**（商家平台）\n2. **星瀚旗舰版**\n3. **星空旗舰版**\n4. **国际版**\n---\n\n\n[批量测试] 检测到产品询问，自动回复: 我使用的是星瀚旗舰版\n\n---\n开票接口返回 500 错误，通常需要按以下顺序排查（参考 [发票云ISV开票接口对接说明](https://www.yuque.com/nbklz3/tadboa/fi6qrk7hrsw2b232) 及 [星瀚旗舰版FAQ](https://www.yuque.com/nbklz3/tadboa/tvb63p71ompm7wgr)）：\n\n**1. 确认环境和授权信息是否正确**\n- 请求地址是否与授权匹配：测试环境用 `http://api-sit.piaozone.com/`，正式环境用 `http://api.piaozone.com/`\n- clientId/clientSecret/encryptKey 是否填写正确，是否与环境匹配（正式/测试混用会报错）\n\n**2. 排查请求参数**\n- 检查请求体 JSON 格式是否合法\n- 开票相关参数（税号、电子税局账号、登录密码等）是否已正确配置\n- 如涉及加密，确认加密方式与文档一致\n\n**3. 检查网络连通性**\n- 内网环境是否已开放发票云域名及 IP 的白名单（参考《发票云公有云域名IP及网络开通策略》文档）\n- 代理设置是否影响请求转发\n\n**4. 查看具体错误体**\n- 500 响应的 body 中通常会带 `message` 或 `errorCode` 字段，从中获取具体错误原因\n- 常见如：`非法的客户ID`（授权信息错误）、`gateway超时`（网络/网关问题）\n\n**5. 确认接口调用时序**\n- 开票接口有严格的前置条件：需先完成认证 → 创建订单 → 登录电子税局 → 然后才能调用创建发票开具任务\n\n如果以上排查无法定位问题，请提供请求参数和返回的完整 error 信息，我可以进一步帮您分析。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "c13deba7-574c-44ea-a070-786d47320cc8",
+      "rounds": 2,
+      "duration_ms": 45394.224,
+      "status": "success",
+      "error": "",
+      "product_selected": "旗舰版发票云",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "开票接口调用失败，返回500错误怎么排查？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "500|错误码|错误排查|故障|调试",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/API文档",
+            "output_mode": "content",
+            "-i": true,
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "500|接口报错|调用失败|返回码",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题",
+            "glob": "*星瀚*",
+            "output_mode": "content",
+            "-i": true,
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/",
+            "description": "List KB directory structure"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls \"/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/\"",
+            "description": "List FAQ subdirectories"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "head_limit": 20,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "pattern": "500错误|接口.*报错|API.*错误|接口.*排查"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/10-案例分享/ISV项目交付/发票云ISV开票接口对接说明.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls \"/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/\"",
+            "description": "List 星瀚 FAQ files"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "head_limit": 30,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "pattern": "500|错误|报错|失败|异常|排查",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "head_limit": 20,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "pattern": "开票.*500|开票.*接口.*错误|开票.*失败.*排查"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "head_limit": 20,
+            "output_mode": "content",
+            "-n": true,
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/开收票FAQ.md",
+            "pattern": "500|接口.*错误|网关|超时|排查"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "offset": 100,
+            "limit": 20
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/一问一答/星瀚旗舰版/开票.md",
+            "limit": 30,
+            "offset": 102
+          }
+        }
+      ],
+      "asked_product": true,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 3,
+        "kb_grounded": 3,
+        "accuracy": 2,
+        "format": 1,
+        "missing_handling": -1
+      },
+      "quality_score": 8.15,
+      "failure_reasons": [
+        "回答超过300字，格式要求简洁但内容过长",
+        "结论未前置，直接进入排查步骤而非先给出最可能原因",
+        "接口调用时序描述（认证→创建订单→登录电子税局→创建开具任务）需验证是否与星瀚旗舰版文档完全一致，存在轻微不确定性"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云的销售负责人是谁，怎么联系？",
+      "answer": "您好，我是发票云平台的智能客服助手。关于销售负责人的具体联系信息，我这边没有相关的内部组织架构和人员联系方式数据，无法为您提供。\n\n建议您通过以下方式获取:\n\n1. **官网渠道** — 访问金蝶发票云官网，通过\"联系我们\"入口提交需求，会有销售团队主动对接\n2. **客服热线** — 拨打金蝶官方客服热线，转接发票云商务咨询\n3. **客户经理** — 如果您已有对接的金蝶客户经理，可直接联系他/她协调\n\n请问您是有采购或合作意向需要对接销售团队吗？我可以先帮您解答产品功能方面的问题。",
+      "session_id": "7352064e-67ee-4a2e-9341-b33067b33c8a",
+      "rounds": 1,
+      "duration_ms": 5833.914,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": 0,
+        "accuracy": 2,
+        "format": 2,
+        "missing_handling": 2
+      },
+      "quality_score": 4.17,
+      "failure_reasons": [
+        "未使用标准兜底话术，正确话术应为'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持'",
+        "答案无知识库依据，属于自行推断的通用建议而非KB内容",
+        "结尾反问用户意图略显冗余，增加了字数但价值有限"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "发票云项目实施大概需要多少天？",
+      "answer": "这个问题是关于项目实施周期的售前咨询，我先搜索营销知识库。发票云项目实施周期主要取决于选择的税局通道，根据 [发票云营销指引](https://www.yuque.com/nbklz3/pgrkef/qg4tuk1fv35tbtme) 和 [乐企联用解决方案](https://www.yuque.com/nbklz3/pgrkef/bv4egyryd0lafimn)，不同通道的接入周期如下：\n\n| 通道 | 接入周期 |\n|------|---------|\n| **税务数字账户（RPA）** | **3～5天** |\n| **乐企联用** | **7～14天**（最快1-2周上线） |\n| **乐企自用** | 申请14～180天，获批后对接30天 |\n\n其中 **RPA通道** 最快，3-5天即可接入；**乐企联用** 是当前主推方案，最快1-2周上线，且建设成本低；**乐企自用** 因涉及税局审批，周期最长。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "19e039fb-bef2-4c7f-95bf-7c708aebb894",
+      "rounds": 1,
+      "duration_ms": 120726.899,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云项目实施大概需要多少天？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施.*天|实施周期|实施时间|项目周期|上线.*天|部署.*天",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-n": true,
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施.*天|实施周期|实施时间|项目周期|上线.*天|部署.*天",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-n": true,
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施周期|实施天数|上线周期|项目实施|交付周期|标准版.*实施|星瀚.*实施|旗舰版.*实施",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/05 方案呈现-商务/报价器/实施人天报价器/实施人天报价器.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/05 方案呈现-商务/报价器/实施人天报价器/发票云在线服务收费一口价说明.md"
+          }
+        },
+        {
+          "name": "Agent",
+          "input": {
+            "description": "Search implementation timeline",
+            "subagent_type": "Explore",
+            "model": "haiku",
+            "prompt": "Search the KB directories for information about invoice cloud project implementation timelines (项目实施周期/实施天数/上线周期). \n\n1. Search in /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/ for p...[truncated]"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/",
+            "description": "List product and delivery knowledge directory"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/ 2>/dev/null",
+            "description": "List marketing knowledge base directory"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施天数|实施周期|上线周期|实施工期|项目周期|标准实施|快速实施",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施天数|实施周期|上线周期|实施工期|项目周期|标准实施|快速实施",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/",
+            "description": "List 01-交付赋能 directory"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/02-项目管理/发票云在线服务收费一口价说明.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/06 项目签约/项目实施工作说明书SOW.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/功能说明手册_操作手册/星瀚发票云/影像管理/收单机盒号列表.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "\\d+[天周月]|实施.*[0-9].*[天周月]|[天周月].*实施.*[0-9]|上线.*[0-9]+[天周月]",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "\\d+[天周月]|实施.*[0-9].*[天周月]|[天周月].*实施.*[0-9]|上线.*[0-9]+[天周月]",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls -R /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/项目交付指导/ 2>/dev/null",
+            "description": "List project delivery guidance directory"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/发票云营销指引.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/03 方案呈现-解决方案/产品标准解决方案/乐企联用解决方案.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/项目交付指导/项目交付总体流程.md"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/02-项目管理/",
+            "description": "List project management directory"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "上线周期|实施天数|实施周期|标准实施周期|交付周期|交付工期|上线工期",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb",
+            "output_mode": "content",
+            "-i": true,
+            "context": 2
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "[\\d一二三四五六七八九十]+[个]?[天日月周年]|[\\d一二三四五六七八九十]+周",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/02-项目管理",
+            "output_mode": "content",
+            "-i": true,
+            "context": 2
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/02-项目管理/项目管理工具.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "最快.*上线|上线.*天|上线.*周|上线.*月|实施.*天|实施.*周|实施.*月|交付.*天|交付.*周|交付.*月",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "**/*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/03 方案呈现-解决方案"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/05 方案呈现-商务/报价器/实施人天报价器/实施人天报价器.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/03 方案呈现-解决方案/产品标准解决方案/发票产品标准解决方案.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/乐企问题/乐企自用FAQ.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "接入周期|标准实施周期|实施周期|交付周期|上线周期|标准工期",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-i": true,
+            "context": 3
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "[\\d一二三四五六七八九十]+[个]?[天日月周年]|[\\d一二三四五六七八九十]+周",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/03-启动阶段",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/03-启动阶段/ 2>/dev/null; echo \"---\"; ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/04-需求阶段/ 2>/dev/null; echo \"---\"...[truncated]",
+            "description": "List remaining stage directories in product knowledge"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/08-上线阶段/发票管理上线（变更）模板.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/05-方案阶段/发票云开票产品标准对接方案.md"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/项目交付指导/",
+            "description": "List project delivery guidance files"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/",
+            "description": "List product knowledge directories"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/发票领域知识/ 2>/dev/null",
+            "description": "List invoice domain knowledge directory"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施天数|实施周期|上线周期|实施工期|标准实施",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/.meta",
+            "output_mode": "content",
+            "context": 2,
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "实施天数|实施周期|上线周期|实施工期|标准实施",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/.meta",
+            "output_mode": "files_with_matches",
+            "-i": true
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls /Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/产品发版说明/ 2>/dev/null",
+            "description": "List product release notes directory"
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "ls \"/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/01-交付赋能/产品知识/产品发版说明/星瀚发票云/\" 2>/dev/null",
+            "description": "List star han invoice cloud release notes"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/.meta/nbklz3/tadboa/docs/pkq9cspftggma0w0.json"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "交付周期|交付工期|工期.*[天周月]|预计.*[天周月]|实施周期.*[天周月]",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "上线.*周期|上线周期.*[0-9]|上新周期|布署周期|部署周期",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/发票云营销指引.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/03 方案呈现-解决方案/产品标准解决方案/乐企联用解决方案.md",
+            "limit": 30
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": 3,
+        "accuracy": 3,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 9.52,
+      "failure_reasons": [
+        "回答字数超过300字限制，表格+说明文字合计偏长"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云和友商产品相比价格怎么样？",
+      "answer": "抱歉，在发票云知识库没找到本答案。您可以：\n\n1、结束会话后点击留言，给我们提工单，我们技术支持人员会尽快和您取得联系，协助您定位解决问题。\n\n2、转在线坐席（当前人工繁忙，可能会等待，等待过程中你可以随时结束转留言提单）",
+      "session_id": "bc9f75e7-10cb-44a5-98f7-167c451db7c7",
+      "rounds": 1,
+      "duration_ms": 6632.182000000001,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云和友商产品相比价格怎么样？"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": false,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": true,
+          "actual": false,
+          "pass": false
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": -1,
+        "accuracy": -1,
+        "format": 2,
+        "missing_handling": 2
+      },
+      "quality_score": 4.0,
+      "failure_reasons": [
+        "兜底话术不标准，未使用规定话术'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持'，而是提供了工单和转人工两个选项",
+        "格式上提供了额外的操作指引，略显冗余，但未超出300字",
+        "行为验证失败: {'product_ask': {'expected': False, 'actual': False, 'pass': True}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
+      ],
+      "is_bad_case": true
+    },
+    {
+      "question": "发票云支持私有化部署在客户自己的服务器上吗？",
+      "answer": "这是一个售前通用咨询问题，直接搜索营销知识库。所有产品均支持公有云和私有云两种部署模式。\n\n根据 [金蝶发票云高级付费售后服务介绍说明](https://www.yuque.com/nbklz3/pgrkef/ivwgxxbcrpg6bipa) 文档记载，发票云全系产品涵盖公有云和私有云部署模式。具体各版本的部署支持情况：\n\n- **星瀚旗舰版（旗舰版）**：支持公有云和私有云两种部署方式\n- **星空旗舰版**：仅支持私有云部署\n- **标准版**：以公有云授权为主，部分场景支持私有云\n\n此外，[影像产品核心价值](https://www.yuque.com/nbklz3/pgrkef/...) 文档也明确提到\"支持云化与私有化部署\"。\n\n具体选择哪种部署方式，取决于企业的IT基础设施和安全需求。如需进一步了解不同版本的部署方案和报价，建议与发票云RBU团队联系获取详细方案。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "bda4b8df-6a18-4739-8a1e-ef9ce66824cf",
+      "rounds": 1,
+      "duration_ms": 32856.134,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云支持私有化部署在客户自己的服务器上吗？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "私有化|私有部署|本地部署|部署方式",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "私有化|私有部署|部署方式|SaaS|本地部署|部署架构",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/金蝶发票云介绍",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "私有化|私有部署|部署方式|SaaS|本地部署|部署架构",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "data/kb/营销知识库/01 需求洞察/**/*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "data/kb/营销知识库/02 项目规划/**/*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/发票云简介.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "部署|SaaS|私有云|公有云",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品版本功能介绍",
+            "output_mode": "content",
+            "-n": true
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品版本功能介绍/金蝶发票云高级付费售后服务介绍说明.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品版本功能介绍/金蝶发票云V6.0产品介绍说明.md"
+          }
+        },
+        {
+          "name": "Glob",
+          "input": {
+            "pattern": "data/kb/营销知识库/01 需求洞察/发票云介绍/*一纸禅*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "一纸禅",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "部署模式|部署方式|私有云|公有云|私有化",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-n": true,
+            "glob": "*.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": 2,
+        "kb_grounded": 3,
+        "accuracy": 1,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 6.67,
+      "failure_reasons": [
+        "产品识别存在轻微偏差：回答开头声称'所有产品均支持公有云和私有云两种部署模式'，但随后又说标准版'以公有云授权为主，部分场景支持私有云'，自相矛盾",
+        "事实准确性存疑：'星空旗舰版仅支持私有云部署'的表述与通常产品逻辑不符，且文档链接存在省略号(...)，说明引用不完整或存在编造风险",
+        "格式问题：回答超过300字，且包含内部思考流程泄漏（'这是一个售前通用咨询问题，直接搜索营销知识库'属于内部处理逻辑，不应出现在用户回复中）"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云能不能和钉钉审批流打通？",
+      "answer": "这个问题属于售前通用咨询——与第三方系统的集成能力，无需区分产品版本，直接搜索营销知识库。可以打通。发票云支持与钉钉审批流集成，具体能力如下：\n\n1. **钉钉作为轻应用入口接入发票云**：可在钉钉的业务审批中查看发票详情（如查看发票影像、票面信息等），参考 [收票管理配置FAQ](https://vip.kingdee.com/knowledge/378215482416984576?productLineId=2&isKnowledge=2&lang=zh-CN)\n2. **发票云提供开放API接口**：支持与钉钉等异构系统对接，实现开票申请、发票查询、发票状态回推等全流程打通\n\n具体对接方式（通过钉钉审批流触发开票/查票等场景）需要根据企业的业务需求进行方案设计，建议联系发票云售前团队获取详细对接方案。\n\n以上回复是否已经解决您的问题\n\n1 解决  2 未解决",
+      "session_id": "7c770ae1-f15b-436a-bd55-410080801c33",
+      "rounds": 1,
+      "duration_ms": 49264.342,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云能不能和钉钉审批流打通？"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "钉钉|审批流|审批",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "files_with_matches"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "钉钉.*审批|审批.*钉钉|钉钉.*集成|集成.*钉钉|第三方.*审批|审批流.*打通",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "output_mode": "content",
+            "-i": true,
+            "glob": "*.md"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "钉钉|钉钉审批|钉钉集成",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "pattern": "集成|对接|第三方|打通",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍",
+            "output_mode": "content",
+            "-i": true
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "output_mode": "content",
+            "-i": true,
+            "pattern": "钉钉",
+            "glob": "*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "output_mode": "content",
+            "-i": true,
+            "pattern": "审批流|审批流程|工作流",
+            "glob": "*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "output_mode": "content",
+            "-i": true,
+            "pattern": "钉钉|企业微信|飞书|第三方集成|异构系统",
+            "glob": "*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识",
+            "head_limit": 30
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/开票产品核心价值.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/星瀚旗舰版/收票管理配置FAQ.md",
+            "offset": 640,
+            "limit": 80
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "output_mode": "content",
+            "-i": true,
+            "pattern": "钉钉.*审批|钉钉.*对接|企业微信.*对接",
+            "glob": "*.md",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb",
+            "head_limit": 20
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "钉钉|企业微信|飞书|云之家|第三方审批|审批流",
+            "glob": "*.md",
+            "head_limit": 30,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "钉钉|企业微信|飞书",
+            "glob": "*.md",
+            "head_limit": 10,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料"
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "钉钉|企业微信|飞书",
+            "glob": "*.md",
+            "head_limit": 20,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/04 方案呈现-能力验证"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/01 需求洞察/发票云介绍/发票云营销指引.md"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/产品与交付知识/11-常见问题/标准版发票云问题/星空企业版收票管理FAQ.md",
+            "offset": 100,
+            "limit": 30
+          }
+        },
+        {
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "glob": "*.md",
+            "head_limit": 20,
+            "output_mode": "content",
+            "path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库",
+            "pattern": "功能清单|功能列表|产品能力"
+          }
+        },
+        {
+          "name": "Read",
+          "input": {
+            "file_path": "/Users/leiquanchun/code/agent-harness/agent_cwd/data/kb/营销知识库/02 项目规划/产品资料/产品功能介绍/产品功能清单/发票云（旗舰版）发票产品功能清单V6.0.md"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": true,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": 2,
+        "accuracy": 2,
+        "format": 2,
+        "missing_handling": -1
+      },
+      "quality_score": 6.67,
+      "failure_reasons": [
+        "回答包含内部思考过程（'直接搜索营销知识库'等）泄漏到输出，违反格式要求",
+        "提供了一个具体KB链接但另一项能力（开放API对接）无文档支撑，存在部分无依据内容",
+        "字数接近边界且结构略显冗余"
+      ],
+      "is_bad_case": false
+    },
+    {
+      "question": "发票云有没有针对小微企业的优惠套餐？",
+      "answer": "抱歉，在发票云知识库没找到本答案。您可以：\n\n1、结束会话后点击留言，给我们提工单，我们技术支持人员会尽快和您取得联系，协助您定位解决问题。\n\n2、转在线坐席（当前人工繁忙，可能会排队等待，等待过程中你可以随时结束转留言提单）",
+      "session_id": "f975d6cd-2b90-46ec-af0c-a97b7384ff2f",
+      "rounds": 1,
+      "duration_ms": 7620.353,
+      "status": "success",
+      "error": "",
+      "product_selected": "",
+      "flash_exit": false,
+      "fallback_after_ask": false,
+      "tool_calls": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "customer-service",
+            "args": "发票云有没有针对小微企业的优惠套餐？"
+          }
+        }
+      ],
+      "asked_product": false,
+      "has_fallback": false,
+      "behavior_pass": false,
+      "behavior_details": {
+        "product_ask": {
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        "fallback": {
+          "expected": true,
+          "actual": false,
+          "pass": false
+        }
+      },
+      "scores": {
+        "product_id": -1,
+        "kb_grounded": -1,
+        "accuracy": -1,
+        "format": 2,
+        "missing_handling": 2
+      },
+      "quality_score": 4.0,
+      "failure_reasons": [
+        "兜底话术不标准，正确话术应为'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持。'，但实际输出包含了额外的提工单和转人工坐席引导内容",
+        "格式上结论前置但内容略显冗长，超出标准兜底话术范围",
+        "行为验证失败: {'product_ask': {'expected': False, 'actual': False, 'pass': True}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
+      ],
+      "is_bad_case": true
+    }
+  ]
+}
