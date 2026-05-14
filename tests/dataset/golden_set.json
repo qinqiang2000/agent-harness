@@ -1,0 +1,322 @@
+[
+  {
+    "id": "qs-001",
+    "question": "金蝶云星空旗舰版公有云的发票云账号每天都要重新登录是怎么回事",
+    "category": "故障排查",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-002",
+    "question": "标准版发票云如何开通扫码开票功能",
+    "category": "售后配置",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-003",
+    "question": "星瀚旗舰版 - 星瀚发票云，产品激活网站内分配开票管理许可选不到对应单位",
+    "category": "故障排查",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-004",
+    "question": "星瀚旗舰版影像附件支持的格式",
+    "category": "功能查询",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-005",
+    "question": "星空企业版发票校验失败，未设置收票地址",
+    "category": "故障排查",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-006",
+    "question": "星空旗舰版发票红冲后仍可上传，星空旗舰版如何配置禁止全部红冲发票导入",
+    "category": "售后配置",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-007",
+    "question": "金蝶云星空旗舰版中，如何开具运输费发票，需要在备注中输入地址信息，应如何操作开票",
+    "category": "售后操作",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-008",
+    "question": "星瀚旗舰版开票产品如何进行数电升级?",
+    "category": "售后配置",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-009",
+    "question": "星空旗舰版发票云开票配置，哪些是必须配置的",
+    "category": "售后配置",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-010",
+    "question": "激活码在哪里，激活码失效了找不到更新的地方",
+    "category": "售后操作",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-011",
+    "question": "发票云分配的时候租户分配错了，可以重新分配吗？订单应该分配给A公司使用，现在要分配给B公司使用。",
+    "category": "订单管理",
+    "expected_product_ask": false,
+    "expected_fallback": true,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-012",
+    "question": "从电子税局下载回来的发票为什么还是未签收状态？如何实现自动签收？",
+    "category": "故障排查",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-013",
+    "question": "数电票开红票流程是什么？",
+    "category": "售后操作",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-014",
+    "question": "星瀚旗舰版开票工作台开具红票流程是什么？",
+    "category": "售后操作",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-015",
+    "question": "星瀚旗舰版，已经在税局勾选的发票，怎么更新系统中的状态",
+    "category": "售后操作",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-016",
+    "question": "统一登录时提示未查询到与该企业的关联关系信息，应该怎么办？",
+    "category": "故障排查",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-017",
+    "question": "收票标准版发票识别出的税额不对",
+    "category": "故障排查",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-018",
+    "question": "旗舰版怎么配置收票管理",
+    "category": "售后配置",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-019",
+    "question": "发票云怎么配置自动开票？",
+    "category": "售后配置",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-020",
+    "question": "开票失败提示\"税局繁忙\"，如何处理？",
+    "category": "故障排查",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-021",
+    "question": "收票支持识别哪些发票类型？",
+    "category": "功能查询",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-022",
+    "question": "如何设置开票审批流程？",
+    "category": "售后配置",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-023",
+    "question": "发票云支持批量开票吗？",
+    "category": "功能查询",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-024",
+    "question": "影像模块支持哪些文件格式上传？",
+    "category": "功能查询",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-025",
+    "question": "如何配置发票抬头信息？",
+    "category": "售后配置",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-026",
+    "question": "开票接口调用失败，返回500错误怎么排查？",
+    "category": "故障排查",
+    "expected_product_ask": true,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-027",
+    "question": "发票云的销售负责人是谁，怎么联系？",
+    "category": "其他",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-028",
+    "question": "发票云项目实施大概需要多少天？",
+    "category": "其他",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-029",
+    "question": "发票云和友商产品相比价格怎么样？",
+    "category": "其他",
+    "expected_product_ask": false,
+    "expected_fallback": true,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-030",
+    "question": "发票云支持私有化部署在客户自己的服务器上吗？",
+    "category": "售前咨询",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-031",
+    "question": "发票云能不能和钉钉审批流打通？",
+    "category": "售前咨询",
+    "expected_product_ask": false,
+    "expected_fallback": false,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  },
+  {
+    "id": "qs-032",
+    "question": "发票云有没有针对小微企业的优惠套餐？",
+    "category": "售前咨询",
+    "expected_product_ask": false,
+    "expected_fallback": true,
+    "gold_doc_url": null,
+    "key_facts": [],
+    "must_not_contain": []
+  }
+]

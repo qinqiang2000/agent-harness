@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 LOG_DIR = PROJECT_ROOT / "log"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-FALLBACK_PHRASE = "抱歉,在发票云知识库没找到本答案"
+FALLBACK_PHRASE = "在发票云知识库没找到本答案"
 
 # 专用 logger，只输出纯 JSON 行，不加 logging 时间前缀
 _interactions_logger = logging.getLogger("interactions")

@@ -177,8 +177,22 @@ def build_judge_prompt(result: dict, golden_entry: dict | None) -> str:
 
 
 def load_golden_set(golden_path: Path) -> dict:
-    """加载 golden set，返回 question -> entry 字典"""
+    """加载 golden set，返回 question -> entry 字典。
+    优先读 .json（格式化数组），没有则读 .jsonl（逐行）。
+    """
     golden = {}
+    # 优先读格式化 .json
+    json_path = golden_path.with_suffix(".json")
+    if json_path.exists():
+        with open(json_path, encoding="utf-8") as f:
+            try:
+                entries = json.load(f)
+                for entry in entries:
+                    golden[entry["question"]] = entry
+                return golden
+            except (json.JSONDecodeError, KeyError):
+                pass
+    # 回退读 .jsonl
     if not golden_path.exists():
         return golden
     with open(golden_path, encoding="utf-8") as f:
