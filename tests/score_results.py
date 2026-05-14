@@ -68,7 +68,7 @@ AI回答:
   3=完全符合；2=1处问题；1=2处问题；0=3处或以上问题
 
 [missing_handling] 当知识库无答案时，是否使用正确兜底话术？
-  正确话术："抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持。"
+  正确话术包含："在发票云知识库没找到本答案"
   3=使用了精确话术；2=适当拒绝但话术不标准；1=含糊应答；0=编造答案或给出不确定内容
   不适用(-1)：知识库有答案的情况
 
@@ -76,7 +76,7 @@ AI回答:
 {{"product_id": N, "kb_grounded": N, "accuracy": N, "format": N, "missing_handling": N, "failure_reasons": ["原因1", "原因2"]}}
 """
 
-FALLBACK_PHRASE = "抱歉,在发票云知识库没找到本答案"
+FALLBACK_PHRASE = "在发票云知识库没找到本答案"
 
 WEIGHTS = {
     "kb_grounded": 3,
@@ -163,6 +163,11 @@ def build_judge_prompt(result: dict, golden_entry: dict | None) -> str:
     if golden_entry and golden_entry.get("gold_answer"):
         gold_section = f"标准答案:\n---\n{golden_entry['gold_answer']}\n---\n评估注意: {golden_entry.get('evaluation_notes', '')}"
         accuracy_note = "（有标准答案，请严格对比）"
+    elif golden_entry and golden_entry.get("gold_doc_url"):
+        key_facts = golden_entry.get("key_facts") or []
+        facts_str = "\n".join(f"- {f}" for f in key_facts) if key_facts else "（未指定）"
+        gold_section = f"标准文档URL: {golden_entry['gold_doc_url']}\n必须包含的关键事实:\n{facts_str}"
+        accuracy_note = "（有标准文档和关键事实，请对照检查答案是否覆盖这些事实点）"
     else:
         gold_section = "（无标准答案，请基于发票云领域知识和KB一致性判断）"
         accuracy_note = "（无标准答案，根据逻辑一致性和KB证据判断）"

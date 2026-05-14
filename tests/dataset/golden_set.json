@@ -5,7 +5,7 @@
     "category": "故障排查",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/iku831gido72566g",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -15,7 +15,7 @@
     "category": "售后配置",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://jdpiaozone.yuque.com/nbklz3/tadboa/ntveg9uystfc2laq",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -25,7 +25,7 @@
     "category": "故障排查",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/sf09ttllvsbpkyae",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -35,7 +35,7 @@
     "category": "功能查询",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/pgrkef/nd6ufdfs1w1kb8cl",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -55,7 +55,7 @@
     "category": "售后配置",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/axl2ua22gz13mdg4",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -65,7 +65,7 @@
     "category": "售后操作",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/efwyufy8k04otgai",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -85,7 +85,7 @@
     "category": "售后配置",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/veg7fwb9sfbkzwr0",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -95,7 +95,7 @@
     "category": "售后操作",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/sf09ttllvsbpkyae",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -115,7 +115,7 @@
     "category": "故障排查",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/ci5ls5gcrr1ht3xy",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -125,7 +125,7 @@
     "category": "售后操作",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/zsp4d9pskfa24a4g",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -135,7 +135,7 @@
     "category": "售后操作",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/exyu88g64x78ihgx",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -145,7 +145,7 @@
     "category": "售后操作",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/kn41k126kfdt01pd",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -165,7 +165,7 @@
     "category": "故障排查",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/gwv14n5pu5eknpst",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -175,7 +175,7 @@
     "category": "售后配置",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/zabzxce5n94bpe47",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -185,7 +185,7 @@
     "category": "售后配置",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/bagkxplalzf04oq7",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -205,7 +205,7 @@
     "category": "功能查询",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/pbp0r1qxo6w6ykx9",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -225,7 +225,7 @@
     "category": "功能查询",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/pgrkef/gaq1aogwoyll94dd",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -235,7 +235,7 @@
     "category": "功能查询",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/beimwsd7u8dqp5bb",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -245,7 +245,7 @@
     "category": "售后配置",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/scgwhou5ghpxzfag",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -255,7 +255,7 @@
     "category": "故障排查",
     "expected_product_ask": true,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/tadboa/fi6qrk7hrsw2b232",
     "key_facts": [],
     "must_not_contain": []
   },
@@ -275,7 +275,7 @@
     "category": "其他",
     "expected_product_ask": false,
     "expected_fallback": false,
-    "gold_doc_url": null,
+    "gold_doc_url": "https://www.yuque.com/nbklz3/pgrkef/qg4tuk1fv35tbtme",
     "key_facts": [],
     "must_not_contain": []
   },
