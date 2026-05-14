@@ -18,6 +18,7 @@ Usage:
 
 import asyncio
 import json
+import os
 import sys
 import argparse
 from pathlib import Path
@@ -86,6 +87,61 @@ WEIGHTS = {
 }
 
 
+def check_behavior(result: dict, golden_entry: dict | None) -> dict:
+    """行为验证（确定性，不依赖 LLM）"""
+    if not golden_entry:
+        return {"behavior_pass": None, "behavior_details": {}}
+
+    details = {}
+
+    # 验证产品消歧行为
+    expected_ask = golden_entry.get("expected_product_ask")
+    if expected_ask is not None:
+        actual_ask = result.get("asked_product", False)
+        details["product_ask"] = {
+            "expected": expected_ask,
+            "actual": actual_ask,
+            "pass": actual_ask == expected_ask,
+        }
+
+    # 验证兜底话术行为
+    expected_fallback = golden_entry.get("expected_fallback")
+    if expected_fallback is not None:
+        actual_fallback = result.get("has_fallback", False)
+        details["fallback"] = {
+            "expected": expected_fallback,
+            "actual": actual_fallback,
+            "pass": actual_fallback == expected_fallback,
+        }
+
+    # 验证关键事实（key_facts 全部命中才算通过）
+    key_facts = golden_entry.get("key_facts", [])
+    if key_facts:
+        answer = result.get("answer", "")
+        missing = [f for f in key_facts if f not in answer]
+        details["key_facts"] = {
+            "total": len(key_facts),
+            "missing": missing,
+            "pass": len(missing) == 0,
+        }
+
+    # 验证禁止内容
+    must_not = golden_entry.get("must_not_contain", [])
+    if must_not:
+        answer = result.get("answer", "")
+        violations = [s for s in must_not if s in answer]
+        details["must_not_contain"] = {
+            "violations": violations,
+            "pass": len(violations) == 0,
+        }
+
+    # 综合行为是否通过（所有有效检查都通过）
+    all_checks = [v["pass"] for v in details.values() if isinstance(v, dict) and "pass" in v]
+    behavior_pass = all(all_checks) if all_checks else None
+
+    return {"behavior_pass": behavior_pass, "behavior_details": details}
+
+
 def compute_quality_score(scores: dict) -> float:
     """加权计算综合分（0-10），跳过不适用维度（-1）"""
     total_weight = 0
@@ -142,12 +198,16 @@ async def score_single_result(
     result: dict,
     golden_entry: dict | None,
 ) -> dict:
-    """对单个结果进行 LLM 评分"""
+    """对单个结果进行行为验证 + LLM 评分"""
+    # 行为验证（确定性，不依赖 LLM）
+    behavior = check_behavior(result, golden_entry)
+
     # 无答案直接给 0 分
     if not result.get("answer") and result.get("status") in ("error", "timeout"):
         scores = {"product_id": 0, "kb_grounded": 0, "accuracy": 0, "format": 0, "missing_handling": 0}
         return {
             **result,
+            **behavior,
             "scores": scores,
             "quality_score": 0.0,
             "failure_reasons": [f"status={result.get('status')}, 无答案"],
@@ -158,7 +218,7 @@ async def score_single_result(
 
     try:
         msg = await client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-4-6",
             max_tokens=512,
             system=JUDGE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
@@ -173,8 +233,15 @@ async def score_single_result(
         scores_raw = json.loads(raw.strip())
         failure_reasons = scores_raw.pop("failure_reasons", [])
         quality_score = compute_quality_score(scores_raw)
+
+        # 行为验证失败时强制降分
+        if behavior["behavior_pass"] is False:
+            quality_score = min(quality_score, 4.0)
+            failure_reasons.append("行为验证失败: " + str(behavior["behavior_details"]))
+
         return {
             **result,
+            **behavior,
             "scores": scores_raw,
             "quality_score": quality_score,
             "failure_reasons": failure_reasons,
@@ -183,6 +250,7 @@ async def score_single_result(
     except Exception as e:
         return {
             **result,
+            **behavior,
             "scores": {},
             "quality_score": -1.0,
             "failure_reasons": [f"评分错误: {e}"],
@@ -213,7 +281,10 @@ async def score_file(input_path: Path, concurrency: int = 3) -> Path:
     if golden:
         print(f"  Golden set: {len(golden)} 条（有标准答案的题目将更精准评分）")
 
-    client = anthropic.AsyncAnthropic()
+    client = anthropic.AsyncAnthropic(
+        api_key=os.environ.get("LITELLM_API_KEY"),
+        base_url=os.environ.get("LITELLM_BASE_URL"),
+    )
     semaphore = asyncio.Semaphore(concurrency)
 
     async def score_with_sem(idx: int, result: dict) -> dict:
@@ -236,17 +307,45 @@ async def score_file(input_path: Path, concurrency: int = 3) -> Path:
     bad = [r for r in valid if r["is_bad_case"]]
     avg_score = sum(r["quality_score"] for r in valid) / len(valid) if valid else 0
 
+    # 行为验证统计
+    behavior_checked = [r for r in scored_results if r.get("behavior_pass") is not None]
+    behavior_passed = [r for r in behavior_checked if r.get("behavior_pass") is True]
+    behavior_failed = [r for r in behavior_checked if r.get("behavior_pass") is False]
+
     print(f"\n  {'='*40}")
     print(f"  平均分: {avg_score:.2f}/10")
     print(f"  Bad cases: {len(bad)}/{len(valid)} ({len(bad)/len(valid)*100:.0f}%)" if valid else "  无有效结果")
 
+    # 行为验证结果
+    if behavior_checked:
+        print(f"\n  行为验证 ({len(behavior_checked)} 条有 golden):")
+        print(f"    ✅ 通过: {len(behavior_passed)}/{len(behavior_checked)}")
+        if behavior_failed:
+            print(f"    ❌ 失败: {len(behavior_failed)}/{len(behavior_checked)}")
+            for r in behavior_failed[:5]:
+                q = (r.get("question") or "")[:45]
+                details = r.get("behavior_details", {})
+                fail_items = [k for k, v in details.items() if isinstance(v, dict) and not v.get("pass")]
+                print(f"       [{', '.join(fail_items)}] {q}...")
+
+    # 工具调用统计
+    all_tool_calls = [tc for r in scored_results for tc in (r.get("tool_calls") or [])]
+    if all_tool_calls:
+        grep_n = sum(1 for tc in all_tool_calls if tc.get("name") == "Grep")
+        read_n = sum(1 for tc in all_tool_calls if tc.get("name") == "Read")
+        total_q = len(scored_results)
+        print(f"\n  工具调用效率:")
+        print(f"    Grep 平均: {grep_n/total_q:.1f} 次/题")
+        print(f"    Read 平均: {read_n/total_q:.1f} 次/题")
+
     # 按维度统计
+    print(f"\n  LLM 评分维度:")
     for dim in ["product_id", "kb_grounded", "accuracy", "format", "missing_handling"]:
         dim_scores = [r["scores"].get(dim, -1) for r in valid if r.get("scores")]
         applicable = [s for s in dim_scores if s >= 0]
         if applicable:
             avg_dim = sum(applicable) / len(applicable)
-            print(f"  {dim:<20}: {avg_dim:.2f}/3")
+            print(f"    {dim:<20}: {avg_dim:.2f}/3")
 
     # 保存
     output = {
