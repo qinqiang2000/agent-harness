@@ -12,9 +12,9 @@
       "Skill": 31,
       "total": 331
     },
-    "scored_at": "2026-05-13T17:31:11.134398",
-    "avg_quality_score": 7.665,
-    "bad_case_count": 7
+    "scored_at": "2026-05-15T08:42:33.017227",
+    "avg_quality_score": 7.9353125,
+    "bad_case_count": 6
   },
   "results": [
     {
@@ -159,17 +159,15 @@
         }
       },
       "scores": {
-        "product_id": 2,
+        "product_id": 3,
         "kb_grounded": 3,
         "accuracy": 3,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 8.52,
+      "quality_score": 9.63,
       "failure_reasons": [
-        "回答开头暴露了内部思考过程（'用户明确提到了星空旗舰版，这是一个售后支持问题'、'我现在搜索知识库'等内部流程泄漏到输出中）",
-        "字数超过300字限制，内容偏长",
-        "产品识别提到星空旗舰版但未明确说明该文档是否专门针对旗舰版还是通用适用，存在轻微产品适用范围模糊"
+        "回答包含内部思考过程（'我现在搜索知识库查找相关信息。Found a relevant document...'等内部流程）泄漏到输出中，不符合格式要求"
       ],
       "is_bad_case": false
     },
@@ -284,7 +282,8 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答开头暴露了内部思考过程（'这是一个售后配置问题，我来搜索知识库。Now let me check the FAQ...'），属于内部流程泄漏"
+        "回答中包含内部思考过程泄漏（'这是一个售后配置问题，我来搜索知识库。Now let me check the FAQ for more details on开通'），不应出现在最终输出中",
+        "末尾添加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的交互选项，标准答案中无此内容"
       ],
       "is_bad_case": false
     },
@@ -451,15 +450,15 @@
         }
       },
       "scores": {
-        "product_id": 3,
+        "product_id": -1,
         "kb_grounded": 3,
         "accuracy": 3,
         "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 9.63,
+      "quality_score": 9.52,
       "failure_reasons": [
-        "回答开头包含内部调试痕迹'Now, let me re-read the key part of the activation document for the exact steps.'，属于内部流程泄漏到输出"
+        "回答开头包含内部调试文本'Now, let me re-read the key part of the activation document for the exact steps.'，属于内部流程泄漏到输出"
       ],
       "is_bad_case": false
     },
@@ -542,7 +541,7 @@
         }
       },
       "scores": {
-        "product_id": 3,
+        "product_id": -1,
         "kb_grounded": 3,
         "accuracy": 3,
         "format": 3,
@@ -677,12 +676,12 @@
       ],
       "asked_product": true,
       "has_fallback": false,
-      "behavior_pass": false,
+      "behavior_pass": true,
       "behavior_details": {
         "product_ask": {
-          "expected": false,
+          "expected": true,
           "actual": true,
-          "pass": false
+          "pass": true
         },
         "fallback": {
           "expected": false,
@@ -697,13 +696,12 @@
         "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 4.0,
+      "quality_score": 8.89,
       "failure_reasons": [
         "产品上下文已明确为旗舰版，AI仍主动询问产品确认，属于不该问却问了，但最终基于正确产品作答，故轻微扣分",
-        "回答字数超过300字限制，格式略显冗长",
-        "行为验证失败: {'product_ask': {'expected': False, 'actual': True, 'pass': False}, 'fallback': {'expected': False, 'actual': False, 'pass': True}}"
+        "回答字数超过300字限制，格式略显冗长"
       ],
-      "is_bad_case": true
+      "is_bad_case": false
     },
     {
       "question": "星空旗舰版发票红冲后仍可上传，星空旗舰版如何配置禁止全部红冲发票导入",
@@ -785,7 +783,7 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的满意度调查，属于多余内容，略超简洁要求"
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的交互提示，标准答案中无此内容，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -981,9 +979,8 @@
       },
       "quality_score": 8.15,
       "failure_reasons": [
-        "回答超过300字，格式要求简洁但内容过长",
-        "结论未完全前置，操作步骤较为冗长",
-        "货物运输发票备注中地址信息的具体格式要求（如起运地、到达地的填写规范）未明确说明，可能存在信息不完整"
+        "回答超过300字，格式冗长，不符合简洁要求",
+        "备注输入地址的具体操作细节未经标准文档核实，存在一定幻觉风险（如'步骤4'的描述未能确认与文档完全一致）"
       ],
       "is_bad_case": false
     },
@@ -1084,15 +1081,17 @@
       },
       "scores": {
         "product_id": 3,
-        "kb_grounded": 1,
+        "kb_grounded": 0,
         "accuracy": 1,
         "format": 2,
-        "missing_handling": -1
+        "missing_handling": 0
       },
-      "quality_score": 5.19,
+      "quality_score": 3.67,
       "failure_reasons": [
-        "答案缺乏知识库文档链接或明确KB引用依据，步骤内容存在潜在编造风险（如'金蝶发票云微信公众号'配置流程、激活码导入步骤等细节无法核实）",
-        "数电升级流程中'接收邮件→激活码→公众号配置'的具体步骤链条未经KB验证，可能与实际操作流程不符"
+        "答案无知识库依据，未引用任何KB文档或链接，存在编造风险",
+        "知识库无答案时未使用标准兜底话术'在发票云知识库没找到本答案'，而是直接给出具体操作步骤",
+        "步骤细节（如激活码流程、公众号配置）无法验证真实性，可能存在幻觉内容",
+        "字数略超300字"
       ],
       "is_bad_case": true
     },
@@ -1173,9 +1172,9 @@
       },
       "quality_score": 8.15,
       "failure_reasons": [
-        "回答篇幅远超300字，格式要求不符",
-        "结论未前置，直接列举配置项而非先给出核心结论",
-        "发票推送邮箱设置标注为必须配置，但实际是否为强制项需进一步核实，存在轻微准确性风险"
+        "回答超过300字，内容冗长，未做到简洁要求",
+        "将'发票推送邮箱设置'列为必须配置项，但该项是否为强制必须项需对照标准文档确认，存在潜在准确性风险",
+        "结构层级过多（三级标题+编号），格式偏复杂，不够简洁直接"
       ],
       "is_bad_case": false
     },
@@ -1261,16 +1260,16 @@
         }
       },
       "scores": {
-        "product_id": 2,
+        "product_id": 1,
         "kb_grounded": 3,
-        "accuracy": 2,
+        "accuracy": 3,
         "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 7.78,
+      "quality_score": 8.15,
       "failure_reasons": [
-        "产品识别偏差：用户上下文已明确为旗舰版发票云，AI仍询问产品版本，且选项中出现'星瀚旗舰版'与'星空旗舰版'两个旗舰版选项，增加用户困惑",
-        "格式问题：回答超过300字，内容偏长；末尾附加税号变更申请的注意事项与用户问题相关性较低，属于冗余信息"
+        "产品上下文已明确为旗舰版发票云，AI仍询问具体产品版本，不应再次询问产品类型",
+        "回答末尾的'以上回复是否已经解决您的问题 1 解决 2 未解决'属于内部交互流程，不应出现在最终输出中"
       ],
       "is_bad_case": false
     },
@@ -1377,15 +1376,16 @@
       "scores": {
         "product_id": 2,
         "kb_grounded": 3,
-        "accuracy": 2,
+        "accuracy": 0,
         "format": 2,
-        "missing_handling": -1
+        "missing_handling": 0
       },
       "quality_score": 4.0,
       "failure_reasons": [
-        "产品识别偏差：上下文已明确标注'旗舰版发票云'，AI仍发起产品询问，属于不该问却问了；但最终基于星瀚旗舰版作答，故扣1分而非最低分",
-        "格式问题：回答超过300字，内容偏长；结论前置做到了但整体略显冗余",
-        "准确性存疑：回答区分了'开票产品'和'收票产品'两条变更流程，逻辑合理且有文档链接支撑，但无法确认两条流程名称是否与KB完全一致，存在轻微不确定性",
+        "标准答案明确指出知识库无此答案，应使用兜底话术，但AI却给出了详细的操作步骤，属于编造/幻觉内容",
+        "未使用正确兜底话术'在发票云知识库没找到本答案'，违反缺失答案处理规范",
+        "产品识别存在轻微偏差：上下文已标注旗舰版发票云，AI仍主动询问产品版本，不该问却问了",
+        "事实内容与标准答案完全相悖，标准答案要求转人工或留言提单，AI却给出了未经验证的变更审批流程步骤",
         "行为验证失败: {'product_ask': {'expected': False, 'actual': True, 'pass': False}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
       ],
       "is_bad_case": true
@@ -1503,7 +1503,7 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答字数略超300字，包含补充说明和结尾确认语，稍显冗余"
+        "结尾添加了'以上回复是否已经解决您的问题 1 解决 2 未解决'，标准答案中无此内容，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -1590,13 +1590,12 @@
         "product_id": -1,
         "kb_grounded": 3,
         "accuracy": 3,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 9.05,
+      "quality_score": 9.52,
       "failure_reasons": [
-        "回答字数明显超过300字限制，正文内容冗长",
-        "结尾附加'以上回复是否已经解决您的问题 1 解决 2 未解决'属于内部交互流程泄漏到输出"
+        "回答字数超过300字限制，正文内容较长"
       ],
       "is_bad_case": false
     },
@@ -1678,7 +1677,7 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答字数超过300字限制，内容偏长"
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的交互提示，属于多余内容，不符合简洁输出要求"
       ],
       "is_bad_case": false
     },
@@ -1742,15 +1741,13 @@
       "scores": {
         "product_id": 3,
         "kb_grounded": 3,
-        "accuracy": 2,
+        "accuracy": 3,
         "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 8.52,
+      "quality_score": 9.63,
       "failure_reasons": [
-        "回答包含内部思考过程泄漏（'让我搜索知识库'、'支持，可以通过...'等内部流程语言暴露在输出中）",
-        "字数超过300字限制，格式略显冗长",
-        "方式一和方式二的操作路径细节无法完全验证准确性，存在轻微不确定性"
+        "回答字数超过300字限制，内容略显冗长"
       ],
       "is_bad_case": false
     },
@@ -1794,13 +1791,14 @@
         "kb_grounded": 0,
         "accuracy": 1,
         "format": 1,
-        "missing_handling": -1
+        "missing_handling": 0
       },
-      "quality_score": 3.7,
+      "quality_score": 3.33,
       "failure_reasons": [
         "未提供任何解决步骤或操作指引，仅反问产品版本，未能解答用户问题",
-        "回答无知识库依据，未引用任何KB内容或文档链接",
-        "结论未前置，直接以反问开场而非先给出可操作的解决方向"
+        "无知识库依据，未引用任何KB内容或文档链接",
+        "知识库无答案时未使用标准兜底话术'在发票云知识库没找到本答案'",
+        "结论未前置，直接以反问开场，不符合结论前置要求"
       ],
       "is_bad_case": true
     },
@@ -1895,14 +1893,13 @@
         "product_id": -1,
         "kb_grounded": 3,
         "accuracy": 2,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 7.62,
+      "quality_score": 8.1,
       "failure_reasons": [
-        "回答超过300字，格式要求简洁未达标",
-        "结论未完全前置，主要原因列表放在说明段落之后才给出解决方案",
-        "税额识别准确率数据（合计行90%+、明细行95%+）未能从引用文档中明确核实，存在轻微数据编造风险"
+        "答案中提到明细行税额准确率约95%+，但无法从提供的文档链接中核实该具体数值是否准确，存在潜在幻觉风险",
+        "回答字数超过300字，不符合简洁要求"
       ],
       "is_bad_case": false
     },
@@ -2011,14 +2008,12 @@
         "product_id": 3,
         "kb_grounded": 3,
         "accuracy": 3,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 9.26,
+      "quality_score": 9.63,
       "failure_reasons": [
-        "回答超过300字，内容过长，未做精简",
-        "结论未前置，直接列步骤而非先给出核心结论",
-        "包含系统内部批量测试流程标注（[批量测试]、[产品询问]等标签）泄漏到输出内容中"
+        "回答超过300字，内容较长，但步骤详细属合理范围；末尾附加了满意度调查选项（1解决/2未解决），标准答案中无此内容，属于格式轻微偏差"
       ],
       "is_bad_case": false
     },
@@ -2146,13 +2141,12 @@
         "product_id": 3,
         "kb_grounded": 3,
         "accuracy": 3,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 9.26,
+      "quality_score": 9.63,
       "failure_reasons": [
-        "回答超过300字，内容冗长",
-        "结论未前置，先描述路径再给步骤，用户需阅读较多内容才能获取核心操作"
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的满意度调查内容，标准答案中无此内容，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -2339,17 +2333,18 @@
         }
       },
       "scores": {
-        "product_id": 2,
+        "product_id": 1,
         "kb_grounded": 2,
         "accuracy": 3,
         "format": 1,
         "missing_handling": -1
       },
-      "quality_score": 7.41,
+      "quality_score": 6.67,
       "failure_reasons": [
-        "产品识别滞后：已知产品上下文为旗舰版发票云，AI仍在首轮回答中发起产品询问，属于不该问却问了，浪费用户交互轮次",
-        "格式问题1：首轮回答在已有产品上下文的情况下仍输出了产品选项询问，暴露了内部判断流程",
-        "格式问题2：两轮回答合计字数超过300字限制，且存在重复内容（两次给出相似的处理步骤）"
+        "产品上下文已明确为旗舰版发票云，AI仍发起产品询问，属于不该问却问了",
+        "第一次回答在已知产品上下文的情况下给出通用答案，未直接基于旗舰版知识库作答",
+        "回答超过300字且存在重复内容（两次给出处理步骤），格式冗余",
+        "第一次回答结论未前置，先解释原因再给步骤，不够简洁"
       ],
       "is_bad_case": false
     },
@@ -2578,10 +2573,9 @@
       },
       "quality_score": 8.15,
       "failure_reasons": [
-        "回答超过300字，格式冗长，不够简洁",
-        "结论未前置，先描述再列举，用户需阅读大量内容才能获取核心信息",
-        "全球发票部分描述'需购买文档智能取数服务流量包'未经KB明确验证，存在轻微幻觉风险",
-        "查验支持'近20种'的表述较模糊，可能与实际KB内容有偏差"
+        "答案超过300字，格式冗长，不够简洁",
+        "产品询问流程暴露在输出中（含[产品询问]标签和批量测试自动回复内容），存在内部流程泄漏",
+        "部分发票类型（如定额发票、机打发票、船票、完税证明等）未经知识库核实，存在潜在幻觉风险"
       ],
       "is_bad_case": false
     },
@@ -2697,18 +2691,16 @@
         }
       },
       "scores": {
-        "product_id": 2,
+        "product_id": 3,
         "kb_grounded": 3,
-        "accuracy": 2,
+        "accuracy": 3,
         "format": 1,
         "missing_handling": -1
       },
-      "quality_score": 7.41,
+      "quality_score": 9.26,
       "failure_reasons": [
-        "产品识别需用户二次确认才完成，上下文已明确为旗舰版发票云，AI不应再询问产品类型",
-        "回答超过300字，格式冗长，不符合简洁要求",
-        "结论未前置，直接进入配置细节，用户需阅读全文才能了解整体方案",
-        "配置项key与配置项类型的对应关系描述存在歧义，表格列头与内容对应不够清晰"
+        "回答超过300字，内容冗长，未做到简洁要求",
+        "结论未前置，先列配置步骤再说效果，用户需要阅读大量内容才能了解整体逻辑"
       ],
       "is_bad_case": false
     },
@@ -2828,7 +2820,7 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答字数超过300字限制，列举了4条功能点导致篇幅偏长"
+        "AI回答末尾多出'以上回复是否已经解决您的问题 1 解决 2 未解决'，标准答案中无此内容，属于额外输出"
       ],
       "is_bad_case": false
     },
@@ -2979,17 +2971,15 @@
         }
       },
       "scores": {
-        "product_id": 2,
+        "product_id": 3,
         "kb_grounded": 3,
         "accuracy": 3,
-        "format": 1,
+        "format": 2,
         "missing_handling": -1
       },
-      "quality_score": 8.52,
+      "quality_score": 9.63,
       "failure_reasons": [
-        "产品上下文已明确为旗舰版发票云，AI仍主动询问产品版本，属于不必要的产品询问，导致多轮交互",
-        "回答未结论前置，先经过产品询问交互才给出答案，流程冗余",
-        "回答包含系统交互标签如[产品询问]和批量测试自动回复内容泄漏在对话流中，格式不规范"
+        "结尾添加了'以上回复是否已经解决您的问题 1 解决 2 未解决'，标准答案中无此内容，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -3101,7 +3091,7 @@
       },
       "quality_score": 9.63,
       "failure_reasons": [
-        "回答字数超过300字限制，内容较为冗长"
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的满意度调查内容，标准答案中不包含此部分，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -3253,17 +3243,18 @@
         }
       },
       "scores": {
-        "product_id": 3,
+        "product_id": 2,
         "kb_grounded": 3,
         "accuracy": 2,
         "format": 1,
         "missing_handling": -1
       },
-      "quality_score": 8.15,
+      "quality_score": 7.41,
       "failure_reasons": [
-        "回答超过300字，格式要求简洁但内容过长",
-        "结论未前置，直接进入排查步骤而非先给出最可能原因",
-        "接口调用时序描述（认证→创建订单→登录电子税局→创建开具任务）需验证是否与星瀚旗舰版文档完全一致，存在轻微不确定性"
+        "产品识别：上下文已明确为旗舰版，AI仍先询问产品类型，属于不该问却问了，扣1分（最终答案基于星瀚旗舰版作答，故给2分）",
+        "格式问题1：回答超过300字，内容冗长",
+        "格式问题2：末尾附加'以上回复是否已经解决您的问题 1解决 2未解决'属于内部交互流程泄漏到输出",
+        "准确性：接口调用时序描述（认证→创建订单→登录电子税局→创建开票任务）未经文档核实，存在潜在错误风险"
       ],
       "is_bad_case": false
     },
@@ -3303,9 +3294,8 @@
       },
       "quality_score": 4.17,
       "failure_reasons": [
-        "未使用标准兜底话术，正确话术应为'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持'",
-        "答案无知识库依据，属于自行推断的通用建议而非KB内容",
-        "结尾反问用户意图略显冗余，增加了字数但价值有限"
+        "未使用标准兜底话术'在发票云知识库没找到本答案'",
+        "回答末尾追问用户意图，属于多余内容，略超简洁要求"
       ],
       "is_bad_case": true
     },
@@ -3704,7 +3694,7 @@
       },
       "quality_score": 9.52,
       "failure_reasons": [
-        "回答字数超过300字限制，表格+说明文字合计偏长"
+        "回答末尾附加了'以上回复是否已经解决您的问题 1 解决 2 未解决'的交互提示，标准答案中无此内容，属于多余输出"
       ],
       "is_bad_case": false
     },
@@ -3746,14 +3736,13 @@
       "scores": {
         "product_id": -1,
         "kb_grounded": -1,
-        "accuracy": -1,
+        "accuracy": 3,
         "format": 2,
-        "missing_handling": 2
+        "missing_handling": 3
       },
       "quality_score": 4.0,
       "failure_reasons": [
-        "兜底话术不标准，未使用规定话术'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持'，而是提供了工单和转人工两个选项",
-        "格式上提供了额外的操作指引，略显冗余，但未超出300字",
+        "AI回答中'可能会等待'与标准答案'可能会排队等待'措辞略有差异，表达不够完整",
         "行为验证失败: {'product_ask': {'expected': False, 'actual': False, 'pass': True}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
       ],
       "is_bad_case": true
@@ -3895,8 +3884,8 @@
       "quality_score": 6.67,
       "failure_reasons": [
         "产品识别存在轻微偏差：回答开头声称'所有产品均支持公有云和私有云两种部署模式'，但随后又说标准版'以公有云授权为主，部分场景支持私有云'，自相矛盾",
-        "事实准确性存疑：'星空旗舰版仅支持私有云部署'的表述与通常产品逻辑不符，且文档链接存在省略号(...)，说明引用不完整或存在编造风险",
-        "格式问题：回答超过300字，且包含内部思考流程泄漏（'这是一个售前通用咨询问题，直接搜索营销知识库'属于内部处理逻辑，不应出现在用户回复中）"
+        "事实准确性存疑：'星空旗舰版仅支持私有云部署'的表述与通常认知不符，星空旗舰版一般同时支持公有云和私有云，需核实；各版本部署模式描述缺乏一致性",
+        "格式问题：回答超过300字，略显冗长；内部思考过程（'这是一个售前通用咨询问题，直接搜索营销知识库'）泄漏到输出中"
       ],
       "is_bad_case": false
     },
@@ -4102,9 +4091,9 @@
       },
       "quality_score": 6.67,
       "failure_reasons": [
-        "回答包含内部思考过程（'直接搜索营销知识库'等）泄漏到输出，违反格式要求",
-        "提供了一个具体KB链接但另一项能力（开放API对接）无文档支撑，存在部分无依据内容",
-        "字数接近边界且结构略显冗余"
+        "回答超过300字，格式略显冗长",
+        "提供了一个具体KB链接但仅针对轻应用入口场景，开放API对接部分缺乏文档支撑，存在一定幻觉风险",
+        "内部思考过程（'直接搜索营销知识库'等）泄漏到输出内容中"
       ],
       "is_bad_case": false
     },
@@ -4146,14 +4135,12 @@
       "scores": {
         "product_id": -1,
         "kb_grounded": -1,
-        "accuracy": -1,
-        "format": 2,
-        "missing_handling": 2
+        "accuracy": 3,
+        "format": 3,
+        "missing_handling": 3
       },
       "quality_score": 4.0,
       "failure_reasons": [
-        "兜底话术不标准，正确话术应为'抱歉,在发票云知识库没找到本答案,请联系发票云人工客服做支持。'，但实际输出包含了额外的提工单和转人工坐席引导内容",
-        "格式上结论前置但内容略显冗长，超出标准兜底话术范围",
         "行为验证失败: {'product_ask': {'expected': False, 'actual': False, 'pass': True}, 'fallback': {'expected': True, 'actual': False, 'pass': False}}"
       ],
       "is_bad_case": true
