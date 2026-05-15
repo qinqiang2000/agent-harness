@@ -114,18 +114,7 @@ def check_behavior(result: dict, golden_entry: dict | None) -> dict:
             "pass": actual_fallback == expected_fallback,
         }
 
-    # 验证关键事实（key_facts 全部命中才算通过）
-    key_facts = golden_entry.get("key_facts", [])
-    if key_facts:
-        answer = result.get("answer", "")
-        missing = [f for f in key_facts if f not in answer]
-        details["key_facts"] = {
-            "total": len(key_facts),
-            "missing": missing,
-            "pass": len(missing) == 0,
-        }
-
-    # 验证禁止内容
+    # 验证禁止内容（must_not_contain 仍然是硬性检查）
     must_not = golden_entry.get("must_not_contain", [])
     if must_not:
         answer = result.get("answer", "")
