@@ -10,6 +10,7 @@ async def build_initial_prompt(
     tenant_id: str,
     user_prompt: str,
     skill: Optional[str] = None,
+    default_skills: Optional[List[str]] = None,
     language: str = "中文",
     context_file_path: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
@@ -36,6 +37,9 @@ async def build_initial_prompt(
     parts.append("# 任务")
     if skill:
         parts.append(f"严格按skill: {skill} 执行任务")
+    elif default_skills:
+        skills_list = "、".join(default_skills)
+        parts.append(f"根据用户请求，从以下 skill 中选择最合适的一个并严格按该 skill 执行任务: {skills_list}")
     parts.append(f"用户请求: {user_prompt}")
 
     # 上下文

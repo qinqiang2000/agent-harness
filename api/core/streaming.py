@@ -1,7 +1,9 @@
 """Claude SDK streaming response processor."""
 
+import asyncio
 import json
 import logging
+import os
 import re
 from typing import AsyncGenerator
 from claude_agent_sdk import (
@@ -87,31 +89,38 @@ class StreamProcessor:
         if self.request.session_id:
             await self._ensure_session_registered(self.request.session_id)
 
+        timeout_ms = int(os.environ.get("API_TIMEOUT_MS", "600000"))
+        timeout_s = timeout_ms / 1000.0
+
         try:
-            async for msg in self.client.receive_response():
-                if not self.first_message_received:
-                    self.first_message_received = True
-                    # 节点 4：首条消息到达
-                    t = PerfTimer.current()
-                    if t:
-                        t.mark("FIRST_MESSAGE")
+            async with asyncio.timeout(timeout_s):
+                async for msg in self.client.receive_response():
+                    if not self.first_message_received:
+                        self.first_message_received = True
+                        # 节点 4：首条消息到达
+                        t = PerfTimer.current()
+                        if t:
+                            t.mark("FIRST_MESSAGE")
 
-                # Handle different message types
-                if isinstance(msg, SystemMessage):
-                    async for sse_msg in self._handle_system_message(msg):
-                        yield sse_msg
+                    # Handle different message types
+                    if isinstance(msg, SystemMessage):
+                        async for sse_msg in self._handle_system_message(msg):
+                            yield sse_msg
 
-                elif isinstance(msg, AssistantMessage):
-                    async for sse_msg in self._handle_assistant_message(msg):
-                        yield sse_msg
+                    elif isinstance(msg, AssistantMessage):
+                        async for sse_msg in self._handle_assistant_message(msg):
+                            yield sse_msg
 
-                elif isinstance(msg, ResultMessage):
-                    async for sse_msg in self._handle_result_message(msg):
-                        yield sse_msg
+                    elif isinstance(msg, ResultMessage):
+                        async for sse_msg in self._handle_result_message(msg):
+                            yield sse_msg
 
             if not self.first_message_received:
                 logger.warning("No messages received from Claude SDK")
 
+        except asyncio.TimeoutError:
+            logger.error(f"Stream timed out after {timeout_s:.0f}s (API_TIMEOUT_MS={timeout_ms})")
+            yield format_sse_message("error", {"message": f"模型响应超时（{timeout_s:.0f}秒），请稍后重试。"})
         finally:
             # Clean up session
             if self.session_registered and self.actual_session_id and self.session_service:

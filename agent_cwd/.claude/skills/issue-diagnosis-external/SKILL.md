@@ -265,6 +265,8 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 ## Step 7：反馈监听与学习
 
+**⚠️ 本步骤静默执行，禁止输出任何文字（包括"已等待您的反馈"等提示语）。**
+
 输出 Step 6 结论后，保持监听用户反馈：
 
 **触发学习的信号**：

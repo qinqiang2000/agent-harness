@@ -160,7 +160,7 @@ class AgentService:
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
             max_turns=40,
-            system_prompt={"type": "preset", "preset": "claude_code"},
+            system_prompt={"type": "preset", "preset": "claude_code", "exclude_dynamic_sections": True},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
             settings=str(self.settings_file),
@@ -243,6 +243,9 @@ class AgentService:
             _base_options = self.build_default_options()
             _current_model = _base_options.model
 
+            _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
+            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
+
             if request.session_id:
                 prompt = request.prompt
                 if request.images:
@@ -253,6 +256,7 @@ class AgentService:
                     tenant_id=request.tenant_id,
                     user_prompt=request.prompt,
                     skill=request.skill,
+                    default_skills=_default_skills if not request.skill else None,
                     language=request.language,
                     context_file_path=context_file_path,
                     metadata=request.metadata,
@@ -267,8 +271,6 @@ class AgentService:
 
             # Configure Claude SDK
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
-            _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
-            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
             if request.skill and not request.session_id:
                 skills = [request.skill]
             elif not request.session_id:

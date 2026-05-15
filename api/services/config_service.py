@@ -157,7 +157,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
     "tencentmaas": ModelConfig(
         name="tencentmaas",
         description="腾讯云 MaaS DeepSeek-V4-Flash",
-        base_url=os.getenv("TENCENTMAAS_BASE_URL", "https://tokenhub.tencentmaas.com"),
+        base_url=os.getenv("TENCENTMAAS_BASE_URL", "https://tokenhub.tencentmaas.com/plan/anthropic"),
         auth_token_env="TENCENTMAAS_API_KEY",
         timeout_ms=600000,
         proxy_env=None,
