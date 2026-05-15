@@ -58,6 +58,9 @@ from api.dependencies import get_agent_service
 from api.models.requests import QueryRequest
 from api.utils.interaction_logger import FALLBACK_PHRASE
 
+import httpx
+import uuid
+
 FLASH_EXIT_THRESHOLD_MS = 100  # duration_ms 低于此值视为闪退
 
 # 配置日志 - 分离文件日志和控制台输出
@@ -109,6 +112,14 @@ class TestResult:
     # 断言结果
     flash_exit: bool = False          # duration_ms < 100ms
     fallback_after_ask: bool = False  # AskUserQuestion 后出现 fallback 短语
+    # 行为记录（用于评测框架）
+    tool_calls: list = None           # [{name, input, truncated}]
+    asked_product: bool = False       # 是否调用了 AskUserQuestion
+    has_fallback: bool = False        # 答案是否包含兜底话术
+
+    def __post_init__(self):
+        if self.tool_calls is None:
+            self.tool_calls = []
 
 
 # 产品选择检测模式 - 只匹配明确的询问，避免匹配陈述句
@@ -130,6 +141,121 @@ PRODUCT_REPLIES = {
     "星空旗舰版": "我使用的是星空旗舰版",
     "星空": "我使用的是星空旗舰版",
 }
+
+
+class ZhichiHttpAgentService:
+    """通过 /zhichi/ask 接口调用远程服务，适配为与 HttpAgentService 相同的事件流接口"""
+
+    def __init__(self, base_url: str, path: str = "/zhichi/ask"):
+        self.base_url = base_url.rstrip("/")
+        self.path = path
+        # session_id → ai_agent_cid 映射，支持多题并发
+        self._cid_map: dict[str, str] = {}
+
+    def _get_or_create_cid(self, session_id: str) -> str:
+        if session_id not in self._cid_map:
+            self._cid_map[session_id] = str(uuid.uuid4()).replace("-", "")
+        return self._cid_map[session_id]
+
+    async def process_query(self, request: QueryRequest):
+        # 用 session_id 作为 key；首轮 session_id 为空时生成新 key
+        key = request.session_id or str(uuid.uuid4())
+        cid = self._get_or_create_cid(key)
+
+        payload = {
+            "question": request.prompt,
+            "ai_agent_cid": cid,
+            "show_question": request.prompt,
+            "msg_type": "TEXT",
+            "req_stream": True,
+            "robot_model": "THIRD_STANDARD",
+            "input_type_enum": "INPUT",
+        }
+
+        # 首轮 yield session_created，让 TestRunner 记录 session_id
+        yield {"event": "session_created", "data": {"session_id": key}}
+
+        start_ms = datetime.now().timestamp() * 1000
+        full_answer = []
+
+        async with httpx.AsyncClient(timeout=600) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}{self.path}",
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if not data_str:
+                        continue
+                    try:
+                        wrapper = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    chunk_data = wrapper.get("data") or {}
+                    llm_answer = chunk_data.get("llm_answer", "")
+                    message_end = chunk_data.get("message_end", False)
+
+                    if llm_answer:
+                        full_answer.append(llm_answer)
+                        yield {"event": "assistant_message", "data": {"content": llm_answer}}
+
+                    if message_end:
+                        break
+
+        duration_ms = datetime.now().timestamp() * 1000 - start_ms
+        yield {"event": "result", "data": {
+            "session_id": key,
+            "result": "".join(full_answer),
+            "duration_ms": duration_ms,
+        }}
+
+
+class HttpAgentService:
+    """通过 HTTP SSE 调用远程接口，接口与 in-process AgentService 相同"""
+
+    def __init__(self, base_url: str, path: str = "/api/query"):
+        self.base_url = base_url.rstrip("/")
+        self.path = path
+
+    async def process_query(self, request: QueryRequest):
+        payload = {k: v for k, v in {
+            "tenant_id": request.tenant_id,
+            "prompt": request.prompt,
+            "skill": request.skill,
+            "language": request.language,
+            "session_id": request.session_id,
+            "metadata": request.metadata,
+        }.items() if v is not None}
+
+        current_event = None
+        async with httpx.AsyncClient(timeout=600) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}{self.path}",
+                json=payload,
+                headers={"Accept": "text/event-stream", "Content-Type": "application/json"},
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if line.startswith("event:"):
+                        current_event = line[len("event:"):].strip()
+                    elif line.startswith("data:"):
+                        data_str = line[len("data:"):].strip()
+                        if current_event:
+                            try:
+                                data_obj = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                data_obj = {"raw": data_str}
+                            yield {"event": current_event, "data": data_obj}
+                            current_event = None
+                    elif line == "":
+                        current_event = None
 
 
 def detect_product_question(text: str) -> bool:
@@ -235,6 +361,17 @@ class TestRunner:
         self.result.error = error
         self.result.duration_ms = (datetime.now() - self.start_time).total_seconds() * 1000
 
+        # 补充行为字段
+        self.result.has_fallback = FALLBACK_PHRASE in self.result.answer
+        # asked_product 补充检测：agent 可能用文字追问而非 AskUserQuestion 工具
+        if not self.result.asked_product:
+            ask_patterns = ["请问您使用的是哪款", "请确认.*产品", "您使用的是哪个版本", "哪款发票云产品"]
+            import re
+            for pat in ask_patterns:
+                if re.search(pat, self.result.answer):
+                    self.result.asked_product = True
+                    break
+
         # 记录最终状态
         duration_s = self.result.duration_ms / 1000
         if status == "success":
@@ -312,7 +449,30 @@ class TestRunner:
                                 self.round_answer.append(f"\n[产品询问] {q.get('question', '')} 选项: {options_text}\n")
                                 # 标记需要产品选择，继续下一轮
                                 self._needs_product_reply = True
+                                # 记录 tool call
+                                self.result.tool_calls.append({
+                                    "name": "AskUserQuestion",
+                                    "input": {"question": q.get("question", ""), "options": [opt.get("label", "") for opt in q.get("options", [])]},
+                                })
+                                self.result.asked_product = True
                                 break
+
+                    elif event_type == "tool_use":
+                        # 记录所有工具调用（Grep/Read/Glob/Skill 等）
+                        tool_name = data_obj.get("name", "")
+                        tool_input = data_obj.get("input", {})
+                        # 对大字段截断，避免 JSON 膨胀
+                        truncated_input = {}
+                        for k, v in tool_input.items():
+                            if isinstance(v, str) and len(v) > 200:
+                                truncated_input[k] = v[:200] + "...[truncated]"
+                            else:
+                                truncated_input[k] = v
+                        self.result.tool_calls.append({
+                            "name": tool_name,
+                            "input": truncated_input,
+                        })
+                        self.log(f"tool_use: {tool_name} {str(truncated_input)[:80]}")
 
                     elif event_type == "result":
                         round_duration_ms = data_obj.get("duration_ms", 0)
@@ -549,6 +709,8 @@ async def run_batch_tests(
     timeout: float = 300.0,
     md_writer: MarkdownWriter = None,
     jsonl_cases: list[dict] = None,
+    url: str = None,
+    path: str = "/api/query",
 ) -> list[TestResult]:
     """并发运行批量测试
 
@@ -559,8 +721,17 @@ async def run_batch_tests(
         timeout: 单个测试超时时间（秒）
         md_writer: Markdown 增量写入器，每完成一个任务立即写入
         jsonl_cases: 多轮测试用例列表（.jsonl 格式），与 questions 二选一
+        url: 目标服务地址（如 http://10.0.0.1:9090），不填则 in-process
+        path: API 路径（默认 /api/query）
     """
-    agent_service = get_agent_service()
+    if url:
+        if path == "/zhichi/ask":
+            agent_service = ZhichiHttpAgentService(url, path)
+        else:
+            agent_service = HttpAgentService(url, path)
+        logger.info(f"HTTP 模式: {url}{path}")
+    else:
+        agent_service = get_agent_service()
     semaphore = asyncio.Semaphore(concurrency)
     write_lock = asyncio.Lock()
 
@@ -702,10 +873,40 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
 
     base_name = f"{name}_{timestamp}"
 
-    # 保存 JSON
+    # 统计行为指标
+    total = len(results)
+    asked_product_count = sum(1 for r in results if r.asked_product)
+    has_fallback_count = sum(1 for r in results if r.has_fallback)
+    durations = [r.duration_ms for r in results if r.duration_ms > 0]
+    avg_duration = sum(durations) / len(durations) if durations else 0
+
+    # 统计工具调用
+    all_tool_calls = [tc for r in results for tc in r.tool_calls]
+    grep_count = sum(1 for tc in all_tool_calls if tc["name"] == "Grep")
+    read_count = sum(1 for tc in all_tool_calls if tc["name"] == "Read")
+    skill_count = sum(1 for tc in all_tool_calls if tc["name"] == "Skill")
+
+    # 保存 JSON（带 _meta 包装，供 score_results.py 读取）
     json_path = output_dir / f"{base_name}.json"
+    output = {
+        "_meta": {
+            "name": name,
+            "timestamp": timestamp,
+            "total": total,
+            "asked_product_count": asked_product_count,
+            "has_fallback_count": has_fallback_count,
+            "avg_duration_ms": round(avg_duration, 1),
+            "tool_call_summary": {
+                "Grep": grep_count,
+                "Read": read_count,
+                "Skill": skill_count,
+                "total": len(all_tool_calls),
+            },
+        },
+        "results": [asdict(r) for r in results],
+    }
     with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump([asdict(r) for r in results], f, ensure_ascii=False, indent=2)
+        json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"JSON 结果已保存: {json_path}")
     logger.info(f"JSON 结果已保存: {json_path}")
 
@@ -715,7 +916,6 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
         save_results_markdown(results, output_dir, name)
 
     # 汇总统计
-    total = len(results)
     success = sum(1 for r in results if r.status == "success")
     timeout = sum(1 for r in results if r.status == "timeout")
     errors = sum(1 for r in results if r.status == "error")
@@ -723,8 +923,6 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
     flash_exits = sum(1 for r in results if r.flash_exit)
     fallback_after_ask = sum(1 for r in results if r.fallback_after_ask)
     fallback_total = sum(1 for r in results if r.answer and FALLBACK_PHRASE in r.answer)
-    durations = [r.duration_ms for r in results if r.duration_ms > 0]
-    avg_duration = sum(durations) / len(durations) if durations else 0
 
     print(f"\n{'='*50}")
     print(f"测试完成: {total} 个用例")
@@ -737,6 +935,7 @@ def save_results(results: list[TestResult], output_dir: Path, name: str, md_writ
     print(f"  ⚠️  AskUser后fallback: {fallback_after_ask}")
     print(f"  📉 Fallback率:        {fallback_total}/{total} ({fallback_total/total*100:.1f}%)" if total else "")
     print(f"  ⏱ 平均响应时间:      {avg_duration/1000:.1f}s")
+    print(f"  🔧 工具调用: Grep×{grep_count} Read×{read_count} Skill×{skill_count}")
     print(f"{'='*50}\n")
 
     return json_path
@@ -749,6 +948,8 @@ async def main():
     parser.add_argument("--concurrency", "-c", type=int, default=1, help="并发数 (默认: 1)")
     parser.add_argument("--default-product", default="旗舰版发票云",
                         help="默认产品选择 (默认: 旗舰版发票云)")
+    parser.add_argument("--url", default=None,
+                        help="目标服务 URL，如 http://10.0.0.1:9090（不填则 in-process 模式）")
     parser.add_argument("--timeout", "-t", type=float, default=360.0, help="单个测试超时(秒)，默认360秒")
     parser.add_argument("--output-dir", "-o", default="tests/results", help="输出目录")
 
@@ -786,6 +987,8 @@ async def main():
 
     print(f"并发数: {args.concurrency}")
     print(f"默认产品: {args.default_product}")
+    if args.url:
+        print(f"目标服务: {args.url}")
     print()
 
     output_dir = Path(args.output_dir)
@@ -802,6 +1005,7 @@ async def main():
         timeout=args.timeout,
         md_writer=md_writer,
         jsonl_cases=jsonl_cases if jsonl_cases else None,
+        url=args.url,
     )
 
     save_results(results, output_dir, file_stem, md_writer=md_writer)

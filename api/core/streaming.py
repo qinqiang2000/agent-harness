@@ -154,7 +154,13 @@ class StreamProcessor:
                 self.sdk_logger.log_text_block(block)
                 if block.text and block.text.strip() and block.text.strip() != "(empty)":
                     text = redact(block.text) if should_redact(self.request.skill, self.request.tenant_id) else block.text
-                    yield format_sse_message("assistant_message", text)
+                    # 过滤非 Claude 模型泄漏的内部标记（DeepSeek/Qwen 等模型的工具调用格式）
+                    INTERNAL_MARKERS = ["<｜DSML｜", "<|tool_calls|>", "<|im_start|>", "<|im_end|>", "<|endoftext|>"]
+                    if any(marker in text for marker in INTERNAL_MARKERS):
+                        logger.warning(f"[StreamFilter] Suppressed output containing internal marker, session={self.request.session_id}")
+                    else:
+                        yield format_sse_message("assistant_message", text)
+
 
             elif isinstance(block, ToolUseBlock):
                 self.sdk_logger.log_tool_use(block)
@@ -220,7 +226,14 @@ class StreamProcessor:
                 yield format_sse_message("transfer_human", {"group": group_name, "reason": reason})
                 result_data["result"] = reason
             else:
-                result_data["result"] = msg.result
+                # 过滤内部标记（DeepSeek/Qwen 等模型 rate-limiting 时泄漏的残留片段）
+                INTERNAL_MARKERS = ["<｜DSML｜", "<|tool_calls|>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<COR", "<-limiting", "<rate"]
+                result = msg.result
+                if any(marker in result for marker in INTERNAL_MARKERS):
+                    logger.warning(f"[StreamFilter] Suppressed result containing internal marker: {result[:50]!r}")
+                    result_data["result"] = "抱歉，处理您的问题时出现错误，请稍后再试。"
+                else:
+                    result_data["result"] = result
 
         yield format_sse_message("result", result_data)
 
