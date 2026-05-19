@@ -56,7 +56,7 @@ cp .env.example .env
 #   - 对应供应商的 API Key
 #   - PORT=9123（对外端口）
 #   - SERVICE_BASE_URL=http://<公网IP>:9123
-#   - YZJ_ALERT_WEBHOOK_TOKEN（云之家告警推送 token）
+#   - YZJ_ALERT_WEBHOOK（云之家告警推送 token）
 
 # 3. 放置 SSH 密钥
 # 将密钥文件放到 ssh-keys/tencent/ 和 ssh-keys/aws/ 目录
@@ -113,7 +113,7 @@ docker compose ps
 | `DEFAULT_MODEL_CONFIG` | ✅ | 模型供应商 | `claude` / `litellm` / `glm` |
 | `PORT` | ✅ | 对外服务端口 | `9123` |
 | `SERVICE_BASE_URL` | ✅ | 公网可访问地址（完整 URL） | `http://42.193.101.189:9123` |
-| `YZJ_ALERT_WEBHOOK_TOKEN` | ✅ | 云之家告警群机器人 token | `e74c5794...` |
+| `YZJ_ALERT_WEBHOOK` | ✅ | 云之家告警群机器人完整 webhook URL | `https://www.yunzhijia.com/...` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | 按需 | Claude 官方 API token | `sk-ant-...` |
 | `LITELLM_BASE_URL` | 按需 | LiteLLM 代理地址 | `http://host:4000` |
 | `LITELLM_API_KEY` | 按需 | LiteLLM API Key | - |
@@ -131,7 +131,7 @@ docker exec agent-harness ls -la /opt/agent-harness/agent_cwd/ssh-keys/tencent/
 docker exec agent-harness ssh -T -i /opt/agent-harness/agent_cwd/ssh-keys/tencent/cosmic_test.pem -o ConnectTimeout=5 root@172.31.16.29 echo ok
 
 # 云之家推送失败
-docker exec agent-harness printenv | grep YZJ_ALERT_WEBHOOK_TOKEN
+docker exec agent-harness printenv | grep YZJ_ALERT_WEBHOOK
 
 # 报告链接 404
 docker exec agent-harness ls /opt/agent-harness/agent_cwd/data/diagnosis-reports/
