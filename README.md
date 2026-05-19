@@ -82,6 +82,111 @@ PORT=9123
 
 日志文件位于 `log/app.log`。
 
+## Docker 部署与维护
+
+### 构建镜像
+
+项目使用两层镜像结构，将耗时的依赖安装与日常代码更新分离：
+
+- **`Dockerfile.base`** — 系统包 + 全部 pip 依赖，只在 `requirements.txt` 变更时重建
+- **`Dockerfile`** — 基于基础镜像，只 COPY 代码，秒级完成
+
+**首次部署或 `requirements.txt` 变更时**，先构建基础镜像：
+
+```bash
+docker build -f Dockerfile.base -t agent-harness-base:latest .
+```
+
+**日常代码更新**，只需构建应用镜像：
+
+```bash
+docker compose build
+
+# 强制不使用缓存重新构建
+docker compose build --no-cache
+```
+
+### 启动与停止
+
+```bash
+# 后台启动
+docker compose up -d
+
+# 查看运行状态
+docker compose ps
+
+# 停止服务（保留容器）
+docker compose stop
+
+# 停止并删除容器
+docker compose down
+```
+
+### 查看日志
+
+```bash
+# 实时跟踪日志
+docker compose logs -f
+
+# 只看最近 100 行
+docker compose logs --tail=100
+
+# 查看容器内日志文件（应用自身写入的 log/app.log）
+docker compose exec agent tail -f log/app.log
+```
+
+### 更新部署
+
+代码有变更时的标准流程：
+
+```bash
+git pull
+docker compose build
+docker compose up -d
+```
+
+如果 `requirements.txt` 也有变更，需要先重建基础镜像：
+
+```bash
+git pull
+docker build -f Dockerfile.base -t agent-harness-base:latest .
+docker compose build
+docker compose up -d
+```
+
+### 进入容器调试
+
+```bash
+# 进入容器 shell
+docker compose exec agent bash
+
+# 在容器内运行 CLI 调试工具
+docker compose exec agent python cli.py
+```
+
+### 数据持久化说明
+
+`docker-compose.yml` 通过 volume 挂载以下目录，容器重建后数据不丢失：
+
+| 宿主机路径 | 容器内路径 | 说明 |
+|-----------|-----------|------|
+| `./agent_cwd/ssh-keys` | `/opt/agent-harness/agent_cwd/ssh-keys` | SSH 密钥（只读） |
+| `./.env` | `/opt/agent-harness/.env` | 环境变量（只读） |
+| `./agent_cwd/data` | `/opt/agent-harness/agent_cwd/data` | 诊断案例等运行时数据 |
+
+> **注意**：`agent_cwd/data` 目录在宿主机上实时同步，无需重启容器即可更新知识库和配置文件。
+
+### 端口配置
+
+容器内固定监听 `9123`，宿主机端口通过 `.env` 中的 `PORT` 变量控制（默认也是 `9123`）：
+
+```bash
+# .env 中修改宿主机端口
+PORT=8080
+```
+
+---
+
 ## 开发工具
 
 ### CLI 调试工具

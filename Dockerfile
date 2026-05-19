@@ -1,26 +1,14 @@
-FROM python:3.11-slim
+# 应用镜像：基于基础镜像，只复制代码
+# 日常迭代只需执行：
+#   docker compose build
+#   docker compose up -d
 
-# 使用国内镜像源加速
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null
-
-# 安装 SSH 客户端和基础工具
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-client \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+FROM agent-harness-base:latest
 
 WORKDIR /opt/agent-harness
 
-# 先装依赖（利用 Docker 缓存）
-COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-
-# 复制项目代码
+# 只复制代码（基础镜像已包含所有依赖）
 COPY . .
-
-# SSH 密钥目录（运行时通过 volume 挂载）
-RUN mkdir -p agent_cwd/ssh-keys/aws agent_cwd/ssh-keys/tencent
 
 EXPOSE 9123
 
