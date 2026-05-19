@@ -179,33 +179,60 @@ fi
 ## 磁盘 IO 利用率高
 
 ```bash
-echo "=== iostat 磁盘 IO ==="
+echo "=== iostat 磁盘 IO（核心指标：rMB/s wMB/s %util） ==="
 iostat -xdm 1 3 2>/dev/null || echo "iostat not available, trying /proc/diskstats"
 cat /proc/diskstats 2>/dev/null | awk '{if($4+$8>0) print}' | head -20
 
 echo "=== 系统负载 ==="
 uptime
 
-echo "=== IO 等待 ==="
+echo "=== IO 等待 (vmstat: bi/bo, wa) ==="
 vmstat 1 3 2>/dev/null
 
-echo "=== Top IO 进程 ==="
+echo "=== Top IO 进程（按写入速率排序） ==="
 if command -v iotop &>/dev/null; then
-  iotop -bon1 2>/dev/null | head -20
+  iotop -bon1 -P 2>/dev/null | head -20
 else
-  # 回退: 通过 /proc 获取 IO 信息
-  for pid in $(ps aux --sort=-%cpu | awk 'NR>1&&NR<12{print $2}'); do
-    echo "PID $pid: $(cat /proc/$pid/cmdline 2>/dev/null | tr '\0' ' ' | cut -c1-80)"
-    cat /proc/$pid/io 2>/dev/null | grep -E "read_bytes|write_bytes"
-    echo "---"
+  # 回退: 通过 /proc/$pid/io 计算 1 秒间隔的写入速率
+  echo "iotop not available, sampling /proc/*/io with 1s interval"
+  declare -A pre_write
+  for pid in $(ps -eo pid --no-headers); do
+    [ -r /proc/$pid/io ] && pre_write[$pid]=$(awk '/^write_bytes:/{print $2}' /proc/$pid/io 2>/dev/null)
   done
+  sleep 1
+  for pid in "${!pre_write[@]}"; do
+    cur=$(awk '/^write_bytes:/{print $2}' /proc/$pid/io 2>/dev/null)
+    [ -z "$cur" ] && continue
+    diff=$((cur - ${pre_write[$pid]}))
+    if [ "$diff" -gt 1048576 ]; then  # >1MB/s
+      cmd=$(cat /proc/$pid/cmdline 2>/dev/null | tr '\0' ' ' | cut -c1-80)
+      printf "PID %s\t%s MB/s\t%s\n" "$pid" "$((diff/1024/1024))" "$cmd"
+    fi
+  done | sort -k2 -rn | head -10
 fi
 
-echo "=== Top 15 CPU 进程（IO 等待常伴随高 CPU）==="
+echo "=== 高写入进程的具体写入文件（lsof 定位写入目标） ==="
+TOP_IO_PIDS=$(iotop -bon1 -P 2>/dev/null | awk 'NR>7 && $4+0>1024 {print $2}' | head -5)
+for pid in $TOP_IO_PIDS; do
+  echo "--- PID $pid: $(cat /proc/$pid/cmdline 2>/dev/null | tr '\0' ' ' | cut -c1-80) ---"
+  # 列出该进程打开的写模式文件（u=读写, w=写）
+  lsof -p $pid 2>/dev/null | awk '$4 ~ /[uw]$/ && $5 == "REG" {print $9, $7}' | sort -u | head -10
+done
+
+echo "=== 近 5 分钟修改且持续增长的文件（>10MB 且 mtime<5min） ==="
+# 仅扫描常见日志/数据目录，避免全盘扫
+for dir in /var/log /data /datadisk /mnt /opt/logs /home; do
+  [ -d "$dir" ] && timeout 15 find "$dir" -xdev -type f -size +10M -mmin -5 -exec ls -lh {} \; 2>/dev/null
+done | sort -k5 -rh | head -15
+
+echo "=== Top 15 CPU 进程（IO 等待常伴随高 CPU） ==="
 ps aux --sort=-%cpu | head -16
 
-echo "=== Docker 容器 ==="
+echo "=== Docker 容器 BlockIO ==="
 if command -v docker &>/dev/null; then
   docker stats --no-stream --format "table {{.Name}}\t{{.BlockIO}}\t{{.CPUPerc}}" 2>/dev/null | head -15
 fi
+
+echo "=== pidstat 进程级 IO（备用） ==="
+pidstat -d 1 2 2>/dev/null | tail -20
 ```

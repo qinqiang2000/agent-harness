@@ -174,6 +174,22 @@ git -C /tmp/gitlab/src/{repo-name} diff {commit}~1 {commit} -- "*.java" "*.py" "
 {1-2条最直接的恢复建议，例如：评估 /datadisk 扩容或归档冷数据。}
 ```
 
+**状态行（status 字段）按告警类型展示对应核心指标，严禁混用：**
+
+| alert_type | 状态行展示内容 | 示例 |
+|-----------|---------------|------|
+| CPU | 异常进程 -> CPU 使用率% | `🚨 java(PID 1234) -> 187% (4 核机器)` |
+| Memory | 异常进程/容器 -> 内存使用 | `🚨 java(PID 1234) -> RES 12G / 总 16G (75%)` |
+| Disk（空间） | 挂载点 -> 使用率% (已用/总量) | `🚨 /dev/vdb -> 82% (381G/492G)` |
+| **IO（读写速度）** | **磁盘设备 -> 写入/读取速度 + %util，并补充 Top 写入目录** | **`🚨 vdb -> w:120MB/s, r:5MB/s, %util:98%; Top 写入: /var/log/nginx/sandbox_access.log (持续追加 3MB/s)`** |
+| 容器 OOM | 容器名 -> OOMKilled 次数 + 最近时间 | `🚨 nginx-pod -> OOMKilled x3 (last: 17:55:23)` |
+| 服务响应慢 | 服务名 -> P99 延迟 + QPS | `🚨 order-service -> P99: 2.3s, QPS: 450` |
+
+**IO 告警状态行的强制要求：**
+- **必须**使用 `iostat -xdm 1 3` 输出中的 `wMB/s`、`rMB/s`、`%util` 数值
+- **必须**通过 `iotop -bon1` 或 `lsof +L1` 等命令定位**当前写入速率最高的具体目录或文件**
+- **严禁**用磁盘空间使用率代替 IO 速率（空间是 Disk 告警，不是 IO 告警）
+
 
 
 ## Step 6：推送云之家
