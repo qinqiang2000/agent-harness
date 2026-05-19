@@ -289,6 +289,138 @@ curl -X POST "http://localhost:9123/api/query" \
 curl -X POST "http://localhost:9123/api/interrupt/{session_id}"
 ```
 
+## 运维告警诊断（ops-diagnosis）
+
+接收 Prometheus Alertmanager / 自定义脚本 / 腾讯云等多源告警，自动 SSH 采集数据、定位根因，推送结论到云之家群。
+
+### 接入端点
+
+| 端点 | 用途 | Body 格式 |
+|------|------|----------|
+| `POST /api/alert-webhook` | Alertmanager 标准告警（结构化） | JSON（`alerts` 字段） |
+| `POST /api/alert-text` | 文本告警（脚本告警、群机器人转发等） | `text/plain` 或 `{"text": "..."}` |
+
+**Alertmanager 示例：**
+```bash
+curl -X POST http://host:9123/api/alert-webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alerts": [{
+      "status": "firing",
+      "labels": {"alertname": "CPU使用率过高", "instance": "172.31.36.31:9100"},
+      "startsAt": "2026-05-06T14:30:00.000Z"
+    }]
+  }'
+```
+
+**文本告警示例：**
+```bash
+curl -X POST http://host:9123/api/alert-text \
+  -H "Content-Type: text/plain" \
+  --data "666: 05-19 11:20 【✅ 恢复】云数据库 CPU 76% 已恢复"
+```
+
+### `/api/alert-text` 接入说明
+
+该端点是**被动接口**，不会自动触发，需要在告警源侧配置 webhook 指向它。所有发到这个端点的文本告警都会原文转发到云之家群（恢复和非恢复均转发）。
+
+**适用场景：**
+
+| 告警源 | 接入方式 |
+|--------|---------|
+| 自定义 shell 监控脚本 | 脚本内 `curl -X POST http://host:9123/api/alert-text --data "告警内容"` |
+| 腾讯云告警回调 | 告警策略 → 回调 URL 填 `http://host:9123/api/alert-text` |
+| 云之家机器人转发 | 群机器人收到告警 → POST 到该端点 |
+| Grafana Alerting | Contact Point 配置 webhook URL 指向该端点 |
+
+> **注意**：Prometheus Alertmanager 有标准 JSON 格式（`alerts` 字段），应走 `/api/alert-webhook`，不要发到 `/api/alert-text`。
+
+### 恢复告警直接转发（不走 LLM）
+
+文本告警若命中恢复关键词（`✅ / 恢复 / 已解决 / resolved / RECOVERY`），直接将原文 POST 到 `$YZJ_ALERT_WEBHOOK`，**不调用 LLM 诊断、不消耗 token**。返回示例：
+
+```json
+{"msg": "ok", "action": "forwarded", "reason": "recovery alert (no diagnosis)"}
+```
+
+### 告警去重与限流
+
+防止短时间内大量重复告警把 agent 打爆，内置三层防护：
+
+| 层级 | 行为 | 配置 |
+|------|------|------|
+| **In-flight 锁** | 同一 `(alert_type, ip)` 已有诊断在跑 → 后续相同告警直接跳过并计数 | 自动 |
+| **冷却期** | 诊断完成后 N 秒内不再触发同 key 诊断，期间跳过的告警继续累计 | `ALERT_COOLDOWN_SECONDS`（默认 1800 秒） |
+| **全局并发** | 最多同时执行 N 个诊断任务，超出排队 | `ALERT_MAX_CONCURRENT`（默认 5） |
+
+**完整时序示例**：100 条同 `(alert_type, ip)` 告警在 30 分钟内涌入：
+
+1. 第 1 条 → 触发诊断（耗时约 10 分钟）
+2. 第 2~100 条 → 命中 in-flight 或 cooldown，**跳过并累加计数**
+3. 诊断完成 → 立即推送诊断结论到云之家
+4. 冷却期结束（诊断完成后 30 分钟）→ 推送一条**频次汇总**：
+
+```
+📊 【告警频次汇总】
+磁盘IO利用率高 - 172.31.16.40
+过去 30 分钟内重复触发 99 次
+首次: 11:20:34  末次: 11:48:12
+（已自动诊断 1 次，详情见之前推送）
+```
+
+这样既不会刷屏，又能让运维知道告警频次是否异常。Webhook 调用方实时响应：
+
+```json
+{
+  "msg": "ok",
+  "triggered": 1,
+  "skipped": 99,
+  "skipped_details": [...]
+}
+```
+
+### 告警类型与状态展示规则
+
+不同告警类型在云之家推送的"状态行"展示对应的核心指标，详见 `agent_cwd/.claude/skills/ops-diagnosis/SKILL.md`：
+
+| alert_type | 状态行内容 |
+|-----------|-----------|
+| CPU | 异常进程 -> CPU 使用率% |
+| Memory | 异常进程/容器 -> 内存使用 |
+| Disk（空间） | 挂载点 -> 使用率% (已用/总量) |
+| **IO（读写速度）** | 设备 -> w:MB/s, r:MB/s, %util；定位到具体写入文件 |
+| 容器 OOM | 容器名 -> OOMKilled 次数 + 最近时间 |
+| 服务响应慢 | 服务名 -> P99 延迟 + QPS |
+
+### SSH 服务器配置
+
+`agent_cwd/.claude/skills/ops-diagnosis/references/server-mapping.md` 记录所有目标服务器的 SSH 信息，支持两种登录方式：
+
+- **密钥登录**：`密钥文件` 列填路径（如 `tencent/rocky_test.pem`），`密码变量` 列为 `-`
+- **密码登录**：`密钥文件` 列为 `-`，`密码变量` 列填环境变量名（如 `$SSH_PASS_TENCENT_172_31_16_40`）
+
+密码不写进文件，只存在 `.env` 中（`.env` 已在 `.gitignore`），由容器通过 sshpass 读取：
+
+```bash
+sshpass -p "$SSH_PASS_TENCENT_172_31_16_40" ssh ai_reader@172.31.16.40
+```
+
+### 云之家 Webhook 配置
+
+`$YZJ_ALERT_WEBHOOK` 直接存**完整的 webhook URL**（含 token），不再单独存 token 拼接：
+
+```bash
+# .env
+YZJ_ALERT_WEBHOOK=https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=xxx
+```
+
+SKILL.md 中推送命令直接用：
+```bash
+curl -s -X POST "$YZJ_ALERT_WEBHOOK" -H "Content-Type: application/json" -d '...'
+```
+
+---
+
 ## 插件系统
 
 Channel（如云之家）等外部集成通过插件方式管理，无需修改核心代码。
@@ -346,6 +478,16 @@ CLAUDE_ROUTER_PROXY=http://127.0.0.1:7890  # 可选
 # 服务配置
 PORT=9123
 LOG_LEVEL=INFO
+
+# 云之家告警推送（完整 webhook URL，含 token）
+YZJ_ALERT_WEBHOOK=https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=xxx
+
+# 告警去重与限流
+ALERT_COOLDOWN_SECONDS=1800   # 同一告警冷却期，默认 30 分钟
+ALERT_MAX_CONCURRENT=5         # 全局并发诊断上限
+
+# SSH 密码登录服务器（变量名规则：SSH_PASS_<ENV>_<IP_with_underscore>）
+SSH_PASS_TENCENT_172_31_16_40=your-password
 
 # 插件额外搜索路径（可选，冒号分隔）
 # PLUGIN_PATHS=/path/to/plugins1:/path/to/plugins2

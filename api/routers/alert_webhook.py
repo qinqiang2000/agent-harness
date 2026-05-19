@@ -32,6 +32,9 @@ ALERT_MAX_CONCURRENT = int(os.getenv("ALERT_MAX_CONCURRENT", "5"))
 _inflight: set[tuple[str, str]] = set()
 # Cooldown：上次诊断完成时间，key=(alert_type, ip), value=完成时间
 _cooldown: dict[tuple[str, str], datetime] = {}
+# 跳过计数：在 in-flight 或 cooldown 期间被跳过的告警，key=(alert_type, ip)
+# value: {"count": N, "first_skipped_at": dt, "last_skipped_at": dt, "alertname": str}
+_skip_count: dict[tuple[str, str], dict] = {}
 # 全局并发信号量
 _concurrency_sem: Optional[asyncio.Semaphore] = None
 # 状态字典并发保护
@@ -46,24 +49,46 @@ def _get_semaphore() -> asyncio.Semaphore:
     return _concurrency_sem
 
 
-async def _should_skip(key: tuple[str, str]) -> Optional[str]:
-    """检查是否应跳过该告警。返回跳过原因，None 表示继续处理。"""
+async def _should_skip(key: tuple[str, str], alertname: str = "") -> Optional[str]:
+    """检查是否应跳过该告警。返回跳过原因，None 表示继续处理。
+
+    被跳过时累加 _skip_count，用于冷却期结束时发送汇总。
+    """
     async with _state_lock:
+        now = datetime.now(timezone.utc)
+
         # 1. 正在诊断中
         if key in _inflight:
+            _record_skip(key, alertname, now)
             return f"in-flight (already diagnosing {key[0]} on {key[1]})"
 
         # 2. 冷却期内
         last_done = _cooldown.get(key)
         if last_done:
-            elapsed = (datetime.now(timezone.utc) - last_done).total_seconds()
+            elapsed = (now - last_done).total_seconds()
             if elapsed < ALERT_COOLDOWN_SECONDS:
+                _record_skip(key, alertname, now)
                 remaining = int(ALERT_COOLDOWN_SECONDS - elapsed)
                 return f"in cooldown ({remaining}s remaining)"
 
-        # 3. 标记为 in-flight
+        # 3. 标记为 in-flight（同时清空之前的计数，新一轮开始）
         _inflight.add(key)
+        _skip_count.pop(key, None)
         return None
+
+
+def _record_skip(key: tuple[str, str], alertname: str, now: datetime):
+    """记录一次跳过（必须在 _state_lock 持有时调用）。"""
+    if key in _skip_count:
+        _skip_count[key]["count"] += 1
+        _skip_count[key]["last_skipped_at"] = now
+    else:
+        _skip_count[key] = {
+            "count": 1,
+            "first_skipped_at": now,
+            "last_skipped_at": now,
+            "alertname": alertname,
+        }
 
 
 async def _release_inflight(key: tuple[str, str]):
@@ -145,6 +170,41 @@ async def _run_diagnosis(prompt: str, key: tuple[str, str]):
         finally:
             # 不管成功失败，都释放 inflight 并进入冷却期
             await _release_inflight(key)
+            # 启动延迟汇总任务：冷却期结束时若有跳过的告警则发汇总
+            asyncio.create_task(_send_skip_summary_after_cooldown(key))
+
+
+async def _send_skip_summary_after_cooldown(key: tuple[str, str]):
+    """冷却期结束时检查跳过计数，若有则推送汇总到云之家。
+
+    时机：诊断完成后等待 ALERT_COOLDOWN_SECONDS 秒（与冷却期同步），
+    然后读取 _skip_count 一次性发汇总。
+    """
+    try:
+        await asyncio.sleep(ALERT_COOLDOWN_SECONDS)
+    except asyncio.CancelledError:
+        return
+
+    async with _state_lock:
+        info = _skip_count.pop(key, None)
+
+    if not info or info["count"] <= 0:
+        return
+
+    alert_type, target = key
+    first = info["first_skipped_at"].astimezone(timezone(timedelta(hours=8))).strftime("%H:%M:%S")
+    last = info["last_skipped_at"].astimezone(timezone(timedelta(hours=8))).strftime("%H:%M:%S")
+    minutes = ALERT_COOLDOWN_SECONDS // 60
+
+    summary = (
+        f"📊 【告警频次汇总】\n"
+        f"{alert_type} - {target}\n"
+        f"过去 {minutes} 分钟内重复触发 {info['count']} 次\n"
+        f"首次: {first}  末次: {last}\n"
+        f"（已自动诊断 1 次，详情见之前推送）"
+    )
+    logger.info(f"Sending skip summary [{key}]: count={info['count']}")
+    await _push_text_to_yunzhijia(summary)
 
 
 @router.post("/alert-webhook")
@@ -213,7 +273,7 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
 
         # 去重检查：同一 (alert_type, ip) 在 in-flight 或冷却期内则跳过
         key = (alert_type, ip)
-        skip_reason = await _should_skip(key)
+        skip_reason = await _should_skip(key, alertname)
         if skip_reason:
             logger.info(f"Skip duplicate alert [{key}]: {skip_reason}")
             skipped.append({
@@ -344,13 +404,14 @@ async def alert_text(request: Request, background_tasks: BackgroundTasks):
             },
         )
 
-    # 非恢复告警：当前实现仅记录日志（后续可接入文本解析 → 诊断流程）
-    logger.info(f"Non-recovery text alert received (no parser yet): {text[:200]}")
+    # 非恢复告警：原文直接转发到云之家（透传，不调 LLM）
+    logger.info(f"Non-recovery text alert, forwarding as-is: {text[:120]}")
+    background_tasks.add_task(_push_text_to_yunzhijia, text)
     return JSONResponse(
         status_code=200,
         content={
             "msg": "ok",
-            "action": "ignored",
-            "reason": "non-recovery text alert parser not implemented yet",
+            "action": "forwarded",
+            "reason": "non-recovery text alert forwarded to yunzhijia (no diagnosis)",
         },
     )
