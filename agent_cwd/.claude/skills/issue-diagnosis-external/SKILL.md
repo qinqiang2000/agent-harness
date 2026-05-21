@@ -218,7 +218,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - 内部 IP 地址、域名、端口
 
 **⚠️ 脱敏规则（仅适用于最终输出，工具调用参数必须使用原始值）**：
-- 外部供应商订单号、合同号、账号（如 `4DLW2D124`）→ 脱敏
+- 外部供应商订单号、合同号、账号，authCode（如 `4DLW2D124`）→ 脱敏
 - 凭证类字段值：clientSecret、entryKey、appSecret、privateKey、password、token、secret → 脱敏
 - 完整手机号 → 保留前3后4，中间用 `****` 替换（如 `138****5678`）
 - 完整身份证号 → 保留前6后4

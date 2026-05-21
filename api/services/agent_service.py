@@ -244,7 +244,7 @@ class AgentService:
             _current_model = _base_options.model
 
             _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
-            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
+            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else ["customer-service", "issue-diagnosis"]
 
             if request.session_id:
                 prompt = request.prompt
@@ -271,10 +271,9 @@ class AgentService:
 
             # Configure Claude SDK
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
-            if request.skill and not request.session_id:
-                skills = [request.skill]
-            elif not request.session_id:
-                skills = _default_skills
+            # 新 session 时加载完整 skills 列表，确保后续 resume 时所有 skill 都可用
+            if not request.session_id:
+                skills = _default_skills  # None 表示加载全部
             else:
                 skills = None
             options = dc_replace(
