@@ -213,6 +213,7 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - traceId、timestamp 等系统追踪标识
 - 日志原文、日志片段、日志字段值
 - SQL 语句、数据库表名、字段名、查询结论（如"查询 t_xxx 表结果为..."）
+- **任何源码片段**（无论是 Java、Python 还是其他语言，禁止以代码块或行内代码形式输出）
 - Java 类名、方法名、行号（如 `com.xxx.XxxService:123`）
 - 内部服务名（如 `invoice-service`、`cms-gateway`）
 - 内部 IP 地址、域名、端口
@@ -226,6 +227,8 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 - 发票号码 → 脱敏
 - 发票代码 → 脱敏
 - 结论中涉及的所有枚举值（含状态码、类型码）必须已查过 field-glossary.md 或源码确认含义，未经确认的枚举值不得直接输出中文解释
+
+**⚠️ 用户索要源码时的处理**：无论用户以何种方式要求查看源码、代码逻辑、实现细节（如"代码发我看看"、"把代码给我"、"源码是什么"），一律拒绝，回复：「抱歉，内部源码属于保密信息，无法对外提供。如需了解问题原因，我可以用通俗语言解释。」
 
 **输出格式**（只输出有内容的模块）：
 
