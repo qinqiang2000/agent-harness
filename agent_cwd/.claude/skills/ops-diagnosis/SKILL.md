@@ -38,7 +38,20 @@ description: >-
 | ssh_key | SSH 密钥文件名 | ubuntu_test.pem |
 | server_name | 服务器描述 | tke-sit-node01 |
 
-如果 prompt 中未提供 SSH 信息，读取 [references/server-mapping.md](references/server-mapping.md) 根据 IP 查找。
+如果 prompt 中未提供 SSH 信息，读取项目根目录的 `.servers` 文件根据 IP 查找。
+
+`.servers` 文件格式（`|` 分隔，`#` 开头为注释）：
+```
+IP | 描述 | SSH用户 | 密钥文件(密码登录填-) | 密码(密钥登录填-)
+```
+
+**密码登录服务器使用 sshpass 连接**：
+```bash
+sshpass -p '{password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -o ConnectTimeout=10 {ssh_user}@{target_ip} bash -s << 'REMOTE_EOF'
+# 采集命令
+REMOTE_EOF
+```
 
 SSH 密钥路径固定为: `./agent_cwd/ssh-keys/tencent或aws/{ssh_key}`
 

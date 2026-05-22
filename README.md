@@ -86,20 +86,8 @@ PORT=9123
 
 ### 构建镜像
 
-项目使用两层镜像结构，将耗时的依赖安装与日常代码更新分离：
-
-- **`Dockerfile.base`** — 系统包 + 全部 pip 依赖，只在 `requirements.txt` 变更时重建
-- **`Dockerfile`** — 基于基础镜像，只 COPY 代码，秒级完成
-
-**首次部署或 `requirements.txt` 变更时**，先构建基础镜像：
-
 ```bash
-docker build -f Dockerfile.base -t agent-harness-base:latest .
-```
-
-**日常代码更新**，只需构建应用镜像：
-
-```bash
+# 首次构建（或代码/依赖变更后重新构建）
 docker compose build
 
 # 强制不使用缓存重新构建
@@ -141,15 +129,6 @@ docker compose exec agent tail -f log/app.log
 
 ```bash
 git pull
-docker compose build
-docker compose up -d
-```
-
-如果 `requirements.txt` 也有变更，需要先重建基础镜像：
-
-```bash
-git pull
-docker build -f Dockerfile.base -t agent-harness-base:latest .
 docker compose build
 docker compose up -d
 ```
@@ -235,65 +214,13 @@ CLI 日志保存在 `log/cli.log`。
 
 Skills 是从 `agent_cwd/.claude/skills/` 加载的 [Agent Skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)。示例技能：
 
-**customer-service** - 发票云客服 Agent
-- 处理售前（产品能力）、售后（故障排除）、API 集成等问题
-- 知识库位于 `agent_cwd/data/kb/`：
-  - `产品与交付知识/` - 产品/交付文档（默认）
-  - `营销知识库/` - 营销/销售材料
-  - `API文档/` - API 文档
-- 多产品消歧：当存在多个产品时，会阻断并询问用户
-
-### Skill 与知识库关联
-
-每个 Skill 通过 `agent_cwd/.claude/skills/{skill-name}/SKILL.md` 定义其能力和上下文。Skill 可以访问 `agent_cwd/data/kb/` 目录下的知识库文件，通过工具（如 Glob、Grep、Read）搜索和读取相关文档。
-
-**示例：customer-service Skill**
-- **Skill 定义**: `agent_cwd/.claude/skills/customer-service/SKILL.md` 包含了处理逻辑、产品识别规则、输出格式等
-- **知识库路径**:
-  - `agent_cwd/data/kb/产品与交付知识/` - 默认搜索路径，覆盖 80%+ 售后场景
-  - `agent_cwd/data/kb/营销知识库/` - 当检测到售前信号（能力、功能、方案等）时搜索
-  - `agent_cwd/data/kb/API文档/` - 当检测到 API 信号（接口、参数、集成等）时搜索
-- **引用机制**: Skill 通过 Read 工具读取 KB 文件第 1 行的 markdown 链接并原样引用（`kb_link.py` 仅作可选辅助脚本）
-
-## API 使用示例
-
-### 通用查询接口
-
-```bash
-curl -X POST "http://localhost:9123/api/query" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant_id": "test-user",
-    "prompt": "星空旗舰版如何配置开票人员？",
-    "skill": "customer-service",
-    "language": "中文"
-  }'
-```
-
-该接口使用 Server-Sent Events (SSE) 进行流式响应。
-
-### SSE 事件类型
-
-- `heartbeat` - 连接状态
-- `session_created` - 新会话 ID（第一条消息）
-- `assistant_message` - 来自 Agent 的文本响应
-- `tool_use` - 工具调用（信息性）
-- `todos_update` - 来自 TodoWrite 的任务列表更新
-- `ask_user_question` - Agent 请求用户输入
-- `result` - 带有会话统计的最终结果
-- `error` - 错误信息
-
-### 中断会话
-
-```bash
-curl -X POST "http://localhost:9123/api/interrupt/{session_id}"
-```
 
 ## 运维告警诊断（ops-diagnosis）
 
 接收 Prometheus Alertmanager / 自定义脚本 / 腾讯云等多源告警，自动 SSH 采集数据、定位根因，推送结论到云之家群。
 
 ### 接入端点
+标准告警会走ai诊断，文本告警会直接转发到群。
 
 | 端点 | 用途 | Body 格式 |
 |------|------|----------|
@@ -301,6 +228,7 @@ curl -X POST "http://localhost:9123/api/interrupt/{session_id}"
 | `POST /api/alert-text` | 文本告警（脚本告警、群机器人转发等） | `text/plain` 或 `{"text": "..."}` |
 
 **Alertmanager 示例：**
+
 ```bash
 curl -X POST http://host:9123/api/alert-webhook \
   -H "Content-Type: application/json" \
@@ -394,15 +322,26 @@ curl -X POST http://host:9123/api/alert-text \
 
 ### SSH 服务器配置
 
-`agent_cwd/.claude/skills/ops-diagnosis/references/server-mapping.md` 记录所有目标服务器的 SSH 信息，支持两种登录方式：
+`.servers`（项目根目录，和 `.env` 同级，`.gitignore` 已忽略）记录所有目标服务器的 SSH 信息。
 
-- **密钥登录**：`密钥文件` 列填路径（如 `tencent/rocky_test.pem`），`密码变量` 列为 `-`
-- **密码登录**：`密钥文件` 列为 `-`，`密码变量` 列填环境变量名（如 `$SSH_PASS_TENCENT_172_31_16_40`）
+**格式**（一行一台，`|` 分隔，`#` 注释）：
+```
+IP | 描述 | SSH用户 | 密钥文件(密码登录填-) | 密码(密钥登录填-)
+```
 
-密码不写进文件，只存在 `.env` 中（`.env` 已在 `.gitignore`），由容器通过 sshpass 读取：
+**示例**：
+```
+172.31.36.31 | tke-sit-node01 | ubuntu | tencent/ubuntu_test.pem | -
+172.31.16.40 | cosmic-nginx | ai_reader | - | m4B2pY5sHDIW@
+```
+
+- **密钥登录**：第 4 列填密钥相对路径（基础目录 `agent_cwd/ssh-keys/`），第 5 列为 `-`
+- **密码登录**：第 4 列为 `-`，第 5 列直接填明文密码（容器通过 sshpass 调用）
+
+**新增/修改服务器**：直接编辑宿主机的 `.servers` 文件（volume 挂载），改完立即生效，无需重启容器。Jenkins 也可以追加一行：
 
 ```bash
-sshpass -p "$SSH_PASS_TENCENT_172_31_16_40" ssh ai_reader@172.31.16.40
+echo "172.31.16.50 | new-svc | ubuntu | tencent/ubuntu_test.pem | -" >> /path/to/.servers
 ```
 
 ### 云之家 Webhook 配置
@@ -418,6 +357,37 @@ SKILL.md 中推送命令直接用：
 ```bash
 curl -s -X POST "$YZJ_ALERT_WEBHOOK" -H "Content-Type: application/json" -d '...'
 ```
+
+### 安全防护体系（5 层纵深防御）
+
+Agent 全程只读，严禁执行修改/删除/重启/安装操作。共有 5 层防护，任意一层都能拦住危险命令：
+
+| 层级 | 位置 | 拦截方式 | 防护范围 |
+|-----|------|---------|---------|
+| **L1：SSH 只读账户** | 目标服务器 OS | 系统账户权限（如 `ai_reader`） | 即使绕过应用层，OS 也会拒绝危险命令 |
+| **L2：settings.json deny 规则** | `agent_cwd/.claude/settings.json` | Claude Code 内置精确模式匹配 | `ssh * rm *`、`git push*`、`systemctl stop*` 等命令直接 deny |
+| **L3：SSH 命令白名单** | `hooks/restrict-ssh.py` + `ssh-allowlist.conf` | PreToolUse hook 解析 heredoc/引号内的远程命令，逐行正则匹配，白名单外**SSH 包根本不发** | 仅放行只读命令：`top/ps/df/iostat/docker ps/kubectl get/jstack/git log` 等 |
+| **L4：文件写入白名单** | `hooks/restrict-edit-write.py` | PreToolUse hook 拦截 Edit/Write，只允许写 `data/issue-diagnosis/instincts/` | 保护代码、配置、知识库不被 Agent 误改 |
+| **L5：SKILL.md 提示约束** | `agent_cwd/.claude/skills/ops-diagnosis/SKILL.md` | 提示词明确列出禁止/允许的命令清单 | LLM 自我审查，减少 99% 的危险尝试 |
+
+**纵深防御示意**（以 `ssh host rm -rf /` 为例）：
+
+```
+[L5] SKILL.md 提示       → LLM 通常根本不会生成这种命令
+   ↓
+[L2] settings.json deny  → "Bash(ssh * rm -rf *)" 命中黑名单
+   ↓
+[L3] SSH 白名单          → 远程命令 rm 不在 allowlist
+   ↓
+[L1] OS 账户权限         → ai_reader 无权 rm /
+   ↓
+执行失败 ❌
+```
+
+**维护说明**：
+- 新增允许的 SSH 命令 → 编辑 `agent_cwd/.claude/hooks/ssh-allowlist.conf`
+- 新增 deny 命令模式 → 编辑 `agent_cwd/.claude/settings.json`
+- 修改 hook 即生效，无需重启服务（hook 每次 PreToolUse 重新加载）
 
 ---
 
@@ -485,9 +455,6 @@ YZJ_ALERT_WEBHOOK=https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0
 # 告警去重与限流
 ALERT_COOLDOWN_SECONDS=1800   # 同一告警冷却期，默认 30 分钟
 ALERT_MAX_CONCURRENT=5         # 全局并发诊断上限
-
-# SSH 密码登录服务器（变量名规则：SSH_PASS_<ENV>_<IP_with_underscore>）
-SSH_PASS_TENCENT_172_31_16_40=your-password
 
 # 插件额外搜索路径（可选，冒号分隔）
 # PLUGIN_PATHS=/path/to/plugins1:/path/to/plugins2

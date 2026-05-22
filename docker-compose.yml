@@ -11,6 +11,8 @@ services:
       - ./agent_cwd/ssh-keys:/opt/agent-harness/agent_cwd/ssh-keys:ro
       # .env 文件
       - ./.env:/opt/agent-harness/.env:ro
+      # .servers 服务器配置
+      - ./.servers:/opt/agent-harness/.servers:ro
       # 数据持久化（诊断案例等）
       - ./agent_cwd/data:/opt/agent-harness/agent_cwd/data
     env_file:

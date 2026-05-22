@@ -158,16 +158,42 @@ async def _run_diagnosis(prompt: str, key: tuple[str, str]):
             language="中文",
         )
 
+        diagnosis_error = None
         try:
             async for message in agent_service.process_query(request):
                 event = message.get("event")
                 if event == "error":
-                    logger.error(f"Diagnosis error [{key}]: {message.get('data')}")
+                    diagnosis_error = message.get("data", "unknown error")
+                    logger.error(f"Diagnosis error [{key}]: {diagnosis_error}")
                 elif event == "result":
-                    logger.info(f"Diagnosis completed [{key}]: {message.get('data')}")
+                    data = message.get("data", "")
+                    # 检查 result 是否实际是错误（如 API 限流导致的失败）
+                    if isinstance(data, str) and "is_error" in data:
+                        import json
+                        try:
+                            result_obj = json.loads(data)
+                            if result_obj.get("is_error"):
+                                diagnosis_error = result_obj.get("result", "unknown error")
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    logger.info(f"Diagnosis completed [{key}]: {data}")
         except Exception as e:
+            diagnosis_error = str(e)
             logger.error(f"Diagnosis failed [{key}]: {e}", exc_info=True)
         finally:
+            # 诊断失败时推送失败通知到云之家
+            if diagnosis_error:
+                alert_type, target_ip = key
+                # 截断错误信息，避免消息过长
+                err_short = str(diagnosis_error)[:150]
+                fail_msg = (
+                    f"⚠️ 【诊断失败】\n"
+                    f"{alert_type} - {target_ip}\n"
+                    f"原因: {err_short}\n"
+                    f"请人工排查或检查 LLM 配额。"
+                )
+                await _push_text_to_yunzhijia(fail_msg)
+
             # 不管成功失败，都释放 inflight 并进入冷却期
             await _release_inflight(key)
             # 启动延迟汇总任务：冷却期结束时若有跳过的告警则发汇总
