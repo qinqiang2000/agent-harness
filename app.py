@@ -3,6 +3,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -11,9 +12,24 @@ load_dotenv('.env')
 
 # Configure logging BEFORE importing any modules that use logger
 log_level = os.getenv('LOG_LEVEL', 'DEBUG')
+log_dir = Path(__file__).parent / "log"
+log_dir.mkdir(parents=True, exist_ok=True)
+
+# 同时输出到 stderr（docker logs 可见）和 log/app.log（持久化到宿主机）
+_log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+_stream_handler = logging.StreamHandler()
+_stream_handler.setFormatter(logging.Formatter(_log_format))
+_file_handler = TimedRotatingFileHandler(
+    filename=str(log_dir / "app.log"),
+    when="midnight",
+    backupCount=14,        # 保留 14 天
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(_log_format))
+
 logging.basicConfig(
     level=getattr(logging, log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    handlers=[_stream_handler, _file_handler],
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
