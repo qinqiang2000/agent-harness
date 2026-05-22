@@ -11,11 +11,10 @@ from fastapi.staticfiles import StaticFiles
 from api.plugins.api import PluginAPI
 from api.plugins.channel import ChannelCapabilities, ChannelMeta, ChannelPlugin
 
-from plugins.bundled.zhichi.agent_status import ZhichiAgentStatusClient
 from plugins.bundled.zhichi.handler import ZhichiHandler
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo, ThirdAlgorithmRespVo, ThirdAlgorithmRespWrapper
 from plugins.bundled.zhichi.quick_reply import generate_quick_reply
-from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
+# from plugins.bundled.zhichi.token_manager import ZhichiTokenManager
 # from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
 
 logger = logging.getLogger(__name__)
@@ -28,37 +27,21 @@ class ZhichiChannelPlugin(ChannelPlugin):
         self.api = api
         self.config = api.config
 
-        self.token_manager: Optional[ZhichiTokenManager] = None
-        agent_status_client: Optional[ZhichiAgentStatusClient] = None
-        if self.config.get("check_agent_online", True):
-            app_id = self.config.get("app_id", "")
-            app_key = self.config.get("app_key", "")
-            if app_id and app_key:
-                self.token_manager = ZhichiTokenManager(
-                    app_id=app_id,
-                    app_key=app_key,
-                    token_api_url=self.config.get(
-                        "token_api_url", "https://www.soboten.com/api/get_token"
-                    ),
-                    refresh_buffer_seconds=self.config.get("token_refresh_buffer_seconds", 300),
-                )
-                agent_status_client = ZhichiAgentStatusClient(
-                    token_manager=self.token_manager,
-                    once_data_url=self.config.get(
-                        "once_data_url",
-                        "https://www.soboten.com/api/chat/5/user/get_once_data",
-                    ),
-                )
-            else:
-                logger.warning(
-                    "[Zhichi] check_agent_online=true 但未配置 app_id/app_key，转人工前不做在线查询"
-                )
+        # self.token_manager: Optional[ZhichiTokenManager] = None
+        # if self.config.get("app_id") and self.config.get("app_key"):
+        #     self.token_manager = ZhichiTokenManager(
+        #         app_id=self.config.get("app_id", ""),
+        #         app_key=self.config.get("app_key", ""),
+        #         token_api_url=self.config.get(
+        #             "token_api_url", "https://www.soboten.com/api/get_token"
+        #         ),
+        #         refresh_buffer_seconds=self.config.get("token_refresh_buffer_seconds", 300),
+        #     )
 
         self.handler = ZhichiHandler(
             agent_service=api.agent_service,
             session_service=api.session_service,
             config=self.config,
-            agent_status_client=agent_status_client,
         )
 
     def get_meta(self) -> ChannelMeta:
@@ -173,13 +156,13 @@ class ZhichiChannelPlugin(ChannelPlugin):
         return False
 
     async def on_start(self) -> None:
-        if self.token_manager:
-            self.token_manager.start_background_refresh()
+        # if self.token_manager:
+        #     self.token_manager.start_background_refresh()
         logger.info("[Zhichi] Plugin started")
 
     async def on_stop(self) -> None:
-        if self.token_manager:
-            self.token_manager.stop_background_refresh()
+        # if self.token_manager:
+        #     self.token_manager.stop_background_refresh()
         logger.info("[Zhichi] Plugin stopped")
 
 
