@@ -130,14 +130,18 @@ class OpenApiHandler:
                 data = json.loads(event["data"])
                 questions = data.get("questions", [])
                 self.session_mapper.set_pending_questions(cid, questions)
-                if agent_session_id:
-                    await self.session_service.interrupt(agent_session_id)
                 if questions:
                     q = questions[0]
                     lines = [q.get("question", "请选择"), ""]
                     for i, opt in enumerate(q.get("options", []), 1):
                         lines.append(f"{i}. {opt.get('label', '')}")
                     answer = "\n".join(lines)
+                if agent_session_id:
+                    await self.session_service.interrupt(agent_session_id)
+                    from api.services.sdk_pool import get_cache
+                    cache = get_cache()
+                    if cache:
+                        await cache.release(agent_session_id, healthy=False)
                 break
 
             elif event_type == "result":
