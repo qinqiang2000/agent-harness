@@ -1,0 +1,20 @@
+# 服务器映射配置示例
+# 复制此文件为 .servers 并填写真实信息：cp .servers.example .servers
+#
+# 格式：IP | 描述 | SSH用户 | 密钥文件(密码登录填-) | 密码(密钥登录填-)
+# 密钥路径相对于 agent_cwd/ssh-keys/
+# 本文件不提交 git（.gitignore 已忽略），密码可以直接明文写
+#
+# 云之家 Webhook: 从环境变量 $YZJ_ALERT_WEBHOOK 获取完整 URL
+# SSH 密钥基础目录: ssh-keys/（相对于 agent_cwd）
+
+# === tencent 环境 ===
+# 密钥登录示例
+# 172.31.36.31 | tke-sit-node01 | ubuntu | tencent/ubuntu_test.pem | -
+# 172.31.16.20 | cosmic-k8s-master | ubuntu | tencent/cosmic_test.pem | -
+
+# 密码登录示例
+# 172.31.16.40 | cosmic-nginx | ai_reader | - | your_password_here
+
+# === AWS 环境 ===
+# 10.0.1.100 | prod-web-01 | ec2-user | aws/prod.pem | -
