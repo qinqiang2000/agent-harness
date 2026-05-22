@@ -151,9 +151,11 @@ docker compose exec agent python cli.py
 |-----------|-----------|------|
 | `./agent_cwd/ssh-keys` | `/opt/agent-harness/agent_cwd/ssh-keys` | SSH 密钥（只读） |
 | `./.env` | `/opt/agent-harness/.env` | 环境变量（只读） |
+| `./.servers` | `/opt/agent-harness/.servers` | 服务器映射配置（只读） |
 | `./agent_cwd/data` | `/opt/agent-harness/agent_cwd/data` | 诊断案例等运行时数据 |
+| `./log` | `/opt/agent-harness/log` | 应用日志（持久化，容器重建后保留） |
 
-> **注意**：`agent_cwd/data` 目录在宿主机上实时同步，无需重启容器即可更新知识库和配置文件。
+> **注意**：`agent_cwd/data` 和 `.servers` 在宿主机上实时同步，无需重启容器即可更新；`log/` 持久化到宿主机后可用 `tail -f log/app.log` 实时跟踪。
 
 ### 端口配置
 
