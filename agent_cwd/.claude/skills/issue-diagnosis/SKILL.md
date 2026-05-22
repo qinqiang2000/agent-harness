@@ -214,20 +214,6 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
      --query '{"type":"faq","sql":"SELECT ...","evidence":"<FAQ文件名，如收票-faq.md>"}'
    ```
    **禁止使用其他形式传入 SQL，无来源声明的查询会被直接拒绝。**
-
-   **当 db_query.py 不可用或数据源未配置时，可改用 Archery 查询**（需环境变量 `ARCHERY_HOST`、`ARCHERY_USER`、`ARCHERY_PASSWORD` 已配置）：
-   ```bash
-   python3 .claude/skills/issue-diagnosis/scripts/archery_query.py \
-     --instance <实例名> --db <数据库名> \
-     --sql "SELECT ..." \
-     --format rows
-   ```
-   **Archery 查询安全限制（强制，不得绕过）**：
-   - 只允许 SELECT 语句，其他类型直接拒绝（退出码 3）
-   - 执行前自动 EXPLAIN 检查：发现全表扫描（type=ALL）或预估行数超过 1000 则拒绝
-   - 可用 `--max-rows` 调低阈值，禁止调高超过 1000
-   - 退出码 3 表示安全拦截，需优化 SQL 后重试，不得强行执行
-
 4. 将查询结果纳入最终诊断报告
 
 ---
