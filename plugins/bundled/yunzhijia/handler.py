@@ -16,7 +16,7 @@ from api.services.sdk_pool import get_cache
 from plugins.bundled.yunzhijia.card_builder import YunzhijiaCardBuilder
 from plugins.bundled.yunzhijia.message_sender import YunzhijiaMessageSender
 from plugins.bundled.yunzhijia.models import YZJRobotMsg
-from api.utils.perf_timer import PerfTimer
+from api.utils.perf_timer import PerfTimer, set_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +175,9 @@ class YunzhijiaHandler:
         perf = PerfTimer(request_id=yzj_session_id[:8] if yzj_session_id else None)
         perf.attach()
 
-        # Resume session 时也要更新 last_active
+        # Resume session 时立即注入 sid
         if agent_session_id:
+            set_session_id(agent_session_id)
             self.session_mapper.update_activity(yzj_session_id, agent_session_id)
 
         async for event in self.agent_service.process_query(request):
@@ -186,6 +187,7 @@ class YunzhijiaHandler:
                 data = json.loads(event["data"])
                 new_session_id = data["session_id"]
                 agent_session_id = new_session_id
+                set_session_id(new_session_id)
                 self.session_mapper.update_activity(yzj_session_id, new_session_id)
                 logger.info(f"[YZJ] Session mapping: {yzj_session_id} -> {new_session_id}")
 

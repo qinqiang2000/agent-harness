@@ -10,6 +10,7 @@ from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
+from api.utils.perf_timer import PerfTimer, set_session_id
 
 from plugins.bundled.open_api.models import AnswerReq
 
@@ -91,6 +92,11 @@ class OpenApiHandler:
 
         agent_session_id = self.session_mapper.get_or_create(cid)
 
+        perf = PerfTimer(request_id=cid[:8] if cid else None)
+        perf.attach()
+        if agent_session_id:
+            set_session_id(agent_session_id)
+
         # 代码层转人工判断，优先于 Agent
         if self._check_transfer(cid, req.question):
             self._get_history(cid).append((req.question, "[TRANSFER]"))
@@ -118,7 +124,9 @@ class OpenApiHandler:
 
             if event_type == "session_created":
                 data = json.loads(event["data"])
-                self.session_mapper.update_activity(cid, data["session_id"])
+                new_session_id = data["session_id"]
+                set_session_id(new_session_id)
+                self.session_mapper.update_activity(cid, new_session_id)
 
             elif event_type == "transfer_human":
                 # Agent 的转人工信号忽略，由代码层统一控制
