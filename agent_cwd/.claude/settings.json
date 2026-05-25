@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Write(**/data/issue-diagnosis/instincts/**)",
-      "Edit(**/data/issue-diagnosis/instincts/**)"
+      "Edit(**/data/issue-diagnosis/instincts/**)",
+      "Write(**/data/linear/prd/**)",
+      "Edit(**/data/linear/prd/**)"
     ],
     "deny": [
       "Bash(git add*)",
@@ -46,6 +48,13 @@
     "elastic": {
       "type": "http",
       "url": "http://jump-test.piaozone.com:9228/mcp"
+    },
+    "ontology": {
+      "type": "http",
+      "url": "http://170.106.141.117/ontology-mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer fpy2026#$"
+      }
     }
   }
 }
