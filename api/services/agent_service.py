@@ -244,7 +244,7 @@ class AgentService:
             _current_model = _base_options.model
 
             _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
-            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else ["customer-service", "issue-diagnosis"]
+            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else ["customer-service", "issue-diagnosis-external"]
 
             if request.session_id:
                 prompt = request.prompt
