@@ -9,6 +9,54 @@ from dotenv import load_dotenv
 # Load environment variables from .env
 load_dotenv('.env')
 
+# ── 日志配置（必须在任何 getLogger 调用之前）──────────────────────────────────
+log_level = os.getenv('LOG_LEVEL', 'DEBUG')
+
+_orig_factory = logging.getLogRecordFactory()
+
+
+def _record_factory(*args, **kwargs):
+    record = _orig_factory(*args, **kwargs)
+    record.trace = "[rid=- sid=-]"
+    return record
+
+
+logging.setLogRecordFactory(_record_factory)
+
+
+class _TraceFilter(logging.Filter):
+    """将当前异步上下文的 rid/sid 注入每条日志 record。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            from api.utils.perf_timer import _current_timer, get_session_id
+            timer = _current_timer.get()
+            rid = timer.request_id if timer else "-"
+            sid = get_session_id() or "-"
+            record.trace = f"[rid={rid} sid={sid}]"
+        except Exception:
+            pass
+        return True
+
+
+logging.basicConfig(
+    level=getattr(logging, log_level.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s'
+)
+_root = logging.getLogger()
+_root.setLevel(getattr(logging, log_level.upper()))
+_fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s')
+_trace_filter = _TraceFilter()
+if not _root.handlers:
+    _root.addHandler(logging.StreamHandler())
+for _h in _root.handlers:
+    _h.setFormatter(_fmt)
+    _h.addFilter(_trace_filter)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+# ─────────────────────────────────────────────────────────────────────────────
+
+logger = logging.getLogger(__name__)
+
 # Patch claude_agent_sdk to tolerate missing 'signature' in thinking blocks
 # (DeepSeek returns thinking blocks without this Anthropic-specific field)
 try:
@@ -21,7 +69,7 @@ try:
             for block in msg.get("content", []):
                 if block.get("type") == "thinking":
                     sig = block.get("signature")
-                    logging.getLogger(__name__).debug(
+                    logger.debug(
                         f"[SDK patch] thinking block signature={'<missing>' if sig is None else repr(sig[:20]) if sig else '<empty>'}"
                     )
                     if sig is None:
@@ -29,18 +77,9 @@ try:
         return _orig_parse(data)
 
     _mp.parse_message = _patched_parse
-    logging.getLogger(__name__).info("[SDK patch] message_parser patched for missing thinking signature")
+    logger.info("[SDK patch] message_parser patched for missing thinking signature")
 except Exception as e:
-    logging.getLogger(__name__).warning(f"[SDK patch] failed to patch message_parser: {e}")
-
-# Configure logging BEFORE importing any modules that use logger
-log_level = os.getenv('LOG_LEVEL', 'DEBUG')
-logging.basicConfig(
-    level=getattr(logging, log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
+    logger.warning(f"[SDK patch] failed to patch message_parser: {e}")
 
 # Import after logging is configured
 from fastapi import FastAPI, HTTPException, Request
@@ -49,6 +88,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import Message
 from api.routers.agent import router
 from api.routers.plugins import router as plugins_router
 from api.routers.diagnosis import router as diagnosis_router
@@ -61,6 +102,13 @@ async def lifespan(app: FastAPI):
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     from api.dependencies import get_config_service, get_plugin_manager
     from api.services.apifox_sync import create_sync_services
+
+    # uvicorn 在 app 启动后才完成自己的 handler 注册，这里统一补齐 formatter 和 filter
+    _root = logging.getLogger()
+    for _h in _root.handlers:
+        _h.setFormatter(_fmt)
+        if not any(isinstance(f, _TraceFilter) for f in _h.filters):
+            _h.addFilter(_trace_filter)
 
     logger.info("Starting AI Agent Service")
     logger.info(f"Python process directory: {Path.cwd()}")
@@ -155,6 +203,73 @@ async def lifespan(app: FastAPI):
         await cache.stop()
 
 
+class OpenApiLoggingMiddleware(BaseHTTPMiddleware):
+    """记录 /open-api/ 请求参数和响应体."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.startswith("/open-api/"):
+            return await call_next(request)
+
+        # 读取请求体
+        body_bytes = await request.body()
+        if body_bytes:
+            try:
+                import json as _json
+                body_log = _json.loads(body_bytes)
+            except Exception:
+                body_log = body_bytes.decode("utf-8", errors="replace")
+        else:
+            body_log = None
+
+        query_params = dict(request.query_params)
+        # 隐藏敏感字段
+        for key in ("sign", "token", "app_key", "appkey"):
+            if key in query_params:
+                query_params[key] = "***"
+
+        logger.info(
+            "[OpenAPI] REQUEST %s %s | params=%s | body=%s",
+            request.method,
+            request.url.path,
+            query_params,
+            body_log,
+        )
+
+        # 重新注入请求体（body 只能读一次）
+        async def receive() -> Message:
+            return {"type": "http.request", "body": body_bytes, "more_body": False}
+
+        request._receive = receive
+
+        # 捕获响应体
+        response = await call_next(request)
+        resp_body = b""
+        async for chunk in response.body_iterator:
+            resp_body += chunk
+
+        try:
+            import json as _json
+            resp_log = _json.loads(resp_body)
+        except Exception:
+            resp_log = resp_body.decode("utf-8", errors="replace")[:500]
+
+        logger.info(
+            "[OpenAPI] RESPONSE %s %s | status=%d | body=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            resp_log,
+        )
+
+        from starlette.responses import Response
+        return Response(
+            content=resp_body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type,
+        )
+
+
 # Create FastAPI app
 app = FastAPI(
     title="AI Agent Service",
@@ -162,6 +277,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# OpenAPI request/response logging middleware
+app.add_middleware(OpenApiLoggingMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -181,7 +299,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             status_code=exc.status_code,
             content={"errcode": errcode, "description": exc.detail, "data": None},
         )
-    raise exc
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.exception_handler(Exception)
@@ -215,6 +333,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
+# SPA fallback: /static/agent/* non-file requests return index.html for vue-router history mode
+# Must be registered before app.mount("/static") so FastAPI route takes priority
+from fastapi.responses import FileResponse as _FileResponse
+
+@app.get("/static/agent/{full_path:path}")
+async def agent_spa(full_path: str):
+    agent_index = Path(__file__).parent / "static" / "agent" / "index.html"
+    requested = Path(__file__).parent / "static" / "agent" / full_path
+    if requested.exists() and requested.is_file():
+        return _FileResponse(str(requested))
+    return _FileResponse(str(agent_index))
+
 # Mount static files
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
@@ -232,6 +362,8 @@ app.include_router(plugins_router)  # Plugin management API
 app.include_router(diagnosis_router)  # Diagnosis cases API
 from api.routers.faq import router as faq_router
 app.include_router(faq_router)
+from api.routers.browser_action import router as browser_action_router
+app.include_router(browser_action_router)
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 

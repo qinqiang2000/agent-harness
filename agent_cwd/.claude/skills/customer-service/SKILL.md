@@ -229,10 +229,12 @@ description: 作为发票云客服Agent,负责回答售前咨询(产品能力、
 **customer-service 只能查询知识库，以下操作一律禁止：**
 
 - 查询 ELK 日志（禁止调用任何 `mcp__elastic__*` 工具）
-- 查看源码（禁止 git clone、GitLab API、Grep 源码仓库）
-- 执行数据库查询
 
-**在执行流程任意阶段，一旦发现需要上述操作才能回答用户问题，立即调用 `Skill("issue-diagnosis-external")` 对外版，不输出任何文字，不尝试自行执行。**
+**在执行流程任意阶段，一旦发现需要上述操作并满足以下任意一项才能回答用户问题，立即调用 `Skill("issue-diagnosis-external")` 对外版，不输出任何文字，不尝试自行执行。**
+- 提供了 traceId                                                                                                                                                                                          
+- 粘贴了异常堆栈（含 `Exception`、`at com.` 等）                                                                                                                                                          
+- 描述了接口/服务在生产或测试环境中实际发生的报错（如"调用接口返回500"、"今天上午出现了 xxx 异常"）
+其他情况禁止`Skill("issue-diagnosis-external")`使用转诊
 
 ---
 

@@ -9,6 +9,17 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _current_timer: ContextVar[Optional["PerfTimer"]] = ContextVar("perf_timer", default=None)
+_current_session_id: ContextVar[Optional[str]] = ContextVar("session_id", default=None)
+
+
+def set_session_id(session_id: str) -> None:
+    """在当前异步上下文中设置 session_id，供日志 Filter 读取。"""
+    _current_session_id.set(session_id)
+
+
+def get_session_id() -> Optional[str]:
+    """获取当前异步上下文的 session_id。"""
+    return _current_session_id.get()
 
 
 class PerfTimer:

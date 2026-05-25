@@ -18,7 +18,7 @@ from claude_agent_sdk import (
 from api.models.requests import QueryRequest
 from api.utils import format_sse_message, extract_todos_from_tool, redact, should_redact
 from api.utils.sdk_logger import SDKLogger
-from api.utils.perf_timer import PerfTimer
+from api.utils.perf_timer import PerfTimer, set_session_id
 logger = logging.getLogger(__name__)
 
 
@@ -87,6 +87,7 @@ class StreamProcessor:
         """
         # If resuming session, register immediately
         if self.request.session_id:
+            set_session_id(self.request.session_id)
             await self._ensure_session_registered(self.request.session_id)
 
         timeout_ms = int(os.environ.get("API_TIMEOUT_MS", "600000"))
@@ -135,6 +136,7 @@ class StreamProcessor:
 
             if isinstance(msg.data, dict) and 'session_id' in msg.data:
                 self.actual_session_id = msg.data['session_id']
+                set_session_id(self.actual_session_id)
 
                 # Emit session created event (also triggers on_session_id callback)
                 async for sse_msg in self._emit_session_created(self.actual_session_id):
