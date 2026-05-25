@@ -178,6 +178,32 @@
 
     .toolbar button:hover { background: #eee; }
 
+    .img-url-bar {
+      display: none; gap: 6px;
+      padding: 6px 12px;
+      background: #fff;
+      border-top: 1px solid #eee;
+    }
+
+    .img-url-bar.visible { display: flex; }
+
+    .img-url-bar input {
+      flex: 1; border: 1px solid #ddd; border-radius: 8px;
+      padding: 6px 10px; font-size: 13px; outline: none;
+    }
+
+    .img-url-bar input:focus { border-color: #1677ff; }
+
+    .img-url-bar button {
+      background: #1677ff; color: #fff; border: none;
+      border-radius: 8px; padding: 0 12px; font-size: 13px;
+      cursor: pointer; white-space: nowrap;
+    }
+
+    .img-url-bar button.cancel {
+      background: #f5f5f5; color: #555;
+    }
+
     .input-bar {
       display: flex; gap: 8px;
       padding: 10px 12px;
@@ -227,7 +253,14 @@
     <button onclick="quickSend('开票失败报错')">开票失败</button>
     <button onclick="quickSend('影像产品介绍')">影像产品</button>
     <button onclick="quickSend('如何对接API？')">API对接</button>
+    <button onclick="toggleImgBar()" style="color:#1677ff;border-color:#91caff">📎 发图片</button>
     <button onclick="resetSession()" style="margin-left:auto;color:#f00;border-color:#fcc">重置</button>
+  </div>
+
+  <div class="img-url-bar" id="imgUrlBar">
+    <input id="imgUrlInput" placeholder="粘贴图片 URL（http://...）" />
+    <button onclick="sendImage()">发送</button>
+    <button class="cancel" onclick="toggleImgBar()">取消</button>
   </div>
 
   <div class="input-bar">
@@ -428,6 +461,75 @@
     document.getElementById('input').value = text;
     sendMessage();
   }
+
+  function toggleImgBar() {
+    const bar = document.getElementById('imgUrlBar');
+    bar.classList.toggle('visible');
+    if (bar.classList.contains('visible')) {
+      document.getElementById('imgUrlInput').focus();
+    }
+  }
+
+  async function sendImage() {
+    const input = document.getElementById('imgUrlInput');
+    const url = input.value.trim();
+    if (!url || loading) return;
+    if (!url.startsWith('http')) {
+      alert('请输入有效的图片 URL（以 http 开头）');
+      return;
+    }
+
+    input.value = '';
+    toggleImgBar();
+    appendUserMsg('[图片] ' + url);
+    setLoading(true);
+    showTyping();
+
+    const body = {
+      question: url,
+      ai_agent_cid: sessionId,
+      msg_type: 'IMG',
+      req_stream: false,
+    };
+
+    try {
+      const resp = await fetch('/zhichi/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+      const chunk = await resp.json();
+      const d = chunk.data;
+      if (!d) throw new Error('响应格式错误');
+
+      hideTyping();
+      const answer = d.llm_answer || '';
+
+      if (d.third_transfer_flag) {
+        const b = createBotBubble(true);
+        b.textContent = '\u{1F464} ' + (answer || '正在为您转接人工客服，请稍候。');
+      } else if (answer) {
+        const bubble = createBotBubble(false);
+        bubble.innerHTML = renderMd(answer);
+        document.getElementById('messages').scrollTop = 9999;
+      } else {
+        appendSystem('未收到回复，请重试');
+      }
+    } catch (e) {
+      hideTyping();
+      appendSystem('连接出错：' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  document.getElementById('imgUrlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendImage();
+    if (e.key === 'Escape') toggleImgBar();
+  });
 
   // ── keyboard ──────────────────────────────────
 

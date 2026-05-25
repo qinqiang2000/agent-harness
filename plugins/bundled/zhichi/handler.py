@@ -10,6 +10,12 @@ from api.services.sdk_pool import get_cache
 from api.services.session_service import SessionService
 from api.utils.perf_timer import PerfTimer
 
+from plugins.bundled.zhichi.file_extractor import (
+    FileExtractError,
+    extract_file_text,
+    is_docx_url,
+    is_pdf_url,
+)
 from plugins.bundled.zhichi.models import ThirdAlgorithmReqVo
 
 # from plugins.bundled.zhichi.message_sender import ZhichiMessageSender
@@ -89,10 +95,28 @@ class ZhichiHandler:
 
         agent_session_id = self.session_mapper.get_or_create(cid)
         prompt = req.question
+        images = None
+
         if agent_session_id:
             pending_questions = self.session_mapper.get_and_clear_pending_questions(cid)
             if pending_questions:
                 prompt = self._build_answer_prompt(req.question, pending_questions)
+
+        # 文件消息优先：不管 msg_type，只要 URL 后缀是 pdf/docx 就提取文字
+        if req.question and req.question.startswith("http") and (is_pdf_url(req.question) or is_docx_url(req.question)):
+            url = req.question
+            try:
+                file_text = await extract_file_text(url)
+                ext = url.rsplit(".", 1)[-1].upper()
+                prompt = f"用户发送了一份{ext}文件，内容如下：\n\n{file_text}"
+            except FileExtractError as e:
+                logger.warning(f"[Zhichi] File extract failed: {e}")
+                prompt = f"用户发送了一份文件（{url}），但文件内容提取失败：{e}，请告知用户无法读取该文件。"
+
+        # 图片消息：msg_type=IMG 且不是文件 URL
+        elif req.msg_type == "IMG" and req.question and req.question.startswith("http"):
+            images = [req.question]
+            prompt = "用户发送了一张图片"
 
         request = QueryRequest(
             prompt=prompt,
@@ -100,6 +124,7 @@ class ZhichiHandler:
             tenant_id="zhichi",
             language="中文",
             session_id=agent_session_id,
+            images=images,
         )
 
         answered = False
