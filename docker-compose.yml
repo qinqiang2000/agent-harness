@@ -1,0 +1,24 @@
+services:
+  agent:
+    build: .
+    image: agent-harness:latest
+    container_name: jinfan-agent-harness
+    restart: unless-stopped
+    ports:
+      - "9123:9123"
+    env_file:
+      - .env
+    environment:
+      AGENT_CWD: /app/agent_cwd
+      PORT: "9123"
+    volumes:
+      - ./agent_cwd:/app/agent_cwd
+      - ./plugins/installed:/app/plugins/installed
+      - ./plugins/config.json:/app/plugins/config.json
+      - ./log:/app/log
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://0.0.0.0:9123/api/health',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
