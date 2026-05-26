@@ -138,9 +138,8 @@ def _build_diagnosis_prompt(alert_type: str, ip: str, alert_time: str, alertname
         f"1. 根据目标IP查找服务器SSH信息\n"
         f"2. SSH远程采集诊断数据\n"
         f"3. 识别高资源消耗的服务\n"
-        f"4. 关联GitLab近期部署变更\n"
-        f"5. 分析根因并给出结论\n"
-        f"6. 推送结果到云之家"
+        f"4. 分析根因并给出结论\n"
+        f"5. 推送结果到云之家"
     )
 
 
@@ -236,12 +235,38 @@ async def _send_skip_summary_after_cooldown(key: tuple[str, str]):
 @router.post("/alert-webhook")
 async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
     """
-    Alertmanager webhook receiver.
+    接收 Prometheus Alertmanager 推送的告警，自动触发 ops-diagnosis 诊断流程。
 
-    Receives firing alerts from Prometheus Alertmanager,
-    extracts alert info, and triggers ops-diagnosis skill in background.
+    ## 功能说明
 
-    Expected payload format:
+    1. **接收告警**：接受 Alertmanager 标准 webhook 格式（JSON），立即返回 200，
+       不等待诊断完成，避免 Alertmanager 超时重试。
+
+    2. **过滤条件**：
+       - 只处理 `status=firing` 的告警，`resolved` 告警直接忽略
+       - 必须有 `instance` 字段（含目标 IP），否则跳过
+       - `alertname` 必须能匹配到已知告警类型（CPU/内存/磁盘/IO），否则跳过
+
+    3. **去重与限流**（防止短时间内大量重复告警打爆 LLM）：
+       - **In-flight 锁**：同一 `(alert_type, ip)` 已有诊断在跑，后续相同告警直接跳过并计数
+       - **冷却期**：诊断完成后 `ALERT_COOLDOWN_SECONDS`（默认 30 分钟）内不再触发同 key 诊断
+       - **全局并发**：最多同时执行 `ALERT_MAX_CONCURRENT`（默认 5）个诊断任务，超出排队等待
+
+    4. **后台诊断**：通过 `BackgroundTasks` 异步执行 ops-diagnosis skill，完整链路：
+       - 读取 `.servers` 文件查找目标服务器 SSH 信息
+       - SSH 远程采集诊断数据（CPU/内存/磁盘/IO 等）
+       - 分析根因，保存完整报告到 `/api/reports/`
+       - 推送精简摘要（150 字以内 + 报告链接）到云之家群
+
+    5. **失败通知**：诊断失败（LLM 限流/SSH 连接失败等）时，自动推送失败通知到云之家，
+       提示运维人工介入。
+
+    6. **频次汇总**：冷却期结束时，若期间有被跳过的重复告警，推送一条频次汇总到云之家：
+       `📊 【告警频次汇总】磁盘IO利用率高 - 172.31.16.40 过去30分钟内重复触发 99 次`
+
+    ## 请求格式（Alertmanager 标准格式）
+
+    ```json
     {
         "alerts": [
             {
@@ -254,6 +279,19 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
             }
         ]
     }
+    ```
+
+    ## 响应格式
+
+    ```json
+    {
+        "msg": "ok",
+        "triggered": 1,
+        "skipped": 99,
+        "details": [{"ip": "172.31.36.31", "alert_type": "CPU使用率高", "alertname": "CPU使用率过高"}],
+        "skipped_details": [{"ip": "...", "alert_type": "...", "reason": "in-flight / in cooldown (Xs remaining)"}]
+    }
+    ```
     """
     data = await request.json()
 
