@@ -8,11 +8,17 @@ _faq_pool: asyncpg.Pool | None = None
 async def get_faq_pool() -> asyncpg.Pool:
     global _faq_pool
     if _faq_pool is None:
+        host = os.getenv("FAQ_POSTGRES_HOST")
+        user = os.getenv("FAQ_POSTGRES_USER")
+        if not host or not user:
+            raise RuntimeError(
+                "FAQ 数据库未配置，请在环境变量中设置 FAQ_POSTGRES_HOST 和 FAQ_POSTGRES_USER"
+            )
         _faq_pool = await asyncpg.create_pool(
-            host=os.getenv("FAQ_POSTGRES_HOST"),
+            host=host,
             port=int(os.getenv("FAQ_POSTGRES_PORT", "5432")),
             database=os.getenv("FAQ_POSTGRES_DATABASE", "postgres"),
-            user=os.getenv("FAQ_POSTGRES_USER"),
+            user=user,
             password=os.getenv("FAQ_POSTGRES_PASSWORD"),
             min_size=1,
             max_size=5,
