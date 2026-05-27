@@ -12,10 +12,10 @@
 
 > **强制规范**：查看任何项目源码，必须将整个仓库 clone 到本地后再检索。
 
-获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull。**必须原样使用以下模板，禁止修改 URL 格式（特别是不得省略 `token:$GITLAB_TOKEN@` 部分，否则会因认证失败导致 clone 失败）**：
+获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull。GitLab 地址由环境变量 `GITLAB_BASE_URL` 控制，默认为 `http://123.207.158.7:5000/ai-agent/git`。**必须原样使用以下模板，禁止修改 URL 格式（特别是不得省略 `token:$GITLAB_TOKEN@` 部分，否则会因认证失败导致 clone 失败）**：
 
 ```bash
-LOCAL_DIR="/tmp/gitlab/src/{repo-name}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "https://token:$GITLAB_TOKEN@test-master.piaozone.com/git/{namespace/repo-name}.git" "$LOCAL_DIR")
+LOCAL_DIR="/tmp/gitlab/src/{repo-name}" && GITLAB_BASE="${GITLAB_BASE_URL:-http://123.207.158.7:5000/ai-agent/git}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "$(echo $GITLAB_BASE | sed 's|://|://token:'"$GITLAB_TOKEN"'@|')/{namespace/repo-name}.git" "$LOCAL_DIR")
 ```
 
 - clone / pull 成功后，所有源码检索均在本地目录进行

@@ -4,9 +4,9 @@
 
 ---
 
-## piaozone（test-master.piaozone.com）
+## piaozone
 
-**GitLab Base URL**: `https://test-master.piaozone.com/git/`，clone 地址格式：`https://token:$GITLAB_TOKEN@test-master.piaozone.com/git/{project_id}.git`
+**GitLab Base URL**: 由环境变量 `GITLAB_BASE_URL` 控制，默认 `http://123.207.158.7:5000/ai-agent/git`，clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.git`
 
 | 日志服务名 (project) | GitLab 仓库路径 (project_id) | 描述                       |
 |---|---|--------------------------|
