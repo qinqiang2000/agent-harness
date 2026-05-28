@@ -116,7 +116,7 @@ class ZhichiHandler:
         # 图片消息：msg_type=IMG 且不是文件 URL
         elif req.msg_type == "IMG" and req.question and req.question.startswith("http"):
             images = [req.question]
-            prompt = "用户发送了一张图片"
+            prompt = "用户提供了以下信息"
 
         request = QueryRequest(
             prompt=prompt,

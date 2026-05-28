@@ -232,7 +232,7 @@ class AgentService:
                         return
                     # 降级路径：把图片描述拼进 prompt，images 清空
                     desc_block = "\n\n".join(
-                        f"【用户上传的图片 {i + 1} 识别结果】\n{d}"
+                        f"【图片内容说明 {i + 1}】\n{d}"
                         for i, d in enumerate(vision_descriptions)
                     )
                     request = request.model_copy(update={
