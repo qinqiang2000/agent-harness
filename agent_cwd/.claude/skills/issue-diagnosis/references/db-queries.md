@@ -9,16 +9,21 @@
 
 ## 数据源
 
-可用数据源定义在 `db/db_config.json`
+通过 `scripts/cosmic_query.py` 的 `--env` 和 `--db` 参数指定。
 
-**选择规则**：
-- 用户指明"测试环境" → 选 `env=test`；未指明或指明"生产环境" → 选 `env=prod`
-- 开票/鉴权相关问题 → 选 `domain=开票/鉴权`（cms 库）
-- 运营/订单相关问题 → 选 `domain=运营/订单`（eop 库）
+**环境选择规则**：
+- 用户指明"测试环境"/"sit 环境" → `--env sit`
+- 用户指明"演示环境"/"demo 环境" → `--env demo`
+- 未指明或指明"生产环境" → `--env prod`（默认）
+
+**数据库选择规则**：
+- 开票/鉴权相关问题 → `--db cms`
+- 运营/订单相关问题 → `--db eop`
+- 收票合规校验相关问题 → `--db invoice`
 
 ---
 
-## prod-main / test-main（cms 库）
+## cms 库
 
 ## 表说明
 
@@ -91,7 +96,7 @@ WHERE fbatch_no = '{batchNo}';
 > - 9=未登录等待重试，-1=异常请求不入队列，-2=文件下载单独处理任务
 >
 > `ferr_desc`：最新结果描述，失败时包含具体错误信息。
-> 数据源：`prod-invoice`（生产）或 `test-invoice`（测试）
+> 数据库：`--db invoice`
 
 ---
 
@@ -108,7 +113,7 @@ ORDER BY fstatus;
 ```
 
 > `fstatus` 含义：30=审批中，60=已通过，65=已入账
-> 数据源：`prod-invoice`（生产）或 `test-invoice`（测试）
+> 数据库：`--db invoice`
 > 若返回多条记录，说明该发票被多个报销单占用（跨企业重复报销时 `fclient_id` 不同）。
 
 ---
@@ -123,7 +128,7 @@ FROM t_ou_company
 WHERE fclient_id = '{fclient_id}';
 ```
 
-> 数据源：`prod-main`（生产）或 `test-main`（测试），即 cms 库
+> 数据库：`--db cms`
 > `fname` 为企业名称，`ftax_no` 为税号，在结论中用企业名称替代 clientId 展示。
 
 ---
