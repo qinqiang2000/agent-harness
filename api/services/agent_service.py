@@ -37,6 +37,9 @@ class AgentService:
     SETTINGS_FILE_NAME = ".custom-settings.json"
     CLAUDE_SETTINGS_FILE = AGENT_CWD / ".claude" / "settings.json"
 
+    # 全局并发限制：最多同时运行 3 个 SDK 子进程，防止并发过高导致 initialize 超时
+    _sdk_semaphore: asyncio.Semaphore = asyncio.Semaphore(3)
+
     def __init__(self, session_service=None):
         """
         Args:
@@ -62,7 +65,9 @@ class AgentService:
                 if extra_deny:
                     logger.info(f"Loaded extra deny permissions: {extra_deny}")
             except Exception:
-                logger.warning("Failed to load MCP server config from settings.json", exc_info=True)
+                logger.warning(
+                    "Failed to load MCP server config from settings.json", exc_info=True
+                )
 
         # 创建安全配置文件
         _base_deny = [
@@ -120,7 +125,11 @@ class AgentService:
     # - `allowed_tools` 可以带路径模式（`Write(pattern)`），用于自动批准；
     # 所以这里以"带模式"的形式集中声明，`_build_tools` 会自动剥离模式得到裸名。
     _BASE_ALLOWED_TOOLS = [
-        "Skill", "Read", "Grep", "Glob", "Bash",
+        "Skill",
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
         "Write(**/data/issue-diagnosis/instincts/**)",
         "Edit(**/data/issue-diagnosis/instincts/**)",
         "AskUserQuestion",
@@ -132,8 +141,12 @@ class AgentService:
     # 注意：`tools` 只接受裸工具名，路径模式/匹配仍由 allowed_tools / deny 处理。
     _BASE_TOOLS = [
         "Skill",
-        "Read", "Grep", "Glob", "Bash",
-        "Write", "Edit",
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Write",
+        "Edit",
         "AskUserQuestion",
         "Task",
     ]
@@ -153,6 +166,7 @@ class AgentService:
     def build_default_options(self) -> ClaudeAgentOptions:
         """构建默认 SDK options。"""
         from api.dependencies import get_config_service
+
         _current_config = get_config_service().get_current_config()
         _env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         return ClaudeAgentOptions(
@@ -169,14 +183,20 @@ class AgentService:
             max_buffer_size=10 * 1024 * 1024,
             cwd=str(AGENT_CWD),
             add_dirs=[],
-            thinking={"type": "disabled"} if (
-                _current_config.disable_thinking or
-                os.getenv("DISABLE_THINKING", "").lower() in ("1", "true", "yes")
-            ) else None,
+            thinking=(
+                {"type": "disabled"}
+                if (
+                    _current_config.disable_thinking
+                    or os.getenv("DISABLE_THINKING", "").lower() in ("1", "true", "yes")
+                )
+                else None
+            ),
         )
 
     async def process_query(
-        self, request: QueryRequest, context_file_path: Optional[str] = None,
+        self,
+        request: QueryRequest,
+        context_file_path: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
         """
         Process Agent query request and return SSE stream.
@@ -203,6 +223,7 @@ class AgentService:
             if request.images:
                 from api.dependencies import get_config_service
                 from api.services.config_service import PREDEFINED_CONFIGS
+
                 _cfg = get_config_service().get_current_config()
                 if _cfg.supports_vision is False:
                     helper_name = _cfg.vision_helper
@@ -222,23 +243,29 @@ class AgentService:
                         f"(model={helper_cfg.vision_model})"
                     )
                     try:
-                        image_blocks_for_helper = await load_image_blocks(request.images)
+                        image_blocks_for_helper = await load_image_blocks(
+                            request.images
+                        )
                         vision_descriptions = await describe_images(
                             image_blocks_for_helper, request.prompt, helper_cfg
                         )
                     except (ImageLoadError, VisionFallbackError) as e:
                         logger.warning(f"Vision fallback failed: {e}")
-                        yield format_sse_message("error", {"message": f"图片识别失败: {e}"})
+                        yield format_sse_message(
+                            "error", {"message": f"图片识别失败: {e}"}
+                        )
                         return
                     # 降级路径：把图片描述拼进 prompt，images 清空
                     desc_block = "\n\n".join(
                         f"【用户上传的图片 {i + 1} 识别结果】\n{d}"
                         for i, d in enumerate(vision_descriptions)
                     )
-                    request = request.model_copy(update={
-                        "prompt": f"{request.prompt}\n\n{desc_block}",
-                        "images": None,
-                    })
+                    request = request.model_copy(
+                        update={
+                            "prompt": f"{request.prompt}\n\n{desc_block}",
+                            "images": None,
+                        }
+                    )
 
             _base_options = self.build_default_options()
             _current_model = _base_options.model
@@ -268,7 +295,11 @@ class AgentService:
             # Configure Claude SDK
             # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
             _default_skills_env = os.getenv("DEFAULT_SKILLS", "")
-            _default_skills = [s.strip() for s in _default_skills_env.split(",") if s.strip()] if _default_skills_env else None
+            _default_skills = (
+                [s.strip() for s in _default_skills_env.split(",") if s.strip()]
+                if _default_skills_env
+                else None
+            )
             if request.skill and not request.session_id:
                 skills = [request.skill]
             elif not request.session_id:
@@ -299,129 +330,164 @@ class AgentService:
             cache = get_cache()
             cache_key = request.session_id  # 只有 resume 时才有值
 
-            for attempt in range(2):
-                healthy = True
+            async with AgentService._sdk_semaphore:
+                logger.debug("[Semaphore] acquired, running SDK query")
 
-                if cache and cache_key:
-                    client = await cache.get_or_create(cache_key, options)
-                    t = PerfTimer.current()
-                    if t:
-                        t.mark("SDK_CACHE_HIT" if attempt == 0 else "SDK_CACHE_RETRY")
-                else:
-                    client = ClaudeSDKClient(options=options)
-                    await client.connect()
-                    t = PerfTimer.current()
-                    if t:
-                        t.mark("SDK_COLD_START")
+                for attempt in range(2):
+                    healthy = True
 
-                async def _on_session_id(real_sid: str) -> None:
-                    nonlocal cache_key
-                    if cache and not cache_key:
-                        async with cache._lock:
-                            if real_sid not in cache._cache:
-                                cache._cache[real_sid] = CachedSession(client=client, in_use=True)
-                        cache_key = real_sid
-                        logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
-
-                asked_user_question = False
-                got_message = False
-                try:
-                    t = PerfTimer.current()
-                    if t:
-                        t.mark("SDK_CONNECTED")
-                    yield format_sse_message("heartbeat", {"status": "connected"})
-
-                    sdk_session_id = request.session_id or "default"
-                    if image_blocks:
-                        content_blocks: list[dict] = [{"type": "text", "text": prompt}]
-                        content_blocks.extend(image_blocks)
-
-                        async def _stream_user_message() -> AsyncGenerator[dict, None]:
-                            yield {
-                                "type": "user",
-                                "message": {"role": "user", "content": content_blocks},
-                                "parent_tool_use_id": None,
-                                "session_id": sdk_session_id,
-                            }
-
-                        await client.query(_stream_user_message(), session_id=sdk_session_id)
+                    if cache and cache_key:
+                        client = await cache.get_or_create(cache_key, options)
+                        t = PerfTimer.current()
+                        if t:
+                            t.mark(
+                                "SDK_CACHE_HIT" if attempt == 0 else "SDK_CACHE_RETRY"
+                            )
                     else:
-                        await client.query(prompt, session_id=sdk_session_id)
-                    t = PerfTimer.current()
-                    if t:
-                        t.mark("QUERY_SENT")
-                    logger.info(f"Query sent: {prompt[:80]}...")
-                    yield format_sse_message("heartbeat", {"status": "processing"})
+                        client = ClaudeSDKClient(options=options)
+                        await client.connect()
+                        t = PerfTimer.current()
+                        if t:
+                            t.mark("SDK_COLD_START")
 
-                    processor = StreamProcessor(
-                        client=client, request=request, session_service=self.session_service,
-                        on_session_id=_on_session_id if not request.session_id else None,
-                    )
+                    async def _on_session_id(real_sid: str) -> None:
+                        nonlocal cache_key
+                        if cache and not cache_key:
+                            async with cache._lock:
+                                if real_sid not in cache._cache:
+                                    cache._cache[real_sid] = CachedSession(
+                                        client=client, in_use=True
+                                    )
+                            cache_key = real_sid
+                            logger.info(f"[SessionCache] 新会话存入缓存: {real_sid}")
 
-                    answer_parts = []
+                    asked_user_question = False
+                    got_message = False
+                    try:
+                        t = PerfTimer.current()
+                        if t:
+                            t.mark("SDK_CONNECTED")
+                        yield format_sse_message("heartbeat", {"status": "connected"})
 
-                    async for message in processor.process():
-                        got_message = True
-                        event = message.get("event")
-                        if event == "assistant_message":
+                        sdk_session_id = request.session_id or "default"
+                        if image_blocks:
+                            content_blocks: list[dict] = [
+                                {"type": "text", "text": prompt}
+                            ]
+                            content_blocks.extend(image_blocks)
+
+                            async def _stream_user_message() -> (
+                                AsyncGenerator[dict, None]
+                            ):
+                                yield {
+                                    "type": "user",
+                                    "message": {
+                                        "role": "user",
+                                        "content": content_blocks,
+                                    },
+                                    "parent_tool_use_id": None,
+                                    "session_id": sdk_session_id,
+                                }
+
+                            await client.query(
+                                _stream_user_message(), session_id=sdk_session_id
+                            )
+                        else:
+                            await client.query(prompt, session_id=sdk_session_id)
+                        t = PerfTimer.current()
+                        if t:
+                            t.mark("QUERY_SENT")
+                        logger.info(f"Query sent: {prompt[:80]}...")
+                        yield format_sse_message("heartbeat", {"status": "processing"})
+
+                        processor = StreamProcessor(
+                            client=client,
+                            request=request,
+                            session_service=self.session_service,
+                            on_session_id=(
+                                _on_session_id if not request.session_id else None
+                            ),
+                        )
+
+                        answer_parts = []
+
+                        async for message in processor.process():
+                            got_message = True
+                            event = message.get("event")
+                            if event == "assistant_message":
+                                try:
+                                    answer_parts.append(
+                                        json.loads(message["data"]).get("content", "")
+                                    )
+                                except Exception:
+                                    pass
+                            elif event == "ask_user_question":
+                                asked_user_question = True
+                            elif event == "result":
+                                try:
+                                    data = json.loads(message["data"])
+                                    answer = "".join(answer_parts)
+                                    await interaction_logger.log(
+                                        {
+                                            "question": request.prompt,
+                                            "answer": answer,
+                                            "skill": request.skill,
+                                            "tenant_id": request.tenant_id,
+                                            "session_id": data.get("session_id"),
+                                            "num_turns": data.get("num_turns"),
+                                            "duration_ms": data.get("duration_ms"),
+                                            "status": (
+                                                "error"
+                                                if data.get("is_error")
+                                                else "success"
+                                            ),
+                                            "has_doc_url": "http" in answer,
+                                            "used_fallback_phrase": FALLBACK_PHRASE
+                                            in answer,
+                                            "asked_user_question": asked_user_question,
+                                            "product_selected": (
+                                                request.metadata or {}
+                                            ).get("product_selected"),
+                                        }
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"Failed to log interaction: {e}")
+                            yield message
+
+                    except Exception:
+                        healthy = False
+                        raise
+                    except GeneratorExit:
+                        raise
+                    except BaseException:
+                        healthy = False
+                        raise
+                    finally:
+                        if asked_user_question:
+                            healthy = False
+                        if cache and cache_key:
                             try:
-                                answer_parts.append(json.loads(message["data"]).get("content", ""))
+                                await cache.release(cache_key, healthy=healthy)
+                            except Exception as _e:
+                                logger.warning(
+                                    f"[SessionCache] release error (ignored): {_e}"
+                                )
+                        elif not cache:
+                            try:
+                                await client.disconnect()
                             except Exception:
                                 pass
-                        elif event == "ask_user_question":
-                            asked_user_question = True
-                        elif event == "result":
-                            try:
-                                data = json.loads(message["data"])
-                                answer = "".join(answer_parts)
-                                await interaction_logger.log({
-                                    "question": request.prompt,
-                                    "answer": answer,
-                                    "skill": request.skill,
-                                    "tenant_id": request.tenant_id,
-                                    "session_id": data.get("session_id"),
-                                    "num_turns": data.get("num_turns"),
-                                    "duration_ms": data.get("duration_ms"),
-                                    "status": "error" if data.get("is_error") else "success",
-                                    "has_doc_url": "http" in answer,
-                                    "used_fallback_phrase": FALLBACK_PHRASE in answer,
-                                    "asked_user_question": asked_user_question,
-                                    "product_selected": (request.metadata or {}).get("product_selected"),
-                                })
-                            except Exception as e:
-                                logger.warning(f"Failed to log interaction: {e}")
-                        yield message
 
-                except Exception:
-                    healthy = False
-                    raise
-                except GeneratorExit:
-                    raise
-                except BaseException:
-                    healthy = False
-                    raise
-                finally:
-                    if asked_user_question:
-                        healthy = False
-                    if cache and cache_key:
-                        try:
-                            await cache.release(cache_key, healthy=healthy)
-                        except Exception as _e:
-                            logger.warning(f"[SessionCache] release error (ignored): {_e}")
-                    elif not cache:
-                        try:
-                            await client.disconnect()
-                        except Exception:
-                            pass
+                    if got_message:
+                        break
 
-                if got_message:
-                    break
-
-                # 空响应：连接已死，重试一次（仅对 resume 场景有意义）
-                if attempt == 0 and cache and cache_key:
-                    logger.warning(f"Empty response on cached connection, retrying with fresh: {cache_key}")
-                else:
-                    break
+                    # 空响应：连接已死，重试一次（仅对 resume 场景有意义）
+                    if attempt == 0 and cache and cache_key:
+                        logger.warning(
+                            f"Empty response on cached connection, retrying with fresh: {cache_key}"
+                        )
+                    else:
+                        break
 
         except ImageLoadError as e:
             logger.warning(f"Image load error: {e}")

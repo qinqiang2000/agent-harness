@@ -1,0 +1,53 @@
+{
+  "id": "linear",
+  "name": "Linear Agent",
+  "version": "1.0.0",
+  "description": "Linear Agent 集成，接收 Webhook 并调用 product-workflow 生成 PRD，支持父子 Issue 自动创建和 PRD 回填",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "default": "",
+        "description": "Linear OAuth App client_id"
+      },
+      "client_secret_env": {
+        "type": "string",
+        "default": "LINEAR_CLIENT_SECRET",
+        "description": "Linear OAuth App client_secret 环境变量名"
+      },
+      "webhook_secret_env": {
+        "type": "string",
+        "default": "LINEAR_WEBHOOK_SECRET",
+        "description": "Webhook 签名密钥环境变量名"
+      },
+      "redirect_uri_env": {
+        "type": "string",
+        "default": "LINEAR_REDIRECT_URI",
+        "description": "OAuth 回调地址环境变量名"
+      },
+      "default_command": {
+        "type": "string",
+        "default": "product-workflow",
+        "description": "默认调用的 command"
+      },
+      "session_timeout": {
+        "type": "integer",
+        "default": 3600,
+        "description": "会话超时时间（秒）"
+      },
+      "prd_output_root": {
+        "type": "string",
+        "default": "data/linear/prd",
+        "description": "PRD 产物输出根目录"
+      },
+      "token_db_path": {
+        "type": "string",
+        "default": "data/linear/linear_tokens.db",
+        "description": "SQLite token 存储路径"
+      }
+    }
+  }
+}

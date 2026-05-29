@@ -170,14 +170,12 @@ start_service() {
         setsid nohup uvicorn "$APP_MODULE" \
             --host "$HOST" \
             --port "$PORT" \
-            --reload \
             > "$LOG_FILE" 2>&1 < /dev/null &
     else
         # macOS/BSD: setsid not available, use nohup alone
         nohup uvicorn "$APP_MODULE" \
             --host "$HOST" \
             --port "$PORT" \
-            --reload \
             > "$LOG_FILE" 2>&1 < /dev/null &
     fi
 

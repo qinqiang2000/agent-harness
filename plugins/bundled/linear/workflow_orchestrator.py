@@ -83,6 +83,7 @@ class OrchestratorResult:
     steps_executed: List[str] = field(default_factory=list)
     prd_files: List[Path] = field(default_factory=list)
     error: str = ""
+    split_required: bool = False  # 大需求需要拆子 Issue，父流程在此结束
 
 
 # ── 编排器 ────────────────────────────────────────────────────────────────────
@@ -115,52 +116,35 @@ class WorkflowOrchestrator:
 
         # 运行时状态
         self._issue_id: Optional[str] = None
+        self._feature_id: Optional[str] = None  # 子 Issue 当前特性 ID
         self._route: List[str] = []
         self._step1_header: Dict[str, Any] = {}
 
     # ── 主入口 ────────────────────────────────────────────────────────────────
 
     async def run(
-        self, prompt: str, issue_id: Optional[str] = None
+        self,
+        prompt: str,
+        issue_id: Optional[str] = None,
+        start_from_step: int = 1,
+        parent_context_dir: Optional[Path] = None,
+        feature_id: Optional[str] = None,
     ) -> OrchestratorResult:
         self._issue_id = issue_id
+        self._feature_id = feature_id  # 子 Issue 当前特性 ID，供 ④⑤ step 使用
         steps_executed: List[str] = []
         prd_files: List[Path] = []
 
-        # ① 需求分析（必经）
-        await self._notify_step_start("① 需求分析")
-        step1 = await self._run_step1(prompt)
-        steps_executed.append("①")
-        await self._notify_step_done("① 需求分析", step1)
+        if start_from_step <= 1:
+            # ① 需求分析（必经）
+            await self._notify_step_start("① 需求分析")
+            step1 = await self._run_step1(prompt)
+            steps_executed.append("①")
+            await self._notify_step_done("① 需求分析", step1)
 
-        if not step1.success:
-            return OrchestratorResult(
-                success=False, steps_executed=steps_executed, error=step1.error
-            )
-
-        if self.cancel_event.is_set():
-            return OrchestratorResult(
-                success=False, steps_executed=steps_executed, error="已取消"
-            )
-
-        # 根据 ① 产物决定路由
-        self._route = self._determine_route(step1.header)
-        logger.info(
-            f"[Orchestrator] route={self._route}, lane={step1.header.get('lane')}"
-        )
-
-        # ② 本体映射（条件执行）
-        if "②" in self._route or "②lite" in self._route:
-            lite = "②lite" in self._route
-            label = "② 本体映射（lite）" if lite else "② 本体映射"
-            await self._notify_step_start(label)
-            step2 = await self._run_step2(lite=lite)
-            steps_executed.append("②lite" if lite else "②")
-            await self._notify_step_done(label, step2)
-
-            if not step2.success:
+            if not step1.success:
                 return OrchestratorResult(
-                    success=False, steps_executed=steps_executed, error=step2.error
+                    success=False, steps_executed=steps_executed, error=step1.error
                 )
 
             if self.cancel_event.is_set():
@@ -168,9 +152,77 @@ class WorkflowOrchestrator:
                     success=False, steps_executed=steps_executed, error="已取消"
                 )
 
-            # ③ 本体更新 Gate（条件执行）
-            need_step3 = self._need_step3(step2)
-            if need_step3:
+            # 根据 ① 产物决定路由
+            self._route = self._determine_route(step1.header)
+            logger.info(
+                f"[Orchestrator] route={self._route}, lane={step1.header.get('lane')}"
+            )
+
+            # ② 本体映射（条件执行）
+            if "②" in self._route or "②lite" in self._route:
+                lite = "②lite" in self._route
+                label = "② 本体映射（lite）" if lite else "② 本体映射"
+                await self._notify_step_start(label)
+                step2 = await self._run_step2(lite=lite)
+                steps_executed.append("②lite" if lite else "②")
+                await self._notify_step_done(label, step2)
+
+                if not step2.success:
+                    return OrchestratorResult(
+                        success=False, steps_executed=steps_executed, error=step2.error
+                    )
+
+                if self.cancel_event.is_set():
+                    return OrchestratorResult(
+                        success=False, steps_executed=steps_executed, error="已取消"
+                    )
+
+                # 大需求检测：② 完成后提前返回，由 handler 拆子 Issue
+                if self._is_large_req():
+                    logger.info(
+                        f"[Orchestrator] Large req detected, split_required. "
+                        f"lane={self._step1_header.get('lane')}, route={self._route}"
+                    )
+                    return OrchestratorResult(
+                        success=True,
+                        lane=self._step1_header.get("lane", ""),
+                        steps_executed=steps_executed,
+                        split_required=True,
+                    )
+
+                # ③ 本体更新 Gate（条件执行）
+                need_step3 = self._need_step3(step2)
+                if need_step3:
+                    await self._notify_step_start("③ 本体检查")
+                    step3 = await self._run_step3()
+                    steps_executed.append("③")
+                    await self._notify_step_done("③ 本体检查", step3)
+
+                    if not step3.success:
+                        return OrchestratorResult(
+                            success=False,
+                            steps_executed=steps_executed,
+                            error=step3.error,
+                        )
+
+                    if self.cancel_event.is_set():
+                        return OrchestratorResult(
+                            success=False, steps_executed=steps_executed, error="已取消"
+                        )
+
+        else:
+            # 子 Issue 流程：从父 Issue 产物恢复上下文
+            if parent_context_dir:
+                self._step1_header = self._read_yaml_header_from(
+                    parent_context_dir, "*_需求分析报告.md"
+                )
+                # 将父 Issue 的 ② 产物复制到子 Issue 输出目录，供 ③ skill 使用
+                self._copy_parent_step2_artifacts(parent_context_dir, feature_id)
+            # 子 Issue 固定跑 ③④⑤（由 handler 根据特性决定是否需要 ④）
+            self._route = ["③", "④", "⑤"]
+
+            # ③ 本体检查
+            if start_from_step <= 3:
                 await self._notify_step_start("③ 本体检查")
                 step3 = await self._run_step3()
                 steps_executed.append("③")
@@ -352,6 +404,8 @@ class WorkflowOrchestrator:
         issue_id = self._issue_id or self.output_dir.name
         rel_dir = self._rel_output_dir()
         skill_prompt = f"{issue_id} {rel_dir}"
+        if self._feature_id:
+            skill_prompt += f" --feature={self._feature_id}"
         result = await self._invoke_skill("prototype-design", skill_prompt)
         if not result.success:
             return StepResult(success=False, error=result.error)
@@ -366,6 +420,8 @@ class WorkflowOrchestrator:
     async def _run_step5(self) -> StepResult:
         rel_dir = self._rel_output_dir()
         skill_prompt = f"{rel_dir} --context={rel_dir} --skip-confirm"
+        if self._feature_id:
+            skill_prompt += f" --feature={self._feature_id}"
         result = await self._invoke_skill("generate-prd", skill_prompt)
         if not result.success:
             return StepResult(success=False, error=result.error)
@@ -518,6 +574,81 @@ class WorkflowOrchestrator:
             return bug_result in ("PARTIAL", "MISS")
         # 完整模式：DONE_WITH_GAPS 执行
         return exit_status == "DONE_WITH_GAPS"
+
+    def _is_large_req(self) -> bool:
+        """判断是否大需求（需要拆子 Issue）。
+
+        条件：route 包含完整 ② 且满足以下任一：
+        - lane=deep（无论 category）
+        - lane=standard 且 category in new/extend
+        """
+        if "②" not in self._route:
+            return False
+        lane = (self._step1_header.get("lane") or "standard").lower()
+        if lane == "deep":
+            return True
+        category = self._extract_category(self._step1_header)
+        return lane == "standard" and category in ("new", "extend")
+
+    def _read_yaml_header_from(self, directory: Path, pattern: str) -> Dict[str, Any]:
+        """从指定目录读取产物文件的 YAML frontmatter。"""
+        files = list(directory.glob(pattern))
+        if not files:
+            return {}
+        target = sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)[0]
+        try:
+            content = target.read_text(encoding="utf-8")
+            match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+            if match:
+                return yaml.safe_load(match.group(1)) or {}
+        except Exception as e:
+            logger.warning(
+                f"[Orchestrator] Failed to read YAML header from {target}: {e}"
+            )
+        return {}
+
+    def _copy_parent_step2_artifacts(
+        self, parent_context_dir: Path, feature_id: Optional[str] = None
+    ) -> None:
+        """将父 Issue 产物目录中的 ② 产物复制到子 Issue 输出目录，供 ③④⑤ skill 使用。
+
+        复制：
+        - *_需求分析报告.md（全量，⑤ skill 需要作为背景）
+        - *_特性清单.md（全量，③④⑤ skill 需要作为背景）
+        - {feature_id}_本体映射报告.md（只复制当前特性的）
+        """
+        import shutil
+
+        copied = 0
+        # 需求分析报告和特性清单全量复制（作为背景上下文）
+        for pattern in ["*_需求分析报告.md", "*_特性清单.md"]:
+            for src in parent_context_dir.glob(pattern):
+                dst = self.output_dir / src.name
+                if not dst.exists():
+                    shutil.copy2(str(src), str(dst))
+                    copied += 1
+
+        # 本体映射报告只复制当前 feature_id 对应的文件
+        if feature_id:
+            for src in parent_context_dir.glob(f"{feature_id}_本体映射报告.md"):
+                dst = self.output_dir / src.name
+                if not dst.exists():
+                    shutil.copy2(str(src), str(dst))
+                    copied += 1
+        else:
+            # 没有 feature_id 时退回全量复制（兼容旧逻辑）
+            for src in parent_context_dir.glob("*_本体映射报告.md"):
+                dst = self.output_dir / src.name
+                if not dst.exists():
+                    shutil.copy2(str(src), str(dst))
+                    copied += 1
+
+        if copied:
+            logger.info(
+                f"[Orchestrator] Copied {copied} step2 artifacts from "
+                f"{parent_context_dir.name} to {self.output_dir.name}"
+                + (f" (feature_id={feature_id})" if feature_id else "")
+            )
 
     def _rel_output_dir(self) -> Path:
         """返回相对于 AGENT_CWD 的输出目录路径。"""

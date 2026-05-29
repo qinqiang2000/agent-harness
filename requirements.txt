@@ -36,3 +36,6 @@ apscheduler>=3.10.0
 # WeCom Plugin
 wecom-sdk==1.0.0
 pycryptodome>=3.20.0
+
+# Linear Plugin
+python-frontmatter>=1.1.0  # 特性清单 YAML frontmatter 解析
