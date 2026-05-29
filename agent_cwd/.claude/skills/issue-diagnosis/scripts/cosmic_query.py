@@ -52,7 +52,7 @@ def _resolve_host(env: str) -> str:
 
 def query(host: str, database: str, sql: str, params: list,
           evidence: str, source_type: str, token: str) -> dict:
-    url = f"{host}/trdPlatform/free/db/query"
+    url = f"{host}/ai/knowledge/free/db/query"
     payload = json.dumps({
         "database": database,
         "sql": sql,

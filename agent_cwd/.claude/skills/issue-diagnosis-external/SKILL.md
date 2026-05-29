@@ -180,26 +180,28 @@ python3 .claude/skills/issue-diagnosis/scripts/parse_logs.py \
 
 仅当 FAQ 命中且条目中标注「数据库验证」时执行，其余情况跳过。
 
-**⚠️ SQL 安全约束（防止慢查询拖垮生产库）**：
-- **禁止自行构造任何 SQL 语句**，包括但不限于：`LIKE '%xxx%'` 模糊匹配、查询无索引字段、无 WHERE 条件的全表扫描
-- **只能使用 [.claude/skills/issue-diagnosis/references/db-queries.md](.claude/skills/issue-diagnosis/references/db-queries.md) 中的预定义模板**，原样替换占位符后执行
-- **没有匹配模板时，直接跳过数据库查询进入 Step 6**，不得尝试自行编写 SQL
+**⚠️ SQL 安全约束**：详见 [.claude/skills/issue-diagnosis/references/db-queries.md](.claude/skills/issue-diagnosis/references/db-queries.md) 顶部约束说明，此处不重复。
 
 **其他严禁行为**：根据日志信号自行推断表名或字段；自行探索数据库表结构（SHOW TABLES、INFORMATION_SCHEMA 等）；日志查不到时用数据库查询替代日志分析；查询结果为空时自行扩展查询其他表、其他字段或其他数据源。**查完即止**。
 
-**数据源选择规则**（参照 `.claude/skills/issue-diagnosis/db/db_config.json`）：
-- 用户指明"测试环境" → 选 `env=test`；用户指明"at环境" → 选 `env=at`；未指明或指明"生产环境" → 选 `env=prod`
-- 开票/鉴权相关问题 → 选 `database=cms`
-- 运营/订单相关问题 → 选 `database=eop`
-- 收票合规校验相关问题 → 选 `prod-invoice`（生产）或 `test-invoice`（测试）
+**数据源选择规则**（通过 `--env` 和 `--db` 参数指定）：
+- 用户指明"测试环境"/"sit 环境" → `--env sit`；用户指明"演示环境"/"demo 环境" → `--env demo`；未指明或指明"生产环境" → `--env prod`（默认）
+- 开票/鉴权相关问题 → `--db cms`
+- 运营/订单相关问题 → `--db eop`
+- 收票合规校验相关问题 → `--db invoice`
 
 **执行步骤**：
 1. 读取 [.claude/skills/issue-diagnosis/references/db-queries.md](.claude/skills/issue-diagnosis/references/db-queries.md)，根据 FAQ 条目编号找到对应模板
 2. 若无匹配模板 → 跳过，直接进入 Step 6
 3. 将模板中的占位符替换为实际参数值后执行：
    ```bash
-   python3 .claude/skills/issue-diagnosis/db/db_query.py --source <数据源> \
-     --query '{"type":"template","sql":"SELECT ...","evidence":"<模板标题>"}'
+   python3 .claude/skills/issue-diagnosis/scripts/cosmic_query.py \
+     --env <prod|sit|demo> \
+     --db <数据库名，如 invoice、cms、eop> \
+     --sql "SELECT ... WHERE field = ?" \
+     --params '["<值>"]' \
+     --evidence "<模板标题>" \
+     --source-type template
    ```
 4. 将查询结论纳入最终诊断报告
 
