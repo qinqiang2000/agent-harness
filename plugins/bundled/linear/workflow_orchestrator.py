@@ -266,7 +266,9 @@ class WorkflowOrchestrator:
                 success=False, steps_executed=steps_executed, error=step5.error
             )
 
-        prd_files = list(self.output_dir.glob("*_用户故事设计规格说明书_v*.md"))
+        prd_files = list(self.output_dir.glob("*_产品规格说明书_v*.md"))
+        if not prd_files:
+            prd_files = list(self.output_dir.glob("*_用户故事设计规格说明书_v*.md"))
 
         return OrchestratorResult(
             success=True,
@@ -419,18 +421,128 @@ class WorkflowOrchestrator:
 
     async def _run_step5(self) -> StepResult:
         rel_dir = self._rel_output_dir()
-        skill_prompt = f"{rel_dir} --context={rel_dir} --skip-confirm"
-        if self._feature_id:
-            skill_prompt += f" --feature={self._feature_id}"
-        result = await self._invoke_skill("generate-prd", skill_prompt)
-        if not result.success:
-            return StepResult(success=False, error=result.error)
+        feature_suffix = f" --feature={self._feature_id}" if self._feature_id else ""
+        feature_id = self._feature_id or self._issue_id or self.output_dir.name
 
-        files = list(self.output_dir.glob("*_用户故事设计规格说明书_v*.md"))
-        # PRD 文件可能有多个，取第一个读 header
-        header = (
-            self._read_yaml_header("*_用户故事设计规格说明书_v*.md") if files else {}
-        )
+        # PRD-A（有映射报告）走分段生成，避免单次推理过长触发 504
+        mapping_files = list(self.output_dir.glob("*_本体映射报告.md"))
+        use_split = bool(mapping_files)
+
+        if use_split:
+            # 第一段：生成第一章（特性概述）+ 第二章（用户故事）+ 第三章（校验规则说明）
+            part1_file = f"{feature_id}_prd_part1.md"
+            part1_prompt = (
+                f"{rel_dir} --context={rel_dir} --skip-confirm{feature_suffix}\n\n"
+                f"【严格分段生成指令 - 第一段，必须严格遵守】\n"
+                f"⚠️ 本次调用是三段式 PRD 生成的第一段，任务边界严格限定如下：\n"
+                f"1. 读取上游产物（需求分析报告、特性清单、本体映射报告）\n"
+                f"2. 只生成第一章（特性概述）、第二章（用户故事）、第三章（校验规则说明）的 Markdown 内容\n"
+                f"3. 将上述内容写入临时文件：{rel_dir}/{part1_file}\n"
+                f"4. ⛔ 写完文件后立即停止，输出'第一段已写入 {part1_file}'，然后结束\n"
+                f"5. ⛔ 禁止继续生成第四章及之后的内容\n"
+                f"6. ⛔ 禁止生成最终 PRD 文件\n"
+                f"7. ⛔ 禁止执行质量自检\n"
+                f"临时文件不需要 frontmatter 和版本记录，只需要章节内容。"
+            )
+            result1 = await self._invoke_skill("generate-prd", part1_prompt)
+            if not result1.success:
+                return StepResult(
+                    success=False, error=f"PRD 第一段生成失败: {result1.error}"
+                )
+
+            if self.cancel_event.is_set():
+                return StepResult(success=False, error="已取消")
+
+            # 第二段：生成第四章（接口/页面规格）+ 第五章（地区差异）+ 第六章（附录）
+            part2_file = f"{feature_id}_prd_part2.md"
+            part2_prompt = (
+                f"{rel_dir} --context={rel_dir} --skip-confirm{feature_suffix}\n\n"
+                f"【严格分段生成指令 - 第二段，必须严格遵守】\n"
+                f"⚠️ 本次调用是三段式 PRD 生成的第二段，任务边界严格限定如下：\n"
+                f"1. 读取上游产物（本体映射报告、本体检查报告、页面设计文件）\n"
+                f"2. 只生成第四章（根据 interaction_type：接口规格/页面交互规格/批处理规格/事件规格）、"
+                f"第五章（地区差异说明）、第六章（附录：产品本体对应实现关系）的 Markdown 内容\n"
+                f"3. 将上述内容写入临时文件：{rel_dir}/{part2_file}\n"
+                f"4. ⛔ 写完文件后立即停止，输出'第二段已写入 {part2_file}'，然后结束\n"
+                f"5. ⛔ 禁止生成第一至三章内容\n"
+                f"6. ⛔ 禁止生成最终 PRD 文件\n"
+                f"7. ⛔ 禁止执行质量自检\n"
+                f"临时文件不需要 frontmatter 和版本记录，只需要章节内容。"
+            )
+            result2 = await self._invoke_skill("generate-prd", part2_prompt)
+            if not result2.success:
+                return StepResult(
+                    success=False, error=f"PRD 第二段生成失败: {result2.error}"
+                )
+
+            if self.cancel_event.is_set():
+                return StepResult(success=False, error="已取消")
+
+            # 第三段：Python 直接合并临时文件，完全绕过 Agent 避免 504
+            part1_path = self.output_dir / part1_file
+            part2_path = self.output_dir / part2_file
+            try:
+                part1_content = part1_path.read_text(encoding="utf-8")
+                part2_content = part2_path.read_text(encoding="utf-8")
+            except Exception as e:
+                return StepResult(success=False, error=f"读取临时文件失败: {e}")
+
+            import datetime
+
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            frontmatter = (
+                f"---\n"
+                f"skill-exit-status: DONE\n"
+                f"skill-exit-detail: PRD 分段生成完成\n"
+                f"generated-by: workflow-orchestrator\n"
+                f"feature-id: {feature_id}\n"
+                f"date: {today}\n"
+                f"---\n\n"
+            )
+            version_record = (
+                f"## 版本记录\n\n"
+                f"| 版本 | 日期 | 更新摘要 |\n"
+                f"| ---- | ---------- | ------ |\n"
+                f"| v1.0 | {today} | 初版 |\n\n"
+                f"---\n\n"
+            )
+            merged_content = (
+                frontmatter
+                + version_record
+                + part1_content
+                + "\n\n---\n\n"
+                + part2_content
+            )
+
+            # 从 part1 第一行提取标题作为文件名依据（格式：# {特性ID} · {特性名称}）
+            prd_filename = f"{feature_id}_产品规格说明书_v1.0.md"
+            final_prd_path = self.output_dir / prd_filename
+            try:
+                final_prd_path.write_text(merged_content, encoding="utf-8")
+                part1_path.unlink(missing_ok=True)
+                part2_path.unlink(missing_ok=True)
+                logger.info(f"[Orchestrator] PRD 合并完成（Python）: {prd_filename}")
+            except Exception as e:
+                return StepResult(success=False, error=f"写入最终 PRD 失败: {e}")
+
+            if self.cancel_event.is_set():
+                return StepResult(success=False, error="已取消")
+        else:
+            # PRD-B（无映射报告）内容较少，直接一次生成
+            skill_prompt = (
+                f"{rel_dir} --context={rel_dir} --skip-confirm{feature_suffix}"
+            )
+            result = await self._invoke_skill("generate-prd", skill_prompt)
+            if not result.success:
+                return StepResult(success=False, error=result.error)
+
+        files = list(self.output_dir.glob("*_产品规格说明书_v*.md"))
+        if not files:
+            # 兼容旧命名
+            files = list(self.output_dir.glob("*_用户故事设计规格说明书_v*.md"))
+        header = self._read_yaml_header("*_产品规格说明书_v*.md") if files else {}
+        if not header:
+            header = self._read_yaml_header("*_用户故事设计规格说明书_v*.md")
         exit_status = header.get("skill-exit-status", "DONE")
 
         if exit_status == "BLOCKED":
@@ -447,6 +559,15 @@ class WorkflowOrchestrator:
 
     # ── 核心工具方法 ──────────────────────────────────────────────────────────
 
+    # skill 名称 → 实际目录路径映射（避免 Agent 因数字前缀 Glob 失败而全局搜索）
+    _SKILL_PATH_MAP = {
+        "requirement-analysis": ".claude/skills/01-requirement-analysis/SKILL.md",
+        "ontology-context": ".claude/skills/02-ontology-context/SKILL.md",
+        "ontology-update": ".claude/skills/03-ontology-update/SKILL.md",
+        "prototype-design": ".claude/skills/04-prototype-design/SKILL.md",
+        "generate-prd": ".claude/skills/05-generate-prd/SKILL.md",
+    }
+
     async def _invoke_skill(self, skill_name: str, prompt: str) -> SkillInvokeResult:
         """调用单个 skill，消费 SSE 事件流，返回最终结果。"""
         # 在 prompt 前注入强制约束，确保 Agent 严格遵守 SKILL.md 的产物命名规范
@@ -455,10 +576,18 @@ class WorkflowOrchestrator:
             f"禁止使用任何其他文件名。\n\n"
             f"{prompt}"
         )
+        # skill 路径提示通过 metadata 传入，避免混入 user_prompt 干扰参数解析
+        skill_path = self._SKILL_PATH_MAP.get(skill_name, "")
+        metadata: dict = {}
+        if skill_path:
+            metadata["skill_file_hint"] = (
+                f"Skill 文件路径：{skill_path}，直接 Read 该文件，不要 Glob 搜索。"
+            )
         request = QueryRequest(
             prompt=enforced_prompt,
             skill=skill_name,
             language="中文",
+            metadata=metadata if metadata else None,
             # 不传 session_id，每步独立会话
         )
 

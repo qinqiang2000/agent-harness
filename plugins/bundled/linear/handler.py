@@ -694,7 +694,9 @@ class LinearSessionHandler:
         # 子目录模式 PRD 回填（大需求子 Issue）
         prd_dir = output_dir / "prd"
         if prd_dir.exists():
-            prd_files = list(prd_dir.glob("*_用户故事设计规格说明书_v*.md"))
+            prd_files = list(prd_dir.glob("*_用户故事设计规格说明书_v*.md")) + list(
+                prd_dir.glob("*_产品规格说明书_v*.md")
+            )
             if prd_files:
                 review_state_id = await client.get_team_state_by_name(
                     team_id, _STATE_REVIEW
@@ -716,36 +718,36 @@ class LinearSessionHandler:
                             exc_info=True,
                         )
 
-        # 小需求 PRD 回填：根目录有 PRD 文件且无特性清单，直接追加到原 Issue 描述
-        if issue_id and not feature_list_files:
-            root_prd_files = list(output_dir.glob("*_用户故事设计规格说明书_v*.md"))
-            if root_prd_files:
-                prd_file = root_prd_files[0]
-                try:
-                    import re
+        # PRD 回填到 Issue 描述：根目录有 PRD 文件时直接追加
+        # 注意：子 Issue 目录会有从父 Issue 复制来的特性清单，不能用 feature_list_files 判断
+        root_prd_files = list(output_dir.glob("*_用户故事设计规格说明书_v*.md")) + list(
+            output_dir.glob("*_产品规格说明书_v*.md")
+        )
+        if issue_id and root_prd_files:
+            prd_file = root_prd_files[0]
+            try:
+                import re
 
-                    prd_content = prd_file.read_text(encoding="utf-8")
-                    issue_data = await client.get_issue(issue_id)
-                    current_desc = issue_data.get("description") or ""
-                    prd_block = f"\n\n---PRD文档---\n{prd_content}\n---PRD文档---"
-                    if "---PRD文档---" in current_desc:
-                        new_desc = re.sub(
-                            r"\n\n---PRD文档---\n.*?\n---PRD文档---",
-                            prd_block,
-                            current_desc,
-                            flags=re.DOTALL,
-                        )
-                    else:
-                        new_desc = current_desc + prd_block
-                    await client.update_issue(issue_id, description=new_desc)
-                    logger.info(
-                        f"[{trace_id}][Linear] PRD appended to issue: {issue_id}"
+                prd_content = prd_file.read_text(encoding="utf-8")
+                issue_data = await client.get_issue(issue_id)
+                current_desc = issue_data.get("description") or ""
+                prd_block = f"\n\n---PRD文档---\n{prd_content}\n---PRD文档---"
+                if "---PRD文档---" in current_desc:
+                    new_desc = re.sub(
+                        r"\n\n---PRD文档---\n.*?\n---PRD文档---",
+                        prd_block,
+                        current_desc,
+                        flags=re.DOTALL,
                     )
-                except Exception:
-                    logger.error(
-                        f"[{trace_id}][Linear] Failed to append PRD to issue {issue_id}",
-                        exc_info=True,
-                    )
+                else:
+                    new_desc = current_desc + prd_block
+                await client.update_issue(issue_id, description=new_desc)
+                logger.info(f"[{trace_id}][Linear] PRD appended to issue: {issue_id}")
+            except Exception:
+                logger.error(
+                    f"[{trace_id}][Linear] Failed to append PRD to issue {issue_id}",
+                    exc_info=True,
+                )
 
         await self._sync_to_git(output_dir, trace_id)
 
