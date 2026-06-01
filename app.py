@@ -178,6 +178,29 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_run_faq_publish, "interval", hours=faq_interval, id="faq_publish")
         logger.info("FAQ auto-publish scheduled every %d hours", faq_interval)
 
+    # Daily report for issue-diagnosis
+    if os.getenv("DAILY_REPORT_ENABLED", "false").lower() in ("1", "true", "yes"):
+        from scripts.daily_report import generate_and_send as _gen_report
+
+        async def _run_daily_report():
+            from datetime import datetime, timedelta
+            date_str = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+            try:
+                result = await _gen_report(date_str)
+                logger.info("Daily report sent: %s", result)
+            except Exception:
+                logger.exception("Daily report failed")
+
+        report_hour = int(os.getenv("DAILY_REPORT_HOUR", "9"))
+        scheduler.add_job(
+            _run_daily_report,
+            "cron",
+            hour=report_hour,
+            minute=0,
+            id="daily_report",
+        )
+        logger.info("Daily report scheduled at %02d:00", report_hour)
+
     try:
         scheduler.start()
     except Exception:
@@ -364,6 +387,8 @@ from api.routers.faq import router as faq_router
 app.include_router(faq_router)
 from api.routers.browser_action import router as browser_action_router
 app.include_router(browser_action_router)
+from api.routers.report import router as report_router
+app.include_router(report_router)
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 
