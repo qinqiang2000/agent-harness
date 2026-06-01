@@ -28,7 +28,10 @@
    - `xinghan`：进入 ERP → 相关模块日志 → 找到对应记录 → 复制 traceId
    - `eas`：财务会计 → 发票管理 → 金税连接设置 → 请求日志 → 筛选"请求返回" → 复制 traceId
    - 若用户无法获取 traceId，则退回步骤 1 用关键字模板查询
-4. 无法匹配任何场景模板 → 直接用 `keywords` 构建 searchWordList
+4. **用户输入包含 URL 时**：如果有类似userKey,riqId 等全局唯一的 query 参数时，可以使用该唯一参数作为搜索词。
+   例：用户输入 `https://api.example.com/expense/invoice/list?userKey=6e6ad24d331f4bf207a3ce385ccc11eb`
+   → searchWordList 应为 `["6e6ad24d331f4bf207a3ce385ccc11eb"]`，而不是 `["expense/invoice/list", "userKey"]`
+5. 无法匹配任何场景模板 → 直接用 `keywords` 构建 searchWordList
 
 ## 查不到日志时的重试策略
 

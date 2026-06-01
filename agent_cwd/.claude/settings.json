@@ -21,6 +21,17 @@
     ]
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "mcp__elastic__searchTraceOrKeyWordsLog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../.venv/bin/python3 .claude/hooks/auto-parse-elk-result.py"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "mcp__elastic__searchTraceOrKeyWordsLog",
