@@ -1,7 +1,21 @@
-"""Claude SDK 会话级连接缓存 - 按 session_id 复用 ClaudeSDKClient，空闲 60 分钟后自动回收。"""
+"""Claude SDK 会话级连接缓存 - 按 session_id 复用 ClaudeSDKClient，空闲超时后自动回收。
+
+进程 TTL 与「会话保留时长」是两层独立的超时，不要混淆：
+- 本模块的 TTL_SECONDS 只控制 Claude CLI 子进程空闲多久被回收（占内存大，应短）；
+- 渠道侧「session 映射保留多久」由 PluginSessionMapper.timeout_seconds 控制
+  （只存一个 Claude session_id 字符串，占内存极小，可长，默认 1 小时）。
+
+进程被回收不会丢会话：磁盘 transcript（~/.claude/projects/<cwd>/<sid>.jsonl）是
+source of truth。映射仍在有效期内时，下次请求未命中本缓存，会用 resume=<sid>
+从磁盘重建进程、无缝恢复上下文（仅付一次冷启动）。
+
+因此 TTL_SECONDS 应远小于映射保留时长：进程及时回收防止数量随累计会话暴涨，
+而 1 小时内的会话连续性由「映射 + resume」保证。
+"""
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -9,7 +23,9 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 
 logger = logging.getLogger(__name__)
 
-TTL_SECONDS = 3600  # 10 分钟
+# Claude CLI 子进程空闲多久后由 reaper 回收（秒）。默认 600（10 分钟）。
+# 必须远小于渠道映射保留时长（默认 3600），否则进程会陪绑会话导致数量暴涨。
+TTL_SECONDS = int(os.getenv("SDK_POOL_CLIENT_TTL", "600"))
 
 
 @dataclass
