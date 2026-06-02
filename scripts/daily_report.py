@@ -32,8 +32,20 @@ def load_interactions(date_str: str) -> list[dict]:
     """读取指定日期的 interactions.log，只返回 skill=issue-diagnosis 的记录。"""
     dt = datetime.strptime(date_str, "%Y%m%d")
     today_str = datetime.now().strftime("%Y%m%d")
-    path = INTERACTIONS_LOG if date_str == today_str else \
-        INTERACTIONS_LOG.with_suffix(f".log.{dt.strftime('%Y-%m-%d')}")
+    target_date = dt.strftime("%Y-%m-%d")
+
+    archived = INTERACTIONS_LOG.with_suffix(f".log.{target_date}")
+
+    if date_str == today_str:
+        path = INTERACTIONS_LOG
+        filter_by_date = False
+    elif archived.exists():
+        path = archived
+        filter_by_date = False
+    else:
+        # 归档文件不存在说明轮转尚未发生，数据仍在当前日志中
+        path = INTERACTIONS_LOG
+        filter_by_date = True
 
     if not path.exists():
         return []
@@ -46,8 +58,11 @@ def load_interactions(date_str: str) -> list[dict]:
                 continue
             try:
                 r = json.loads(line)
-                if r.get("skill") == "issue-diagnosis":
-                    records.append(r)
+                if r.get("skill") != "issue-diagnosis":
+                    continue
+                if filter_by_date and not (r.get("timestamp") or "").startswith(target_date):
+                    continue
+                records.append(r)
             except json.JSONDecodeError:
                 pass
     return records
