@@ -133,7 +133,7 @@ def main() -> None:
                     "type": "text",
                     "text": (
                         f"[系统已自动将 ELK 查询结果转为 JSONL，无需再次运行 parse_logs.py] 共 {line_count} 条日志，路径：{output_path}\n"
-                        f"请直接按 .claude/skills/issue-diagnosis/references/log-analysis.md 中的「查询后处理」规则，用 Bash grep 对上述 JSONL 文件进行分析。"
+                        f"请直接按 .claude/skills/issue-diagnosis/references/log-analysis.md 中的「查询后处理」规则，日志条数少时直接读取即可,多的时候用 Bash grep 对上述 JSONL 文件进行分析。"
                     ),
                 }
             ],
