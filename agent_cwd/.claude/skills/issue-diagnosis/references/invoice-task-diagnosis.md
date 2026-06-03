@@ -18,7 +18,7 @@
 若有 `batchNo`，立即执行：
 
 ```bash
-python3 .claude/skills/issue-diagnosis/db/db_query.py --source prod-invoice --sql "SELECT fbatch_no, ftask_status, ferr_desc, fcreate_time, fupdate_time FROM t_elc_sync_task WHERE fbatch_no = '{batchNo}'"
+python3 .claude/skills/issue-diagnosis/scripts/cosmic_query.py --env prod --db invoice --sql "SELECT fbatch_no, ftask_status, ferr_desc, fcreate_time, fupdate_time FROM t_elc_sync_task WHERE fbatch_no = ?" --params '["{batchNo}"]' --evidence "进项采集任务状态查询" --source-type template --format table
 ```
 
 `ftask_status` 含义：
