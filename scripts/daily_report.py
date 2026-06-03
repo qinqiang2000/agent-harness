@@ -218,7 +218,10 @@ async def llm_summarize(stats: dict, records: list[dict], date_str: str) -> str:
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].text.strip()
+        text_block = next((b for b in message.content if b.type == "text"), None)
+        if text_block is None:
+            return "（LLM 总结失败: 响应中无文本内容）"
+        return text_block.text.strip()
     except Exception as e:
         return f"（LLM 总结失败: {e}）"
 
