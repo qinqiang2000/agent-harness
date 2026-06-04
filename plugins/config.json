@@ -1,5 +1,13 @@
 {
-  "enabled": ["yunzhijia", "zhichi", "audit", "open_api", "wecom", "wecom_group"],
+  "enabled": [
+    "yunzhijia",
+    "zhichi",
+    "audit",
+    "open_api",
+    "wecom",
+    "wecom_group",
+    "linear"
+  ],
   "plugins": {
     "open_api": {
       "app_id": "${OPEN_API_APP_ID}",
@@ -44,6 +52,10 @@
       "encoding_aes_key": "${WECOM_GROUP_ENCODING_AES_KEY}",
       "session_timeout": 3600,
       "default_skill": "customer-service"
+    },
+    "linear": {
+      "token_db_path": "data/linear/linear_tokens.db",
+      "system_prompt": ""
     }
   }
 }

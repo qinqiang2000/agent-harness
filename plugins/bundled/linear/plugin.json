@@ -1,0 +1,23 @@
+{
+  "id": "linear",
+  "name": "Linear Agent",
+  "version": "1.0.0",
+  "description": "Linear Agent 简洁集成：接收 created 事件直接调用 AgentService，无 PRD 编排",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "token_db_path": {
+        "type": "string",
+        "default": "data/linear/linear_tokens.db",
+        "description": "SQLite token 存储路径"
+      },
+      "system_prompt": {
+        "type": "string",
+        "default": "",
+        "description": "调用 AgentService 时附加的系统提示（可选）"
+      }
+    }
+  }
+}

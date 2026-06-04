@@ -5,24 +5,49 @@ import json
 import logging
 import os
 import re
+import sys
 from typing import AsyncGenerator
+
+# asyncio.timeout 在 Python 3.11+ 才引入，3.10 用 async_timeout 兼容
+if sys.version_info >= (3, 11):
+    _asyncio_timeout = asyncio.timeout
+else:
+    try:
+        from async_timeout import timeout as _asyncio_timeout
+    except ImportError:
+        import contextlib
+
+        @contextlib.asynccontextmanager
+        async def _asyncio_timeout(delay):
+            """asyncio.timeout 的简单 fallback，Python 3.10 无 async_timeout 时使用。"""
+            task = asyncio.current_task()
+            handle = asyncio.get_event_loop().call_later(delay, task.cancel)
+            try:
+                yield
+            except asyncio.CancelledError:
+                raise asyncio.TimeoutError()
+            finally:
+                handle.cancel()
+
+
 from claude_agent_sdk import (
     ClaudeSDKClient,
     AssistantMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
-    ToolUseBlock
+    ToolUseBlock,
 )
 
 from api.models.requests import QueryRequest
 from api.utils import format_sse_message, extract_todos_from_tool, redact, should_redact
 from api.utils.sdk_logger import SDKLogger
 from api.utils.perf_timer import PerfTimer, set_session_id
+
 logger = logging.getLogger(__name__)
 
 
-_TRANSFER_PATTERN = re.compile(r'\[TRANSFER:([^\]]*)\]\s*')
+_TRANSFER_PATTERN = re.compile(r"\[TRANSFER:([^\]]*)\]\s*")
 
 
 class StreamProcessor:
@@ -70,7 +95,9 @@ class StreamProcessor:
             await self.session_service.register(session_id, self.client)
             self.session_registered = True
 
-    async def _emit_session_created(self, session_id: str) -> AsyncGenerator[dict, None]:
+    async def _emit_session_created(
+        self, session_id: str
+    ) -> AsyncGenerator[dict, None]:
         """发送 session_created 事件，同时触发 on_session_id 回调（两者原子绑定）。"""
         if not self.session_id_sent:
             self.session_id_sent = True
@@ -94,7 +121,7 @@ class StreamProcessor:
         timeout_s = timeout_ms / 1000.0
 
         try:
-            async with asyncio.timeout(timeout_s):
+            async with _asyncio_timeout(timeout_s):
                 async for msg in self.client.receive_response():
                     if not self.first_message_received:
                         self.first_message_received = True
@@ -120,22 +147,36 @@ class StreamProcessor:
                 logger.warning("No messages received from Claude SDK")
 
         except asyncio.TimeoutError:
-            logger.error(f"Stream timed out after {timeout_s:.0f}s (API_TIMEOUT_MS={timeout_ms})")
-            yield format_sse_message("error", {"message": f"模型响应超时（{timeout_s:.0f}秒），请稍后重试。"})
+            logger.error(
+                f"Stream timed out after {timeout_s:.0f}s (API_TIMEOUT_MS={timeout_ms})"
+            )
+            yield format_sse_message(
+                "error", {"message": f"模型响应超时（{timeout_s:.0f}秒），请稍后重试。"}
+            )
         finally:
             # Clean up session
-            if self.session_registered and self.actual_session_id and self.session_service:
+            if (
+                self.session_registered
+                and self.actual_session_id
+                and self.session_service
+            ):
                 await self.session_service.unregister(self.actual_session_id)
 
-    async def _handle_system_message(self, msg: SystemMessage) -> AsyncGenerator[dict, None]:
+    async def _handle_system_message(
+        self, msg: SystemMessage
+    ) -> AsyncGenerator[dict, None]:
         """Handle system message."""
         self.sdk_logger.log_system_message(msg)
 
-        if (hasattr(msg, 'subtype') and msg.subtype == 'init'
-            and not self.request.session_id and not self.session_id_sent):
+        if (
+            hasattr(msg, "subtype")
+            and msg.subtype == "init"
+            and not self.request.session_id
+            and not self.session_id_sent
+        ):
 
-            if isinstance(msg.data, dict) and 'session_id' in msg.data:
-                self.actual_session_id = msg.data['session_id']
+            if isinstance(msg.data, dict) and "session_id" in msg.data:
+                self.actual_session_id = msg.data["session_id"]
                 set_session_id(self.actual_session_id)
 
                 # Emit session created event (also triggers on_session_id callback)
@@ -145,7 +186,9 @@ class StreamProcessor:
                 # Register session
                 await self._ensure_session_registered(self.actual_session_id)
 
-    async def _handle_assistant_message(self, msg: AssistantMessage) -> AsyncGenerator[dict, None]:
+    async def _handle_assistant_message(
+        self, msg: AssistantMessage
+    ) -> AsyncGenerator[dict, None]:
         """Handle assistant message."""
         tool_blocks = [b for b in msg.content if isinstance(b, ToolUseBlock)]
         if len(tool_blocks) > 1:
@@ -154,19 +197,36 @@ class StreamProcessor:
         for block in msg.content:
             if isinstance(block, TextBlock):
                 self.sdk_logger.log_text_block(block)
-                if block.text and block.text.strip() and block.text.strip() != "(empty)":
-                    text = redact(block.text) if should_redact(self.request.skill, self.request.tenant_id) else block.text
+                if (
+                    block.text
+                    and block.text.strip()
+                    and block.text.strip() != "(empty)"
+                ):
+                    text = (
+                        redact(block.text)
+                        if should_redact(self.request.skill, self.request.tenant_id)
+                        else block.text
+                    )
                     # 过滤非 Claude 模型泄漏的内部标记（DeepSeek/Qwen 等模型的工具调用格式）
-                    INTERNAL_MARKERS = ["<｜DSML｜", "<|tool_calls|>", "<|im_start|>", "<|im_end|>", "<|endoftext|>"]
+                    INTERNAL_MARKERS = [
+                        "<｜DSML｜",
+                        "<|tool_calls|>",
+                        "<|im_start|>",
+                        "<|im_end|>",
+                        "<|endoftext|>",
+                    ]
                     if any(marker in text for marker in INTERNAL_MARKERS):
-                        logger.warning(f"[StreamFilter] Suppressed output containing internal marker, session={self.request.session_id}")
+                        logger.warning(
+                            f"[StreamFilter] Suppressed output containing internal marker, session={self.request.session_id}"
+                        )
                     else:
                         yield format_sse_message("assistant_message", text)
 
-
             elif isinstance(block, ToolUseBlock):
                 self.sdk_logger.log_tool_use(block)
-                yield format_sse_message("tool_use", {"name": block.name, "input": block.input})
+                yield format_sse_message(
+                    "tool_use", {"name": block.name, "input": block.input}
+                )
 
                 # Extract and emit todos
                 if block.name == "TodoWrite":
@@ -183,16 +243,24 @@ class StreamProcessor:
                             try:
                                 questions = json.loads(questions)
                             except (json.JSONDecodeError, ValueError):
-                                logger.error(f"[AskUserQuestion] Failed to parse questions string: {questions[:100]}")
-                                yield format_sse_message("assistant_message", "抱歉，agent异常，请稍后再试。")
+                                logger.error(
+                                    f"[AskUserQuestion] Failed to parse questions string: {questions[:100]}"
+                                )
+                                yield format_sse_message(
+                                    "assistant_message", "抱歉，agent异常，请稍后再试。"
+                                )
                                 questions = []
                         if questions and isinstance(questions, list):
-                            logger.info(f"[AskUserQuestion] Emitting {len(questions)} question(s)")
-                            yield format_sse_message("ask_user_question", {
-                                "questions": questions
-                            })
+                            logger.info(
+                                f"[AskUserQuestion] Emitting {len(questions)} question(s)"
+                            )
+                            yield format_sse_message(
+                                "ask_user_question", {"questions": questions}
+                            )
 
-    async def _handle_result_message(self, msg: ResultMessage) -> AsyncGenerator[dict, None]:
+    async def _handle_result_message(
+        self, msg: ResultMessage
+    ) -> AsyncGenerator[dict, None]:
         """Handle result message."""
         self.actual_session_id = msg.session_id
 
@@ -215,7 +283,7 @@ class StreamProcessor:
             "session_id": msg.session_id,
             "duration_ms": msg.duration_ms,
             "is_error": msg.is_error,
-            "num_turns": msg.num_turns
+            "num_turns": msg.num_turns,
         }
 
         # Include result field if present (SDK final output)
@@ -223,16 +291,31 @@ class StreamProcessor:
             m = _TRANSFER_PATTERN.search(msg.result)
             if m:
                 group_name = m.group(1).strip()
-                reason = msg.result[m.end():].strip() or msg.result[:m.start()].strip()
+                reason = (
+                    msg.result[m.end() :].strip() or msg.result[: m.start()].strip()
+                )
                 logger.info(f"[Transfer] Detected transfer signal: group={group_name}")
-                yield format_sse_message("transfer_human", {"group": group_name, "reason": reason})
+                yield format_sse_message(
+                    "transfer_human", {"group": group_name, "reason": reason}
+                )
                 result_data["result"] = reason
             else:
                 # 过滤内部标记（DeepSeek/Qwen 等模型 rate-limiting 时泄漏的残留片段）
-                INTERNAL_MARKERS = ["<｜DSML｜", "<|tool_calls|>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<COR", "<-limiting", "<rate"]
+                INTERNAL_MARKERS = [
+                    "<｜DSML｜",
+                    "<|tool_calls|>",
+                    "<|im_start|>",
+                    "<|im_end|>",
+                    "<|endoftext|>",
+                    "<COR",
+                    "<-limiting",
+                    "<rate",
+                ]
                 result = msg.result
                 if any(marker in result for marker in INTERNAL_MARKERS):
-                    logger.warning(f"[StreamFilter] Suppressed result containing internal marker: {result[:50]!r}")
+                    logger.warning(
+                        f"[StreamFilter] Suppressed result containing internal marker: {result[:50]!r}"
+                    )
                     result_data["result"] = "抱歉，处理您的问题时出现错误，请稍后再试。"
                 else:
                     result_data["result"] = result
