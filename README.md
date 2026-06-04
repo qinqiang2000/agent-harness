@@ -222,6 +222,89 @@ python manage_plugins.py doctor            # 健康检查
 
 会话管理：映射云之家 `sessionId` → Agent `session_id`，默认 30 分钟不活跃超时（可配置）
 
+### Linear 插件
+
+Linear 插件（`plugins/bundled/linear/`）接收 Linear AgentSession Webhook，将 Issue 信息传给 Agent 处理，结果回写到 Linear Activity。支持多轮对话。
+
+#### 1. 在 Linear 创建 OAuth App
+
+进入 [Linear Settings → API → OAuth Applications](https://linear.app/settings/api/applications)，创建一个新的 OAuth App：
+
+- **Developer URI**: `https://your-domain.com`
+- **Redirect URI**: `https://your-domain.com/linear/oauth/callback`
+- **Webhook URL**: `https://your-domain.com/linear/webhook`
+- **Webhook 事件**: 勾选 `AgentSession`、`AgentSessionEvent`
+- **App events**: 全部勾上
+
+记录下 `Client ID`、`Client Secret`、`Webhook Secret`。
+
+#### 2. 配置环境变量
+
+在 `.env` 中添加：
+
+```bash
+LINEAR_CLIENT_ID=your_linear_client_id
+LINEAR_CLIENT_SECRET=your_linear_client_secret
+LINEAR_REDIRECT_URI=https://your-domain.com/linear/oauth/callback
+LINEAR_WEBHOOK_SECRET=your_linear_webhook_secret
+```
+
+#### 3. 启用插件
+
+在 `plugins/config.json` 中添加：
+
+```json
+{
+  "enabled": [..., "linear"],
+  "plugins": {
+    "linear": {
+      "token_db_path": "data/linear/linear_tokens.db",
+      "system_prompt": ""
+    }
+  }
+}
+```
+
+`system_prompt` 可选，填入后会在每次调用 Agent 时附加到 prompt 前面。
+
+#### 4. 完成 OAuth 授权
+
+服务启动后，访问以下地址完成 workspace 授权：
+
+```
+https://your-domain.com/linear/oauth/install
+```
+
+授权成功后会显示 workspace 名称和 App User ID，表示安装完成。
+
+#### 5. 在 Linear 中使用
+
+授权完成后，在 Linear Issue 中将 Issue **分配给 Agent**（或 @提及 App 用户），即可触发 Agent 处理。Agent 会：
+
+1. 发送 `"已收到，正在处理中..."` thought
+2. 拉取 Issue 详情，将标题/描述/状态/优先级组装为 prompt
+3. 将 Issue 状态置为第一个 `started` 状态
+4. 调用 AgentService 处理
+5. 将结果回写为 response activity
+
+在 Linear 中追加消息可继续多轮对话，Agent 会续接原有会话上下文。
+
+#### 接口说明
+
+| 路径 | 说明 |
+|------|------|
+| `POST /linear/webhook` | 接收 Linear AgentSession Webhook |
+| `GET /linear/oauth/install` | 引导 OAuth 授权安装 |
+| `GET /linear/oauth/callback` | OAuth 回调，换取并保存 token |
+| `GET /linear/stats` | 查看当前安装状态（调试用）|
+
+#### 查看运行状态
+
+```bash
+# 查看安装状态
+curl https://your-domain.com/linear/stats
+```
+
 ## 环境变量说明
 
 关键环境变量配置（在 `.env` 中）：
