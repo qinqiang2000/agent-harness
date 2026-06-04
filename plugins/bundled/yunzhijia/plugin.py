@@ -70,24 +70,21 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
             request: Request,
             msg: YZJRobotMsg,
             background_tasks: BackgroundTasks,
-            yzj_token: str = Query(..., description="云之家机器人 token"),
+            yzj_token: str = Query(None, description="云之家机器人 token（对话型机器人不带此参数）"),
             skill: str = Query(None, description="指定使用的 skill"),
         ):
             """云之家消息接收端点"""
             session_id = request.headers.get("sessionId")
             msg.sessionId = session_id
 
+            # 对话型机器人不带 yzj_token，用 robotId 做回调标识
+            effective_token = yzj_token or msg.robotId or "unknown"
+
             logger.info(
-                f"[YZJ] Received message: token={yzj_token[:8]}..., "
+                f"[YZJ] Received message: token={effective_token[:8]}..., "
                 f"session={session_id}, operator={msg.operatorName}, "
                 f"content={msg.content[:30] if msg.content else 'empty'}..."
             )
-
-            if not yzj_token:
-                return JSONResponse(content={
-                    "success": False,
-                    "data": {"type": 2, "content": "缺少 yzj_token 参数"},
-                })
 
             if not msg.content or not msg.content.strip():
                 return JSONResponse(content={
@@ -95,7 +92,7 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
                     "data": {"type": 2, "content": "请输入有效内容"},
                 })
 
-            background_tasks.add_task(handler.process_message, msg, yzj_token, skill)
+            background_tasks.add_task(handler.process_message, msg, effective_token, skill)
 
             return JSONResponse(content={
                 "success": True,
