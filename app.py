@@ -176,6 +176,20 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # 打印详细的 422 原因（哪个字段缺失/类型不对）和原始 body，便于排查
+    try:
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        body_text = "<unable to read body>"
+
+    logger.warning(
+        f"422 Validation Error: path={request.url.path} "
+        f"query={dict(request.query_params)} "
+        f"errors={exc.errors()} "
+        f"body={body_text[:1000]}"
+    )
+
     if request.url.path.startswith("/open-api/"):
         return JSONResponse(
             status_code=422,
