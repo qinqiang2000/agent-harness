@@ -537,6 +537,112 @@ python manage_plugins.py doctor            # 健康检查
 
 会话管理：映射云之家 `sessionId` → Agent `session_id`，默认 30 分钟不活跃超时（可配置）
 
+### 云之家机器人配置（@机器人主动对话）
+
+支持在群里 @机器人 触发任意 skill，覆盖运维问诊、客服问答、主动追问等场景。
+
+**整体流程**：
+
+```
+群里 @机器人 "帮我看看 172.31.16.40 IO 情况"
+   ↓
+POST http://your-host:9123/yzj/chat?yzj_token=xxx&skill=ops-diagnosis
+   ↓
+yzj_chat 立即返回 200（云之家不会重试）
+   ↓
+后台任务调用 AgentService.process_query(skill=ops-diagnosis)
+   ↓
+通过 sessionId 查找/创建会话上下文（同一会话延续 30 分钟）
+   ↓
+SSE 流式响应 → 收集完整结果
+   ↓
+通过 webhook 推回云之家群（文本 / 图片卡片）
+```
+
+#### 步骤 1：云之家后台创建机器人
+
+1. 进入云之家管理后台 → 群机器人管理
+2. 机器人类型选 **对话型机器人**（不是"群通知型"）
+3. 回调 URL 填：
+
+   ```
+   http://42.193.101.189:9123/yzj/chat?yzj_token={机器人 Token}
+   ```
+
+4. 不同业务场景可在 URL 加 `?skill=` 参数指定 skill：
+
+   | 场景 | 回调 URL 示例 |
+   |------|-------------|
+   | 客服群（默认） | `?yzj_token=xxx` |
+   | 运维诊断群 | `?yzj_token=xxx&skill=ops-diagnosis` |
+   | 数据分析群 | `?yzj_token=xxx&skill=operational-analytics` |
+
+   未传 `skill` 参数时使用 `.env` 中的 `YZJ_DEFAULT_SKILL`（默认 `customer-service`）。
+
+#### 步骤 2：`.env` 关键配置
+
+```bash
+# 默认 skill（URL 不带 skill 参数时生效）
+YZJ_DEFAULT_SKILL=customer-service
+
+# 会话超时（秒），超时后下次对话开新会话
+YZJ_SESSION_TIMEOUT=1800
+
+# 消息详细程度
+# true: 详细模式，输出所有中间过程
+# false: 简洁模式，只输出最终答案（推荐）
+YZJ_VERBOSE=false
+
+# 卡片消息模板 ID（在云之家后台创建后填入）
+YZJ_CARD_TEMPLATE_ID=64d08cb4e4b07ba2b112b395
+
+# 服务公网地址（云之家拉取图片时需要能访问到）
+SERVICE_BASE_URL=http://42.193.101.189:9123
+```
+
+#### 步骤 3：群里 @机器人 使用
+
+```
+@机器人 星空旗舰版如何配置开票人员？           # 客服 skill
+@机器人 帮我看看 172.31.16.40 现在 IO 怎么样   # ops-diagnosis skill
+@机器人 上周订单量同比是多少                     # operational-analytics skill
+```
+
+**多轮对话**自动延续上下文（同一 sessionId 30 分钟内）：
+
+```
+[运维] @机器人 ZK 写入暴增是什么原因？
+[机器人] 经诊断是 RabbitMQ 客户端 172.31.16.50 高频提交 offset 导致...
+[运维] @机器人 那继续看下这个客户端的连接数
+[机器人] （复用之前会话上下文）该客户端当前 channels=152，明显高于均值...
+```
+
+#### 与告警诊断的协同
+
+三种触发方式互补使用：
+
+| 触发方式 | 端点 | 适用场景 |
+|---------|------|---------|
+| Alertmanager 自动 | `/api/alert-webhook` | Prometheus 告警自动诊断 |
+| 文本告警转发 | `/api/alert-text` | 脚本/腾讯云告警，恢复消息原文转发 |
+| 云之家 @机器人 | `/yzj/chat` | 运维主动追问、深度排查、跨场景问答 |
+
+**典型协同场景**：
+1. Prometheus 触发告警 → `/api/alert-webhook` 自动诊断 → 群里推摘要
+2. 运维看到摘要 → 群里 @机器人 继续追问 → Agent 复用上下文给出更深入分析
+
+#### 调试
+
+设置 `YZJ_MOCK_ENABLED=true` 后，访问 `http://host:9123/yzj/debug` 打开调试页面，无需云之家就能模拟群消息测试机器人响应。
+
+#### 查看会话状态
+
+```bash
+curl http://host:9123/yzj/stats
+```
+
+返回当前活跃会话数、各 token 的会话映射等。
+
 ## 环境变量说明
 
 关键环境变量配置（在 `.env` 中）：

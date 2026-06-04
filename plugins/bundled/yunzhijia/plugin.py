@@ -52,6 +52,19 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
         router = APIRouter(tags=["yunzhijia"])
         handler = self.handler
 
+        # === Debug：打印云之家发来的原始请求体（解决 422 时定位字段不匹配） ===
+        @router.post("/yzj/chat-debug")
+        async def yzj_chat_debug(request: Request):
+            """收到原始请求打日志，不解析模型。仅用于定位 422 错误。"""
+            body = await request.body()
+            logger.info(f"[YZJ DEBUG] headers: {dict(request.headers)}")
+            logger.info(f"[YZJ DEBUG] query: {dict(request.query_params)}")
+            logger.info(f"[YZJ DEBUG] raw body: {body.decode('utf-8', errors='replace')}")
+            return JSONResponse(content={
+                "success": True,
+                "data": {"type": 2, "content": ""},
+            })
+
         @router.post("/yzj/chat")
         async def yzj_chat(
             request: Request,
