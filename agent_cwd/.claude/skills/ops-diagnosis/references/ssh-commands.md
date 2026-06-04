@@ -361,4 +361,150 @@ fi
 
 echo "=== pidstat 进程级 IO（备用） ==="
 pidstat -d 1 2 2>/dev/null | tail -20
+
+# ===========================================================================
+# 服务专项深度诊断（IO 告警时识别到这些服务，必须追加专项采集）
+# 触发条件：lsof 写入文件路径 或 高 IO 进程 cmdline 命中以下关键字
+# 目标：从"系统级 IO 高"下沉到"具体服务在做什么导致 IO 高"
+# ===========================================================================
+
+# --- Zookeeper 专项（路径含 zookeeper / zk_ / version-2，或进程含 QuorumPeerMain） ---
+ZK_PID=$(ps aux | grep -E 'QuorumPeerMain|zookeeper' | grep -v grep | awk '{print $2}' | head -1)
+ZK_DATA_DIR=$(lsof +L1 2>/dev/null | grep -oE '/[^ ]*zookeeper[^ ]*/version-2' | head -1)
+[ -z "$ZK_DATA_DIR" ] && ZK_DATA_DIR=$(find /mnt /data /datadisk /opt -maxdepth 6 -type d -name "version-2" -path "*zookeeper*" 2>/dev/null | head -1)
+
+if [ -n "$ZK_PID" ] || [ -n "$ZK_DATA_DIR" ]; then
+  echo ""
+  echo "=== 【Zookeeper 专项】事务日志/Snapshot 写入分析 ==="
+  echo "ZK PID: ${ZK_PID:-未识别}, 数据目录: ${ZK_DATA_DIR:-未找到}"
+
+  if [ -n "$ZK_DATA_DIR" ]; then
+    echo "--- 近 10 分钟新增/修改的 log/snapshot 文件 ---"
+    find "$ZK_DATA_DIR" -type f \( -name "log.*" -o -name "snapshot.*" \) -mmin -10 \
+      -exec ls -lh {} \; 2>/dev/null | sort -k6,7 | tail -20
+
+    echo "--- 最近 10 个 log 文件大小分布（看是否异常增大） ---"
+    ls -lhS "$ZK_DATA_DIR"/log.* 2>/dev/null | head -10
+
+    echo "--- 当前正在写入的 log 文件（最新 mtime） ---"
+    LATEST_LOG=$(ls -t "$ZK_DATA_DIR"/log.* 2>/dev/null | head -1)
+    if [ -n "$LATEST_LOG" ]; then
+      ls -lh "$LATEST_LOG"
+      # 用 zk 自带工具反序列化最近的事务（看具体在写什么 path）
+      # 路径里通常会包含 /brokers/ /consumers/ /clients/ 等业务前缀
+      ZK_HOME=$(dirname $(dirname $(readlink -f $(which zkServer.sh) 2>/dev/null) 2>/dev/null) 2>/dev/null)
+      if [ -n "$ZK_HOME" ] && [ -f "$ZK_HOME/lib/zookeeper.jar" ] || [ -f "$ZK_HOME/zookeeper.jar" ]; then
+        echo "--- 解析最新事务日志的最后 50 条事务（看写入了哪些 znode path） ---"
+        timeout 10 java -cp "$ZK_HOME/lib/*:$ZK_HOME/*" \
+          org.apache.zookeeper.server.LogFormatter "$LATEST_LOG" 2>/dev/null | tail -50
+      else
+        echo "（未找到 zkServer.sh，无法反序列化日志，但文件大小和频率已能定位异常）"
+      fi
+    fi
+  fi
+
+  # ZK 4字命令：mntr 看请求速率、连接数、znode 数；cons 看每个客户端的请求统计
+  if command -v nc &>/dev/null && [ -n "$ZK_PID" ]; then
+    ZK_PORT=$(ss -tlnp 2>/dev/null | grep "pid=$ZK_PID" | awk '{print $4}' | grep -oE '[0-9]+$' | head -1)
+    [ -z "$ZK_PORT" ] && ZK_PORT=2181
+    echo "--- ZK mntr（写入速率/znode 数/watch 数） ---"
+    echo mntr | timeout 5 nc -w 3 127.0.0.1 $ZK_PORT 2>/dev/null
+    echo "--- ZK cons（按客户端 IP 排序，看哪个客户端写得最多） ---"
+    echo cons | timeout 5 nc -w 3 127.0.0.1 $ZK_PORT 2>/dev/null | head -30
+    echo "--- ZK wchc（watch 集中在哪些 path，反推热点 znode） ---"
+    echo wchc | timeout 5 nc -w 3 127.0.0.1 $ZK_PORT 2>/dev/null | head -50
+  fi
+fi
+
+# --- RabbitMQ 专项（进程含 rabbit 或 beam.smp） ---
+RABBIT_PID=$(ps aux | grep -E 'rabbit@|beam.smp.*rabbit' | grep -v grep | awk '{print $2}' | head -1)
+if [ -n "$RABBIT_PID" ]; then
+  echo ""
+  echo "=== 【RabbitMQ 专项】队列/连接/消息速率分析 ==="
+  echo "RabbitMQ PID: $RABBIT_PID"
+
+  if command -v rabbitmqctl &>/dev/null; then
+    echo "--- 集群状态 ---"
+    timeout 10 rabbitmqctl cluster_status 2>/dev/null | head -20
+    echo "--- 队列消息堆积 Top 15（按 messages 排序） ---"
+    timeout 10 rabbitmqctl list_queues name messages messages_ready messages_unacknowledged consumers --no-table-headers 2>/dev/null \
+      | sort -k2 -rn | head -15
+    echo "--- 高消息速率队列（messages_published 增量） ---"
+    timeout 10 rabbitmqctl list_queues name message_stats.publish_details.rate message_stats.deliver_details.rate --no-table-headers 2>/dev/null \
+      | sort -k2 -rn | head -10
+    echo "--- 连接数及客户端 IP（按 channel 数倒序） ---"
+    timeout 10 rabbitmqctl list_connections peer_host channels send_oct recv_oct --no-table-headers 2>/dev/null \
+      | sort -k2 -rn | head -15
+  else
+    echo "（rabbitmqctl 不可用，回退查看 mnesia 日志大小）"
+    find /var/lib/rabbitmq -type f -size +50M -mmin -60 -exec ls -lh {} \; 2>/dev/null | head -10
+  fi
+fi
+
+# --- MySQL 专项（高 IO 进程含 mysqld） ---
+MYSQL_PID=$(ps aux | grep -E '/mysqld\b|mysqld --' | grep -v grep | awk '{print $2}' | head -1)
+if [ -n "$MYSQL_PID" ]; then
+  echo ""
+  echo "=== 【MySQL 专项】慢查询/binlog/连接数 ==="
+  if command -v mysql &>/dev/null; then
+    # 优先尝试无密码本地连接（仅诊断用，无密码失败也不影响其他步骤）
+    timeout 10 mysql -uroot -e "
+      SHOW GLOBAL STATUS LIKE 'Slow_queries';
+      SHOW GLOBAL STATUS LIKE 'Innodb_rows_inserted';
+      SHOW GLOBAL STATUS LIKE 'Innodb_log_writes';
+      SHOW PROCESSLIST;" 2>/dev/null | head -50
+    echo "--- binlog 增量（近 10 分钟） ---"
+    find /var/lib/mysql -name "mysql-bin.*" -mmin -10 -exec ls -lh {} \; 2>/dev/null | tail -10
+  fi
+fi
+
+# --- Nginx 专项（高 IO 文件路径含 nginx） ---
+NGINX_LOG_HOT=$(lsof -p $(pgrep -d, nginx 2>/dev/null) 2>/dev/null | awk '$5=="REG" && /access\.log|error\.log/ {print $9}' | sort -u | head -5)
+if [ -n "$NGINX_LOG_HOT" ]; then
+  echo ""
+  echo "=== 【Nginx 专项】异常访问日志分析 ==="
+  for log in $NGINX_LOG_HOT; do
+    [ ! -f "$log" ] && continue
+    echo "--- $log（最后 1 万行 Top 来源 IP / URL / 状态码） ---"
+    SIZE=$(stat -c %s "$log" 2>/dev/null)
+    if [ "${SIZE:-0}" -gt 0 ]; then
+      tail -10000 "$log" | awk '{print $1}' | sort | uniq -c | sort -rn | head -5
+      echo "  --- Top URL ---"
+      tail -10000 "$log" | awk '{print $7}' | sort | uniq -c | sort -rn | head -5
+      echo "  --- 状态码分布 ---"
+      tail -10000 "$log" | awk '{print $9}' | sort | uniq -c | sort -rn | head -5
+    fi
+  done
+fi
+
+# --- PostgreSQL 专项（已在磁盘空间章节有详细命令，IO 场景下补充活跃查询） ---
+PG_PID=$(ps aux | grep -E 'postgres .* writer\b|postgres -D' | grep -v grep | awk '{print $2}' | head -1)
+if [ -n "$PG_PID" ] && command -v psql &>/dev/null; then
+  echo ""
+  echo "=== 【PostgreSQL 专项】活跃查询 + WAL 速率 ==="
+  timeout 10 sudo -u postgres psql -c "
+    SELECT pid, datname, usename, state, wait_event_type, wait_event,
+           now() - query_start AS runtime, left(query, 120) AS query
+    FROM pg_stat_activity
+    WHERE state != 'idle' AND pid != pg_backend_pid()
+    ORDER BY query_start LIMIT 15;" 2>/dev/null
+  timeout 5 sudo -u postgres psql -c "
+    SELECT pg_current_wal_lsn(), pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')) AS wal_total;" 2>/dev/null
+fi
+
+# --- Kafka 专项（进程含 kafka.Kafka） ---
+KAFKA_PID=$(ps aux | grep -E 'kafka\.Kafka' | grep -v grep | awk '{print $2}' | head -1)
+if [ -n "$KAFKA_PID" ]; then
+  echo ""
+  echo "=== 【Kafka 专项】topic/segment 写入分析 ==="
+  KAFKA_LOG_DIR=$(lsof -p $KAFKA_PID 2>/dev/null | awk '$5=="DIR" && /kafka-logs|kafka\/data/ {print $9}' | sort -u | head -1)
+  [ -z "$KAFKA_LOG_DIR" ] && KAFKA_LOG_DIR=$(find /data /datadisk /var/lib /opt -maxdepth 5 -type d -name "kafka-logs" 2>/dev/null | head -1)
+  if [ -n "$KAFKA_LOG_DIR" ]; then
+    echo "--- 近 10 分钟写入的 topic-partition Top 15 ---"
+    find "$KAFKA_LOG_DIR" -type f -name "*.log" -mmin -10 -exec ls -lh {} \; 2>/dev/null \
+      | awk '{print $5, $NF}' | sort -rh | head -15
+    echo "--- 各 topic 总占用 ---"
+    du -sh "$KAFKA_LOG_DIR"/*/ 2>/dev/null | sort -rh | head -10
+  fi
+fi
 ```
