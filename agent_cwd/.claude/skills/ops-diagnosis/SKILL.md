@@ -37,14 +37,14 @@ description: >-
 | ssh_key | SSH 密钥文件名 | ubuntu_test.pem |
 | server_name | 服务器描述 | tke-sit-node01 |
 
-读取prompt的服务器ip，读取项目根目录的 `.servers` 文件根据 服务器IP 查找对应的ssh信息。
+读取prompt的服务器ip，读取 `../.servers` 文件（即项目根目录的 `.servers`，Agent cwd 的上级目录）根据 服务器IP 查找对应的ssh信息。
 
 `.servers` 文件格式（`|` 分隔，`#` 开头为注释）：
 ```
 IP | 描述 | SSH用户 | 密钥文件(密码登录填-) | 密码(密钥登录填-)
 ```
 
-如果是密码，则直接使用密码，如果后缀带.pem则是密钥，密钥的路径为： `./agent_cwd/ssh-keys/tencent或aws/{ssh_key}`。
+如果是密码，则直接使用密码，如果后缀带.pem则是密钥，密钥的路径为： `ssh-keys/{ssh_key}`（相对于当前工作目录 agent_cwd）。
 
 **密码登录服务器使用 sshpass 连接**：
 ```bash
@@ -63,7 +63,7 @@ REMOTE_EOF
 执行 SSH 命令采集数据，使用以下格式：
 
 ```bash
-timeout 300 ssh -T -i /datadisk/rundeck/ssh/{ssh_key} \
+timeout 300 ssh -T -i ssh-keys/{ssh_key} \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
   -o ConnectTimeout=10 \
