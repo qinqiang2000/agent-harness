@@ -46,6 +46,7 @@ from api.routers.plugins import router as plugins_router
 from api.routers.diagnosis import router as diagnosis_router
 from api.routers.alert_webhook import router as alert_webhook_router
 from api.routers.reports import router as reports_router
+from api.routers.tasks import router as tasks_router
 from api.constants import DATA_DIR, AGENT_CWD
 
 @asynccontextmanager
@@ -214,6 +215,7 @@ app.include_router(plugins_router)  # Plugin management API
 app.include_router(diagnosis_router)  # Diagnosis cases API
 app.include_router(alert_webhook_router)  # Alertmanager webhook
 app.include_router(reports_router)  # Diagnosis reports web view
+app.include_router(tasks_router)  # Task work orders
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 
