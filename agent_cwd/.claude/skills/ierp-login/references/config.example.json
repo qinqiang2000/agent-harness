@@ -1,0 +1,17 @@
+{
+  "_comment": "复制此文件为 scripts/config.json 并填写真实值",
+  "yzj": {
+    "pubsend_url": "https://yunzhijia.com/pubacc/pubsendV2",
+    "company_id": "你的企业ID（数字字符串）",
+    "pub_id": "你的公共号ID（XT-xxxx 格式）",
+    "pub_secret": "",
+    "session_cookie": "",
+    "user_ids": ["接收二维码通知的云之家用户OpenID"]
+  },
+  "login": {
+    "cookie_file": "data/cookies.json",
+    "cookie_expire_days": 30,
+    "scan_timeout": 180,
+    "max_qrcode_retry": 5
+  }
+}
