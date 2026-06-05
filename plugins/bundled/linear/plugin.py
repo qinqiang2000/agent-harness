@@ -102,6 +102,8 @@ class LinearChannelPlugin(ChannelPlugin):
                     background_tasks.add_task(handler.handle_prompted, payload_json)
                 elif action in ("stopped", "stop"):
                     background_tasks.add_task(handler.handle_stopped, payload_json)
+            elif event_type == "Issue":
+                background_tasks.add_task(handler.handle_issue_event, payload_json)
 
             return JSONResponse(status_code=200, content={"ok": True})
 

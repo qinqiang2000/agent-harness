@@ -272,6 +272,71 @@ class LinearClient:
             {"id": issue_id, "input": input_data},
         )
 
+    async def create_issue(
+        self,
+        team_id: str,
+        title: str,
+        description: str = "",
+        state_id: Optional[str] = None,
+        delegate_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """创建 Issue（用于自动提 bug 单）。
+
+        Args:
+            team_id: 目标团队 ID
+            title: Issue 标题
+            description: Markdown 描述（根因+证据+修复计划）
+            state_id: 初始状态 ID（可选，默认团队默认状态）
+            delegate_id: 委派的 bot 用户 ID（可选）
+
+        Returns:
+            含 id/identifier/url 的字典
+        """
+        input_data: Dict[str, Any] = {
+            "teamId": team_id,
+            "title": title,
+            "description": description,
+        }
+        if state_id:
+            input_data["stateId"] = state_id
+        if delegate_id:
+            input_data["delegateId"] = delegate_id
+        data = await self._query(
+            """
+            mutation IssueCreate($input: IssueCreateInput!) {
+                issueCreate(input: $input) {
+                    success
+                    issue { id identifier url }
+                }
+            }
+            """,
+            {"input": input_data},
+        )
+        return data["issueCreate"]["issue"]
+
+    async def create_comment(self, issue_id: str, body: str) -> str:
+        """在 Issue 上创建评论（用于回写分析结果/进度）。
+
+        Args:
+            issue_id: Linear Issue UUID
+            body: Markdown 评论内容
+
+        Returns:
+            新建 comment 的 ID
+        """
+        data = await self._query(
+            """
+            mutation CommentCreate($input: CommentCreateInput!) {
+                commentCreate(input: $input) {
+                    success
+                    comment { id }
+                }
+            }
+            """,
+            {"input": {"issueId": issue_id, "body": body}},
+        )
+        return data["commentCreate"]["comment"]["id"]
+
     # ── Team ─────────────────────────────────────────────────────────────────
 
     async def get_team_first_started_state_id(self, team_id: str) -> Optional[str]:
@@ -298,3 +363,26 @@ class LinearClient:
         if not started:
             return None
         return min(started, key=lambda s: s["position"])["id"]
+
+    async def get_workflow_states(self, team_id: str) -> List[Dict[str, Any]]:
+        """获取团队全部 workflow 状态（id/name/type/position）。
+
+        供 coordinator 做「状态名 → stateId」映射。
+
+        Args:
+            team_id: Linear team ID
+
+        Returns:
+            状态字典列表
+        """
+        data = await self._query(
+            """
+            query TeamStates($teamId: String!) {
+                team(id: $teamId) {
+                    states { nodes { id name type position } }
+                }
+            }
+            """,
+            {"teamId": team_id},
+        )
+        return data["team"]["states"]["nodes"]

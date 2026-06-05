@@ -6,7 +6,8 @@
     "open_api",
     "wecom",
     "wecom_group",
-    "linear"
+    "linear",
+    "repair"
   ],
   "plugins": {
     "open_api": {
@@ -56,6 +57,12 @@
     "linear": {
       "token_db_path": "data/linear/linear_tokens.db",
       "system_prompt": ""
+    },
+    "repair": {
+      "repair_db_path": "data/repair/repair_runs.db",
+      "poll_interval_seconds": 60,
+      "fix_retry_limit": 3,
+      "rediagnose_limit": 2
     }
   }
 }

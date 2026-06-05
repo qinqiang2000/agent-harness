@@ -1,0 +1,33 @@
+{
+  "id": "repair",
+  "name": "Bug 修复流水线",
+  "version": "1.0.0",
+  "description": "Linear 中枢的自动 bug 修复流水线：提单→审核→TDD改码→建MR→Jenkins→三类归因回转",
+  "type": "channel",
+  "entry_point": "plugin:register",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "repair_db_path": {
+        "type": "string",
+        "default": "data/repair/repair_runs.db",
+        "description": "repair_runs SQLite 路径"
+      },
+      "poll_interval_seconds": {
+        "type": "integer",
+        "default": 60,
+        "description": "构建报告轮询间隔（秒）"
+      },
+      "fix_retry_limit": {
+        "type": "integer",
+        "default": 3,
+        "description": "代码错同分支重修上限 N"
+      },
+      "rediagnose_limit": {
+        "type": "integer",
+        "default": 2,
+        "description": "根因错重诊断上限 M"
+      }
+    }
+  }
+}

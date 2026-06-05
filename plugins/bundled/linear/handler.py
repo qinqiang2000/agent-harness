@@ -197,6 +197,53 @@ class LinearSessionHandler:
         session_id = payload.get("agentSession", {}).get("id", "")
         logger.info(f"[Linear] Stop signal received: session={session_id}")
 
+    async def handle_issue_event(self, payload: Dict[str, Any]) -> None:
+        """处理 Issue 状态变更/分配事件，审核通过则委派 RepairCoordinator。
+
+        当 Issue 新状态为「审核通过」（如 In Progress）时，触发自动开发。
+        软依赖 repair 插件：未启用时 get_coordinator() 返回 None，直接跳过。
+
+        Args:
+            payload: Linear Webhook 原始 payload（type=Issue）
+        """
+        data = payload.get("data", {})
+        issue_id = data.get("id", "")
+        state = data.get("state", {}) or {}
+        state_name = state.get("name", "")
+
+        if not issue_id:
+            return
+
+        try:
+            from plugins.bundled.repair.coordinator import get_coordinator
+            from plugins.bundled.repair import prompts
+        except Exception:
+            # repair 插件未启用（或其模块导入报错），忽略 Issue 事件
+            logger.debug("[Linear] repair plugin unavailable, skip Issue event", exc_info=True)
+            return
+
+        coordinator = get_coordinator()
+        if coordinator is None:
+            return
+
+        if not prompts.is_approval_state(state_name):
+            logger.info(
+                "[Linear] Issue %s state=%s not approval, ignore", issue_id, state_name
+            )
+            return
+
+        logger.info(
+            "[Linear] Issue %s approved (state=%s), triggering development",
+            issue_id,
+            state_name,
+        )
+        try:
+            await coordinator.start_development(issue_id)
+        except Exception:
+            logger.error(
+                "[Linear] start_development failed for %s", issue_id, exc_info=True
+            )
+
     # ── 核心处理流程 ──────────────────────────────────────────────────────────
 
     async def _process(

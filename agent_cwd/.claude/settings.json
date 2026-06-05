@@ -5,17 +5,7 @@
       "Edit(**/data/issue-diagnosis/instincts/**)"
     ],
     "deny": [
-      "Bash(git add*)",
-      "Bash(git commit*)",
-      "Bash(git push*)",
-      "Bash(git checkout -b*)",
-      "Bash(git branch -d*)",
-      "Bash(git branch -D*)",
-      "Bash(git reset*)",
-      "Bash(git rebase*)",
       "Bash(git merge*)",
-      "Bash(git tag*)",
-      "Bash(git stash*)",
       "Edit(/tmp/gitlab/**)",
       "Write(/tmp/gitlab/**)"
     ]
@@ -48,6 +38,15 @@
           {
             "type": "command",
             "command": "../.venv/bin/python3 .claude/hooks/restrict-edit-write.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../.venv/bin/python3 .claude/hooks/restrict-git-write.py"
           }
         ]
       }
