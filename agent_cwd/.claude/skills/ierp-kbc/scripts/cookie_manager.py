@@ -20,7 +20,7 @@ def _get_cookie_path() -> Path:
     if config_path.exists():
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
-        cookie_file = config.get("login", {}).get("cookie_file", "data/cookies.json")
+        cookie_file = config.get("ierp", {}).get("cookie_file", "data/cookies.json")
     else:
         cookie_file = "data/cookies.json"
     cookie_path = Path(__file__).parent / cookie_file
@@ -31,7 +31,7 @@ def _get_cookie_path() -> Path:
 def check_cookies() -> bool:
     """
     检查本地是否存在 Cookie 文件。
-    实际 Cookie 是否仍有效以页面为准：步骤 2 打开 iERP 首页，
+    实际 Cookie 是否仍有效以页面为准：打开 iERP 首页，
     能进入首页则有效，跳回登录页则失效需重新扫码。
 
     Returns:

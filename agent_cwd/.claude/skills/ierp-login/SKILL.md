@@ -20,14 +20,15 @@ pip install -q -r requirements.txt
 
 确认 `config.json` 存在，否则提示用户参考 `references/config.example.json` 创建。
 
-## 步骤 1：检查 Cookie 是否有效
+## 步骤 1：检查本地是否有 Cookie 文件
 
 ```bash
 python cookie_manager.py --check
 ```
 
-- 输出 `COOKIE_STATUS: VALID` → 直接进入步骤 2 验证 Cookie
-- 输出 `COOKIE_STATUS: NOT_FOUND` 或 `EXPIRED` → 跳到步骤 3 扫码登录
+- 输出 `COOKIE_STATUS: VALID` → 本地有 Cookie，进入步骤 2 用页面验证是否真实有效
+- 输出 `COOKIE_STATUS: NOT_FOUND` → 本地无 Cookie，跳到步骤 3 扫码登录
+- 输出 `COOKIE_STATUS: ERROR` → Cookie 文件损坏，执行 `python cookie_manager.py --clear` 后跳到步骤 3
 
 ## 步骤 2：用 Cookie 免登录验证
 
@@ -114,5 +115,16 @@ python wait_for_login.py
 ## 错误处理
 
 - **云之家通知失败**：打印警告但继续等待扫码，不中断流程
-- **browse 操作失败**：截图保存到 `scripts/logs/` 目录，输出错误信息
+
+- **browse 操作失败**：将当前页面截图保存到 `scripts/logs/` 供排查，然后输出错误信息：
+  ```bash
+  mkdir -p <此SKILL.md所在目录>/scripts/logs
+  $B screenshot <此SKILL.md所在目录>/scripts/logs/error_$(date +%Y%m%d_%H%M%S).png
+  ```
+
+- **Cookie 检查报 ERROR**：说明 Cookie 文件损坏，直接清除后走扫码流程：
+  ```bash
+  python cookie_manager.py --clear
+  ```
+
 - **二维码刷新超限或超时**：`wait_for_login.py` 会输出明确错误信息，提示用户手动检查网络或重新运行 skill

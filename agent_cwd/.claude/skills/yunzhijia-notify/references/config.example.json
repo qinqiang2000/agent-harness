@@ -6,11 +6,9 @@
     "pub_id": "你的公共号ID（XT-xxxx 格式）",
     "pub_secret": "",
     "session_cookie": "",
-    "user_ids": ["接收二维码通知的云之家用户OpenID"]
-  },
-  "login": {
-    "cookie_file": "data/cookies.json",
-    "scan_timeout": 180,
-    "max_qrcode_retry": 5
+    "user_ids": ["默认消息接收人的云之家用户 OpenID"],
+    "complete_user_ids": [
+      "流程完成通知接收人的云之家用户 OpenID，不填则用 user_ids"
+    ]
   }
 }

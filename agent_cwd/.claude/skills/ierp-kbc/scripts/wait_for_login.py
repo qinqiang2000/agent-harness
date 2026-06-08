@@ -3,10 +3,12 @@ iERP 扫码登录等待脚本
 通过轮询 browse skill 检测登录状态，每 30 秒自动刷新二维码并重新通知。
 
 用法:
-  python wait_for_login.py [--timeout 180] [--qrcode-interval 30] [--check-interval 3]
+  python wait_for_login.py [--image /tmp/ierp_qrcode.png]  # 等待扫码完成
+  python wait_for_login.py --capture-only --image /tmp/ierp_qrcode.png  # 仅截取二维码
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -18,14 +20,16 @@ def run_browse(args: list[str]) -> tuple[int, str]:
     调用 browse CLI 执行一条命令。
 
     Args:
-        args: browse 命令参数列表，如 ["url"] 或 ["screenshot", "/tmp/qr.png"]
+        args: browse 命令参数列表
 
     Returns:
         (returncode, stdout) 元组
     """
+    browse_bin = Path.home() / ".claude/skills/gstack/browse/dist/browse"
+    cmd = str(browse_bin) if browse_bin.exists() else "agent-browser"
     try:
         result = subprocess.run(
-            ["agent-browser"] + args,
+            [cmd] + args,
             capture_output=True,
             text=True,
             timeout=30,
@@ -34,7 +38,6 @@ def run_browse(args: list[str]) -> tuple[int, str]:
     except subprocess.TimeoutExpired:
         return 1, "timeout"
     except FileNotFoundError:
-        # 兼容 browse 二进制名称差异
         try:
             result = subprocess.run(
                 ["browse"] + args,
@@ -96,7 +99,6 @@ def wait_for_qrcode_render(max_wait: int = 15) -> bool:
     """
     for _ in range(max_wait):
         time.sleep(1)
-        # 切换到 iframe 内检测 img.qrcode 是否已渲染
         run_browse(["frame", "iframe#qr-code"])
         rc, result = run_browse(
             [
@@ -122,8 +124,6 @@ def capture_qrcode(image_path: str) -> bool:
     Returns:
         True 表示截图成功
     """
-    import json
-
     clip_arg = None
 
     # 获取 iframe 在页面中的位置
@@ -165,7 +165,6 @@ def capture_qrcode(image_path: str) -> bool:
     if clip_arg:
         rc, _ = run_browse(["screenshot", image_path, "--clip", clip_arg])
     else:
-        # 降级：固定裁剪区域
         print("⚠️  无法动态定位二维码，使用固定截图区域", file=sys.stderr)
         rc, _ = run_browse(["screenshot", image_path, "--clip", "980,125,230,230"])
 
@@ -201,7 +200,7 @@ def dismiss_privacy_dialog() -> None:
 
 def reload_and_capture(image_path: str, retry_count: int) -> bool:
     """
-    刷新登录页面并重新截取二维码、发送通知。
+    刷新登录页面，等待二维码渲染后截图并重新发送通知。
 
     Args:
         image_path: 截图保存路径
@@ -212,7 +211,9 @@ def reload_and_capture(image_path: str, retry_count: int) -> bool:
     """
     print(f"\n🔄 刷新二维码（第 {retry_count + 1} 次）...")
     run_browse(["reload"])
-    time.sleep(3)  # 等待 iframe 加载
+
+    if not wait_for_qrcode_render():
+        print("⚠️  等待二维码渲染超时，尝试直接截图", file=sys.stderr)
 
     if not capture_qrcode(image_path):
         print("❌ 截图失败，跳过本次通知", file=sys.stderr)
@@ -240,15 +241,12 @@ def wait_for_login(
     Returns:
         True 表示登录成功，False 表示超时或超过刷新上限
     """
-    # 读取 config 中的 max_qrcode_retry
     try:
-        import json
-
         config_path = Path(__file__).parent / "config.json"
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
-        max_retry = config.get("login", {}).get("max_qrcode_retry", 5)
-        timeout = config.get("login", {}).get("scan_timeout", timeout)
+        max_retry = config.get("ierp", {}).get("max_qrcode_retry", 5)
+        timeout = config.get("ierp", {}).get("scan_timeout", timeout)
     except Exception:
         max_retry = 5
 
@@ -261,20 +259,16 @@ def wait_for_login(
     while True:
         elapsed = time.time() - start_time
 
-        # 超时检测
         if elapsed > timeout:
             print(f"\n❌ 等待超时（{timeout} 秒），请重新运行登录流程", file=sys.stderr)
             return False
 
-        # 检测是否已登录
         if is_logged_in():
             print("\n✅ 检测到登录成功！")
             return True
 
-        # 检测隐私弹窗
         dismiss_privacy_dialog()
 
-        # 判断是否需要刷新二维码
         since_last_qrcode = time.time() - last_qrcode_time
         if since_last_qrcode >= qrcode_interval:
             retry_count += 1
@@ -304,7 +298,17 @@ def main():
     parser.add_argument(
         "--image", default="/tmp/ierp_qrcode.png", help="二维码截图路径"
     )
+    parser.add_argument(
+        "--capture-only", action="store_true", help="仅截取二维码，不等待扫码"
+    )
     args = parser.parse_args()
+
+    if args.capture_only:
+        # 等待渲染后截图
+        if not wait_for_qrcode_render():
+            print("⚠️  等待二维码渲染超时，尝试直接截图", file=sys.stderr)
+        success = capture_qrcode(args.image)
+        sys.exit(0 if success else 1)
 
     success = wait_for_login(
         timeout=args.timeout,

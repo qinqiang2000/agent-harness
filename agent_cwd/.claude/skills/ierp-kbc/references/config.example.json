@@ -1,0 +1,59 @@
+{
+  "_comment": "复制此文件为 scripts/config.json 并填写真实值",
+  "ierp": {
+    "login_url": "https://passport.kingdee.com/passport/#/auth/oauth2/third_login?pck=ok&force_login=2&client_id=204758&response_type=code&redirect_uri=https%3A%2F%2Fierp.kingdee.com%2Fierp%2F%3Flanguage%3Dzh_CN%26sourcePage%3Dfalse&self_redirect=true",
+    "home_url": "https://ierp.kingdee.com/ierp/",
+    "cookie_file": "data/cookies.json",
+    "scan_timeout": 180,
+    "max_qrcode_retry": 5
+  },
+  "eop": {
+    "login_url": "https://cosmic-pro.piaozone.com/ierp/login.html?redirect=http%3A%2F%2Fcosmic-pro.piaozone.com%2Fierp%2F%3FformId%3Dpc_main_console",
+    "username": "",
+    "password": ""
+  },
+  "yzj": {
+    "pubsend_url": "https://yunzhijia.com/pubacc/pubsendV2",
+    "company_id": "你的企业ID",
+    "pub_id": "你的公共号ID（XT-xxxx 格式）",
+    "pub_secret": "",
+    "session_cookie": "",
+    "user_ids": ["接收二维码通知的云之家用户OpenID"],
+    "complete_user_ids": ["接收完成通知的云之家用户OpenID"]
+  },
+  "excel_filter": {
+    "exclude_contract_types": ["延期续费"],
+    "excluded_materials": [
+      "现场服务（初级顾问）",
+      "ISV金选服务",
+      "标准成功服务",
+      "资金申报",
+      "人人差旅",
+      "人人费用",
+      "人人资产",
+      "人人报账",
+      "总账",
+      "固定资产",
+      "费用核算",
+      "出纳",
+      "应收",
+      "应付",
+      "财务报表",
+      "合并报表",
+      "财务+供应链+制造分组",
+      "存货核算",
+      "内部交易对账",
+      "EPM客户端",
+      "库存管理",
+      "多核算体系",
+      "智能核算",
+      "新租赁准则",
+      "流程服务-运行时",
+      "集成管理",
+      "钢铁云专业分组",
+      "寻源管理",
+      "寻源协同",
+      "售前、产品对接及实施支持服务"
+    ]
+  }
+}
