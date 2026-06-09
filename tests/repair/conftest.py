@@ -25,6 +25,8 @@ class FakeLinearClient:
         self.updated = []  # (issue_id, kwargs)
         self.comments = []  # (issue_id, body)
         self.created_issues = []  # input dicts
+        self.thoughts = []  # (session_id, body) —— 会话内进行中活动
+        self.responses = []  # (session_id, body) —— 会话内最终回复
         self._next_issue = {"id": "child-uuid", "identifier": "ENG-CHILD", "url": "http://x"}
         self._states = [
             {"id": "s-backlog", "name": "Backlog", "type": "backlog", "position": 0},
@@ -39,6 +41,14 @@ class FakeLinearClient:
     async def create_comment(self, issue_id, body):
         self.comments.append((issue_id, body))
         return "comment-id"
+
+    async def send_thought(self, session_id, body, ephemeral=False):
+        self.thoughts.append((session_id, body))
+        return "thought-id"
+
+    async def send_response(self, session_id, body):
+        self.responses.append((session_id, body))
+        return "response-id"
 
     async def create_issue(self, team_id, title, description="", state_id=None, delegate_id=None):
         self.created_issues.append(
@@ -69,7 +79,11 @@ class FakeJenkins:
 
 
 class FakeAgentService:
-    """按预设脚本逐次返回 result 文本。process_query 是 async generator。"""
+    """按预设脚本逐次返回 result 文本。process_query 是 async generator。
+
+    每次调用会先 emit 一条 assistant_message（中间过程），再 emit 最终 result，
+    用于测试逐步转发到 Linear 会话的回调。
+    """
 
     def __init__(self, scripted_results):
         # scripted_results: list[str]，每次 process_query 弹一个
@@ -80,6 +94,7 @@ class FakeAgentService:
         self.calls.append(request)
         text = self._results.pop(0) if self._results else ""
         yield {"type": "session_created", "data": {"session_id": "claude-sess-1"}}
+        yield {"type": "assistant_message", "data": {"content": "正在处理中间步骤"}}
         yield {"type": "result", "data": {"result": text}}
 
 

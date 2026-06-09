@@ -342,6 +342,39 @@ async def test_start_manual_repair_resolves_repo_from_agent_output(store, fake_l
 
 
 @pytest.mark.unit
+async def test_start_manual_repair_with_session_streams_to_session(store, fake_linear):
+    # 带 Linear session_id 时：中间步骤 send_thought 进会话，最终结果 send_response 进会话，
+    # 不再发 issue 评论
+    _seed_manual(store)
+    dev_output = "【状态】完成\n【分支】fix/ENG-M1\n【MR链接】http://mr/m1\n【说明】改为不作废"
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_manual_repair("manual-1", session_id="sess-9")
+
+    run = store.get("manual-1")
+    assert run.stage == Stage.BUILDING
+    # 中间过程进会话 thought
+    assert any(sid == "sess-9" for sid, _ in fake_linear.thoughts)
+    # 最终结果进会话 response（含 MR）
+    assert any(sid == "sess-9" and "http://mr/m1" in body for sid, body in fake_linear.responses)
+    # 不再发 issue 评论
+    assert fake_linear.comments == []
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_without_session_uses_comment(store, fake_linear):
+    # 不带 session_id（向后兼容）→ 仍走 issue 评论
+    _seed_manual(store)
+    dev_output = "【状态】完成\n【分支】fix/ENG-M1\n【MR链接】http://mr/m1\n【说明】改为不作废"
+    coord, agent, _ = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_manual_repair("manual-1")
+
+    assert len(fake_linear.comments) >= 1
+    assert fake_linear.responses == []
+
+
+@pytest.mark.unit
 async def test_start_manual_repair_missing_run_is_noop(store, fake_linear):
     coord, agent, _ = _make_coordinator(store, fake_linear, ["unused"])
     await coord.start_manual_repair("does-not-exist")  # 不抛错

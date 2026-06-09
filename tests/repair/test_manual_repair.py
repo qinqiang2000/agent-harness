@@ -137,7 +137,7 @@ async def test_try_manual_repair_classified_bug_registers_and_starts(tmp_path):
     assert run is not None
     assert run.repo == "ai-agent/foo"
     assert run.stage == Stage.PENDING_REVIEW
-    fake_coord.start_manual_repair.assert_awaited_once_with("issue-1")
+    fake_coord.start_manual_repair.assert_awaited_once_with("issue-1", session_id="sess-1")
 
 
 @pytest.mark.unit
@@ -164,7 +164,7 @@ async def test_try_manual_repair_nl_bug_starts_with_empty_repo(tmp_path):
     assert run is not None
     assert run.repo == ""
     assert run.repair_plan == nl_desc
-    fake_coord.start_manual_repair.assert_awaited_once_with("issue-1")
+    fake_coord.start_manual_repair.assert_awaited_once_with("issue-1", session_id="sess-1")
 
 
 @pytest.mark.unit

@@ -15,10 +15,18 @@ from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
 logger = logging.getLogger(__name__)
 
 
-async def _run_agent(agent_service, prompt: str, skill: str, session_id: Optional[str]) -> tuple[str, Optional[str]]:
+async def _run_agent(
+    agent_service,
+    prompt: str,
+    skill: str,
+    session_id: Optional[str],
+    on_message: Optional[Callable[[str], "object"]] = None,
+) -> tuple[str, Optional[str]]:
     """调 AgentService.process_query，返回 (result_text, claude_session_id)。
 
     新会话靠 DEFAULT_SKILLS 加载 skill；resume 时传 session_id。
+    on_message：每收到一条 assistant_message 中间过程文本就 await 调用一次
+    （用于逐步转发到 Linear 会话）；回调异常被吞掉，不影响主流程。
     """
     from api.models.requests import QueryRequest
 
@@ -40,6 +48,14 @@ async def _run_agent(agent_service, prompt: str, skill: str, session_id: Optiona
                 data = {}
         if etype == "session_created":
             new_session_id = data.get("session_id", new_session_id)
+        elif etype == "assistant_message":
+            if on_message:
+                text = data.get("content", "") or data.get("text", "")
+                if text:
+                    try:
+                        await on_message(text)
+                    except Exception:
+                        logger.warning("[Repair] on_message callback failed", exc_info=True)
         elif etype == "result":
             result_text = data.get("result", "") or data.get("content", "")
     return result_text, new_session_id
@@ -91,7 +107,9 @@ class RepairCoordinator:
             return
         await self._develop_and_build(run, on_agent_failure=Stage.PENDING_REVIEW)
 
-    async def start_manual_repair(self, linear_issue_id: str) -> None:
+    async def start_manual_repair(
+        self, linear_issue_id: str, session_id: Optional[str] = None
+    ) -> None:
         """人工修复单：created 即开修，不经审核门。
 
         handler 已先 upsert 一条带 repo+repair_plan 的 run（stage=PENDING_REVIEW）。
@@ -99,6 +117,9 @@ class RepairCoordinator:
         - 入口门只挡「已在流水线中」的 run（building/developing/...）以幂等，
           不要求审核通过；
         - agent 失败时落可见终态 REJECTED（人工单无审核态可退），不静默卡死。
+
+        session_id：created 事件的 Linear AgentSession ID。传入时把开发过程/结果
+        写回该会话（中间步骤 send_thought、最终 send_response），而非 issue 评论。
         """
         run = self.store.get(linear_issue_id)
         if not run:
@@ -111,17 +132,41 @@ class RepairCoordinator:
                 run.stage,
             )
             return
-        await self._develop_and_build(run, on_agent_failure=Stage.REJECTED)
+        await self._develop_and_build(
+            run, on_agent_failure=Stage.REJECTED, session_id=session_id
+        )
 
-    async def _develop_and_build(self, run: RepairRun, on_agent_failure: str) -> None:
+    async def _develop_and_build(
+        self,
+        run: RepairRun,
+        on_agent_failure: str,
+        session_id: Optional[str] = None,
+    ) -> None:
         """共用：developing → 调 developer → building → 触发 Jenkins → 回写。
 
         Args:
             run: 当前 RepairRun（stage 已确认为 PENDING_REVIEW）
             on_agent_failure: developer agent 抛错时落到的 stage
                 （start_development 回退 PENDING_REVIEW；人工单落 REJECTED）
+            session_id: Linear AgentSession ID。传入时开发过程/结果写回会话
+                （中间 send_thought、最终 send_response），否则走 issue 评论。
         """
         linear_issue_id = run.linear_issue_id
+        client = self._linear(run.workspace_id)
+
+        async def notify(body: str, *, final: bool = False) -> None:
+            """把消息写回 Linear：有 session 走会话（thought/response），否则走 issue 评论。"""
+            try:
+                if session_id:
+                    if final:
+                        await client.send_response(session_id, body)
+                    else:
+                        await client.send_thought(session_id, body)
+                else:
+                    await client.create_comment(linear_issue_id, body)
+            except Exception:
+                logger.warning("[Repair] notify failed (session=%s)", session_id, exc_info=True)
+
         self.store.update(linear_issue_id, stage=Stage.DEVELOPING)
         branch = run.branch or f"fix/{run.linear_identifier}"
 
@@ -135,22 +180,27 @@ class RepairCoordinator:
             is_retry=False,
             last_report="",
         )
+
+        # 有会话时，把 developer 每步中间输出转成会话 thought（逐步可见）。
+        on_message = (lambda text: notify(text)) if session_id else None
+
         try:
-            result_text, session_id = await _run_agent(
-                self.agent_service, prompt, skill="bug-fix-developer", session_id=None
+            result_text, claude_session_id = await _run_agent(
+                self.agent_service,
+                prompt,
+                skill="bug-fix-developer",
+                session_id=None,
+                on_message=on_message,
             )
         except Exception:
             logger.error("[Repair] developer agent failed: %s", linear_issue_id, exc_info=True)
             self.store.update(linear_issue_id, stage=on_agent_failure)
-            comment = (
+            fail_msg = (
                 "⚠️ 自动开发启动失败，已退回待审核，请重新触发或人工介入。"
                 if on_agent_failure == Stage.PENDING_REVIEW
                 else "🚫 自动修复启动失败（开发阶段异常），已转人工，请人工介入。"
             )
-            try:
-                await self._linear(run.workspace_id).create_comment(linear_issue_id, comment)
-            except Exception:
-                logger.warning("[Repair] failed to comment after dev failure", exc_info=True)
+            await notify(fail_msg, final=True)
             return
 
         parsed = prompts.parse_developer_output(result_text)
@@ -159,8 +209,7 @@ class RepairCoordinator:
         summary = parsed["summary"]
         # 人工单 repo 可能留空，由 agent 查表解析后在输出里回填【仓库】
         resolved_repo = parsed["repo"] or run.repo
-
-        client = self._linear(run.workspace_id)
+        session_id_for_store = claude_session_id
 
         # developer 未真正完成（卡批准/没按格式收尾/中途放弃）→ 不触发构建，
         # 回写 agent 实际输出 + 落可见终态 REJECTED，等人工介入。
@@ -172,14 +221,11 @@ class RepairCoordinator:
                 linear_issue_id,
             )
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
-            try:
-                await client.create_comment(
-                    linear_issue_id,
-                    "🚫 自动修复未完成（开发阶段未产出有效修复/未推分支），已转人工。\n\n"
-                    f"Agent 最后输出：\n{result_text}",
-                )
-            except Exception:
-                logger.warning("[Repair] failed to comment after dev incomplete", exc_info=True)
+            await notify(
+                "🚫 自动修复未完成（开发阶段未产出有效修复/未推分支），已转人工。\n\n"
+                f"Agent 最后输出：\n{result_text}",
+                final=True,
+            )
             return
 
         build_id = self.jenkins.trigger_build(repo=resolved_repo, branch=new_branch)
@@ -190,20 +236,17 @@ class RepairCoordinator:
             repo=resolved_repo,
             branch=new_branch,
             mr_url=mr_url,
-            develop_session_id=session_id or "",
+            develop_session_id=session_id_for_store or "",
             jenkins_build_id=build_id,
         )
 
-        try:
-            comment = (
-                f"已自动开发并建 MR：{mr_url or '(未解析到 MR 链接)'}\n"
-                f"分支：{new_branch}\n构建已触发，等待测试报告。"
-            )
-            if summary:
-                comment += f"\n\n修复摘要：{summary}"
-            await client.create_comment(linear_issue_id, comment)
-        except Exception:
-            logger.warning("[Repair] failed to comment after development", exc_info=True)
+        result_msg = (
+            f"已自动开发并建 MR：{mr_url or '(未解析到 MR 链接)'}\n"
+            f"分支：{new_branch}\n构建已触发，等待测试报告。"
+        )
+        if summary:
+            result_msg += f"\n\n修复摘要：{summary}"
+        await notify(result_msg, final=True)
 
     # ── 阶段 2：分析报告 + 三类归因 ──────────────────────────────────────
     async def analyze_report(self, linear_issue_id: str) -> None:

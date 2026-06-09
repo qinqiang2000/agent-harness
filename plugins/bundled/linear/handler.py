@@ -206,7 +206,7 @@ class LinearSessionHandler:
             f"[{trace_id}][Linear] manual repair registered: {identifier} "
             f"repo={repo or '(待 agent 从描述识别)'}, starting"
         )
-        await coordinator.start_manual_repair(issue_id)
+        await coordinator.start_manual_repair(issue_id, session_id=session_id)
         return True
 
     async def handle_prompted(self, payload: Dict[str, Any]) -> None:
