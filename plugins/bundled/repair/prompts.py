@@ -154,6 +154,7 @@ def parse_developer_output(text: str) -> Dict[str, str]:
         "branch": _extract(r"【分支】\s*(\S+)", text),
         "mr_url": _extract(r"【MR链接】\s*(\S+)", text),
         "test_path": _extract(r"【复现测试】\s*(\S+)", text),
+        "summary": _extract(r"【说明】\s*([^\n]+)", text),
     }
 
 

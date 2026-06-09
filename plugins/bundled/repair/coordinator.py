@@ -156,6 +156,7 @@ class RepairCoordinator:
         parsed = prompts.parse_developer_output(result_text)
         new_branch = parsed["branch"] or branch
         mr_url = parsed["mr_url"]
+        summary = parsed["summary"]
         # 人工单 repo 可能留空，由 agent 查表解析后在输出里回填【仓库】
         resolved_repo = parsed["repo"] or run.repo
 
@@ -173,11 +174,13 @@ class RepairCoordinator:
 
         client = self._linear(run.workspace_id)
         try:
-            await client.create_comment(
-                linear_issue_id,
+            comment = (
                 f"已自动开发并建 MR：{mr_url or '(未解析到 MR 链接)'}\n"
-                f"分支：{new_branch}\n构建已触发，等待测试报告。",
+                f"分支：{new_branch}\n构建已触发，等待测试报告。"
             )
+            if summary:
+                comment += f"\n\n修复摘要：{summary}"
+            await client.create_comment(linear_issue_id, comment)
         except Exception:
             logger.warning("[Repair] failed to comment after development", exc_info=True)
 

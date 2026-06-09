@@ -205,6 +205,22 @@ async def test_analyze_report_missing_run_is_noop(store, fake_linear):
 
 
 @pytest.mark.unit
+async def test_develop_comment_includes_summary(store, fake_linear):
+    # 回写 Linear 的评论应附上 developer 输出的【说明】修复摘要
+    _seed_pending(store)
+    dev_output = (
+        "【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java\n"
+        "【说明】SUCCESS 状态不再作废已有任务，改为等待自然完成"
+    )
+    coord, agent, _ = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_development("issue-1")
+
+    bodies = [body for _, body in fake_linear.comments]
+    assert any("不再作废已有任务" in b for b in bodies)
+
+
+@pytest.mark.unit
 async def test_start_development_rolls_back_on_agent_failure(store, fake_linear):
     # agent 抛异常 → 回退 PENDING_REVIEW
     _seed_pending(store)
