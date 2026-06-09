@@ -26,6 +26,21 @@ def is_approval_state(state_name: str) -> bool:
     return state_name.strip().lower() in _approval_states()
 
 
+# ── 人工修复单：按 Linear 状态 type 判断是否「可开修」───────────────────────────
+# Linear workflow state.type 枚举：backlog / unstarted / started / completed
+#   / canceled / duplicate。本工作流把 started 重载为一串「XX完成」流程节点
+#   （需求评审完成→…→测试完成），开修后 issue 会被推到第一个 started 状态。
+# 据此：仅 backlog/unstarted（尚未进入处理）可开修；started/completed（已在处理
+#   或已完成）与 canceled/duplicate（已终止）一律跳过——这是跨进程持久的幂等门。
+_REPAIRABLE_STATE_TYPES = {"backlog", "unstarted"}
+
+
+def is_repairable_state(state_type: str) -> bool:
+    """state.type ∈ {backlog, unstarted} 才可开修；其余（started/completed/
+    canceled/duplicate）视为已在处理/已完成/已终止，跳过。"""
+    return (state_type or "").strip().lower() in _REPAIRABLE_STATE_TYPES
+
+
 # ── 人工修复单：从单描述解析目标 repo / 服务名 ──────────────────────────────
 # 约定单描述里有一行形如 `repo: xxx` / `仓库：xxx` / `服务: xxx`（半/全角冒号均可）。
 # 值可以是：

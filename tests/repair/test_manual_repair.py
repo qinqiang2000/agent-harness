@@ -91,7 +91,7 @@ def _make_handler():
     )
 
 
-def _fake_client(label_names, description):
+def _fake_client(label_names, description, state_type="unstarted", state_name="Todo"):
     client = MagicMock()
     client.get_issue = AsyncMock(
         return_value={
@@ -99,6 +99,7 @@ def _fake_client(label_names, description):
             "identifier": "ENG-1",
             "description": description,
             "team": {"id": "team-1"},
+            "state": {"type": state_type, "name": state_name},
             "label_names": label_names,
         }
     )
@@ -203,4 +204,101 @@ async def test_try_manual_repair_no_coordinator_falls_through():
         )
 
     assert handled is False
+
+
+# ── 幂等门：状态门 + 本地 store 门 ───────────────────────────────────────────
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "state_type,state_name",
+    [
+        ("started", "需求评审完成"),
+        ("started", "测试完成"),
+        ("completed", "发布完成"),
+        ("canceled", "产研退回"),
+        ("canceled", "已失效"),
+        ("duplicate", "Duplicate"),
+    ],
+)
+async def test_try_manual_repair_non_repairable_state_skips(tmp_path, state_type, state_name):
+    # 门1：已在处理/已完成/已终止的单被再次 @agent → 跳过、回会话提示、不登记不开修
+    store = RepairStore(str(tmp_path / "r.db"))
+    fake_coord = MagicMock()
+    fake_coord.store = store
+    fake_coord.start_manual_repair = AsyncMock()
+    coord_mod.set_coordinator(fake_coord)
+
+    handler = _make_handler()
+    handler._classify_is_repair = AsyncMock(return_value=True)
+    client = _fake_client([], "repo: ai-agent/foo\n改为不作废", state_type, state_name)
+
+    with patch("plugins.bundled.linear.handler.LinearClient", return_value=client):
+        handled = await handler._try_manual_repair(
+            session_id="sess-1", issue_id="issue-1", workspace_id="ws-1", trace_id="t1"
+        )
+
+    assert handled is True  # 已拦截，不走普通流程
+    assert store.get("issue-1") is None  # 未登记，未覆盖
+    fake_coord.start_manual_repair.assert_not_awaited()
+    client.send_response.assert_awaited()  # 回了会话提示
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("state_name", ["Backlog", "Todo", "计划", "需求编写中", "需求编写完成"])
+async def test_try_manual_repair_repairable_states_proceed(tmp_path, state_name):
+    # backlog/unstarted（含 Backlog）均可开修
+    state_type = "backlog" if state_name == "Backlog" else "unstarted"
+    store = RepairStore(str(tmp_path / "r.db"))
+    fake_coord = MagicMock()
+    fake_coord.store = store
+    fake_coord.start_manual_repair = AsyncMock()
+    coord_mod.set_coordinator(fake_coord)
+
+    handler = _make_handler()
+    handler._classify_is_repair = AsyncMock(return_value=True)
+    client = _fake_client([], "repo: ai-agent/foo\n改为不作废", state_type, state_name)
+
+    with patch("plugins.bundled.linear.handler.LinearClient", return_value=client):
+        handled = await handler._try_manual_repair(
+            session_id="sess-1", issue_id="issue-1", workspace_id="ws-1", trace_id="t1"
+        )
+
+    assert handled is True
+    assert store.get("issue-1") is not None
+    fake_coord.start_manual_repair.assert_awaited_once_with("issue-1", session_id="sess-1")
+
+
+@pytest.mark.unit
+async def test_try_manual_repair_existing_run_in_pipeline_skips(tmp_path):
+    # 门2：状态仍可开修（并发/状态未翻转），但本地已有 run 且非 PENDING_REVIEW → 跳过
+    from plugins.bundled.repair.store import RepairRun
+
+    store = RepairStore(str(tmp_path / "r.db"))
+    store.upsert(
+        RepairRun(
+            linear_issue_id="issue-1",
+            workspace_id="ws-1",
+            stage=Stage.BUILDING,
+            linear_identifier="ENG-1",
+        )
+    )
+    fake_coord = MagicMock()
+    fake_coord.store = store
+    fake_coord.start_manual_repair = AsyncMock()
+    coord_mod.set_coordinator(fake_coord)
+
+    handler = _make_handler()
+    handler._classify_is_repair = AsyncMock(return_value=True)
+    client = _fake_client([], "repo: ai-agent/foo", "unstarted", "Todo")
+
+    with patch("plugins.bundled.linear.handler.LinearClient", return_value=client):
+        handled = await handler._try_manual_repair(
+            session_id="sess-1", issue_id="issue-1", workspace_id="ws-1", trace_id="t1"
+        )
+
+    assert handled is True
+    # 原 run 未被覆盖重置
+    assert store.get("issue-1").stage == Stage.BUILDING
+    fake_coord.start_manual_repair.assert_not_awaited()
+    client.send_response.assert_awaited()
 

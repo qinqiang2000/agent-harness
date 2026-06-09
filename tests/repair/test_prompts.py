@@ -23,6 +23,24 @@ def test_classify_state_review_to_developing():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "state_type,expected",
+    [
+        ("backlog", True),
+        ("unstarted", True),
+        ("started", False),
+        ("completed", False),
+        ("canceled", False),
+        ("duplicate", False),
+        ("", False),
+        ("  Unstarted  ", True),  # 大小写/空白容错
+    ],
+)
+def test_is_repairable_state(state_type, expected):
+    assert prompts.is_repairable_state(state_type) is expected
+
+
+@pytest.mark.unit
 def test_parse_developer_output_extracts_branch_and_mr():
     text = """
     一些自审说明...

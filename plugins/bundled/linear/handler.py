@@ -172,6 +172,40 @@ class LinearSessionHandler:
         issue = await client.get_issue(issue_id)
         identifier = issue.get("identifier", "")
         description = issue.get("description", "") or ""
+        state = issue.get("state") or {}
+        state_type = state.get("type", "")
+        state_name = state.get("name", "") or state_type
+
+        # 幂等门 1（Linear 状态，跨进程持久）：开修会把单推到 started，
+        # 故已在处理/已完成/已终止的单再次被 @agent 时直接跳过，回会话提示。
+        if not prompts.is_repairable_state(state_type):
+            logger.info(
+                f"[{trace_id}][Linear] {identifier} state={state_name} "
+                f"(type={state_type or '空'}) not repairable, skip"
+            )
+            try:
+                await client.send_response(
+                    session_id,
+                    f"该单当前状态「{state_name}」已在修复流程中或已处理，跳过重复触发。",
+                )
+            except Exception:
+                pass
+            return True
+
+        # 幂等门 2（本地 store，防状态尚未翻转时的并发重复 created）：
+        # 已有 run 且 stage 已推进出 PENDING_REVIEW，说明流水线在跑，跳过。
+        existing = coordinator.store.get(issue_id)
+        if existing is not None and existing.stage != Stage.PENDING_REVIEW:
+            logger.info(
+                f"[{trace_id}][Linear] {identifier} run exists stage={existing.stage}, skip"
+            )
+            try:
+                await client.send_response(
+                    session_id, "该单已在修复流程中，跳过重复触发。"
+                )
+            except Exception:
+                pass
+            return True
 
         # 分类：这是不是一个要改代码的 bug？否则走普通流程（诊断/咨询）。
         is_repair = await self._classify_is_repair(description)
