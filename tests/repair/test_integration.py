@@ -34,7 +34,7 @@ async def test_happy_path_end_to_end(tmp_path):
     fake_linear = FakeLinearClient()
     agent = FakeAgentService(
         [
-            "【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java",  # developer
+            "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java",  # developer
             "【判定】已解决\n【依据】全绿\n【后续动作】无",  # analyzer
         ]
     )
@@ -72,9 +72,9 @@ async def test_code_error_retry_then_resolve(tmp_path):
     fake_linear = FakeLinearClient()
     agent = FakeAgentService(
         [
-            "【分支】fix/ENG-1\n【MR链接】http://mr/1",  # developer 首次
+            "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1",  # developer 首次
             "【判定】代码错\n【依据】NPE 仍在\n【后续动作】补判空",  # analyzer 第一轮
-            "【分支】fix/ENG-1\n【MR链接】http://mr/2",  # developer 重修
+            "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/2",  # developer 重修
             "【判定】已解决\n【依据】绿\n【后续动作】无",  # analyzer 第二轮
         ]
     )

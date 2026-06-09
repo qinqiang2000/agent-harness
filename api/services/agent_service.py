@@ -123,6 +123,10 @@ class AgentService:
         "Skill", "Read", "Grep", "Glob", "Bash",
         "Write(**/data/issue-diagnosis/instincts/**)",
         "Edit(**/data/issue-diagnosis/instincts/**)",
+        # bug-fix-developer 修复流水线：临时 clone 目录内自动批准改码
+        # （目录外由 restrict-edit-write hook deny 兜底）
+        "Write(/tmp/repair/**)",
+        "Edit(/tmp/repair/**)",
         "AskUserQuestion",
         "Task",
     ]

@@ -144,18 +144,37 @@ def _extract(pattern: str, text: str) -> str:
 
 
 def parse_developer_output(text: str) -> Dict[str, str]:
-    """从 developer skill 输出解析仓库、分支、MR URL、测试路径。
+    """从 developer skill 输出解析状态、仓库、分支、MR URL、测试路径。
 
     缺失字段返回空串。`repo` 是 agent 实际解析/使用的完整 project_id，
     用于人工单 repo 留空时由 agent 查表解析后回填，供 Jenkins 触发。
+
+    `status` = "completed" 仅当输出含明确的【状态】完成/成功；否则一律 "failed"
+    （包括无【状态】字段——agent 中途卡住/没按格式收尾时保守判失败，绝不误触发构建）。
     """
     return {
+        "status": _parse_dev_status(text),
         "repo": _extract(r"【仓库】\s*(\S+)", text),
         "branch": _extract(r"【分支】\s*(\S+)", text),
         "mr_url": _extract(r"【MR链接】\s*(\S+)", text),
         "test_path": _extract(r"【复现测试】\s*(\S+)", text),
         "summary": _extract(r"【说明】\s*([^\n]+)", text),
     }
+
+
+def _parse_dev_status(text: str) -> str:
+    """解析 developer【状态】。仅明确完成/成功 → completed；其余（含缺失）→ failed。
+
+    注意「未完成」含「完成」二字，须先判否定词，避免误判为 completed。
+    """
+    line = _extract(r"【状态】\s*([^\n]+)", text)
+    if not line:
+        return "failed"
+    # 否定/失败信号优先（未完成、失败、待批准、未通过…）
+    for neg in ("未完成", "没完成", "未成功", "失败", "待批准", "未通过", "中止", "放弃"):
+        if neg in line:
+            return "failed"
+    return "completed" if ("完成" in line or "成功" in line) else "failed"
 
 
 _VERDICT_MAP = [

@@ -160,6 +160,28 @@ class RepairCoordinator:
         # 人工单 repo 可能留空，由 agent 查表解析后在输出里回填【仓库】
         resolved_repo = parsed["repo"] or run.repo
 
+        client = self._linear(run.workspace_id)
+
+        # developer 未真正完成（卡批准/没按格式收尾/中途放弃）→ 不触发构建，
+        # 回写 agent 实际输出 + 落可见终态 REJECTED，等人工介入。
+        if parsed["status"] != "completed" or not parsed["branch"]:
+            logger.info(
+                "[Repair] developer not completed (status=%s branch=%s): %s, skip build, reject",
+                parsed["status"],
+                parsed["branch"] or "(无)",
+                linear_issue_id,
+            )
+            self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            try:
+                await client.create_comment(
+                    linear_issue_id,
+                    "🚫 自动修复未完成（开发阶段未产出有效修复/未推分支），已转人工。\n\n"
+                    f"Agent 最后输出：\n{result_text}",
+                )
+            except Exception:
+                logger.warning("[Repair] failed to comment after dev incomplete", exc_info=True)
+            return
+
         build_id = self.jenkins.trigger_build(repo=resolved_repo, branch=new_branch)
 
         self.store.update(
@@ -172,7 +194,6 @@ class RepairCoordinator:
             jenkins_build_id=build_id,
         )
 
-        client = self._linear(run.workspace_id)
         try:
             comment = (
                 f"已自动开发并建 MR：{mr_url or '(未解析到 MR 链接)'}\n"
@@ -262,6 +283,19 @@ class RepairCoordinator:
             session_id=run.develop_session_id or None,
         )
         parsed = prompts.parse_developer_output(result_text)
+        # 重修同样要求真正完成才触发构建；否则落 REJECTED 转人工。
+        if parsed["status"] != "completed":
+            logger.info(
+                "[Repair] retry developer not completed (status=%s): %s, skip build, reject",
+                parsed["status"],
+                run.linear_issue_id,
+            )
+            await self._reject(
+                run,
+                "重修未完成（开发阶段未产出有效修复），转人工。\n\n"
+                f"Agent 最后输出：\n{result_text}",
+            )
+            return
         mr_url = parsed["mr_url"] or run.mr_url
         build_id = self.jenkins.trigger_build(repo=run.repo, branch=run.branch)
         self.store.update(

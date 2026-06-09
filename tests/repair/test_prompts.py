@@ -44,6 +44,32 @@ def test_parse_developer_output_missing_fields():
 
 
 @pytest.mark.unit
+def test_parse_developer_output_status_completed():
+    text = "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1"
+    assert prompts.parse_developer_output(text)["status"] == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "line",
+    [
+        "【状态】失败",
+        "【状态】未完成",
+        "【状态】待批准",
+    ],
+)
+def test_parse_developer_output_status_failed(line):
+    assert prompts.parse_developer_output(line + "\n【分支】fix/ENG-1")["status"] == "failed"
+
+
+@pytest.mark.unit
+def test_parse_developer_output_status_defaults_failed_when_absent():
+    # 没有【状态】字段（agent 中途卡住/没按格式收尾）→ 保守判 failed，绝不误触发构建
+    parsed = prompts.parse_developer_output("请批准编辑以继续。")
+    assert parsed["status"] == "failed"
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "verdict,expected",
     [

@@ -47,7 +47,7 @@ def _seed_pending(store, stage=Stage.PENDING_REVIEW):
 @pytest.mark.unit
 async def test_start_development_happy_path(store, fake_linear):
     _seed_pending(store)
-    dev_output = "【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java"
+    dev_output = "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java"
     coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
 
     await coord.start_development("issue-1")
@@ -96,7 +96,7 @@ async def test_analyze_code_error_resumes_and_increments(store, fake_linear):
         fake_linear,
         [
             "【判定】代码错\n【依据】NPE 仍在\n【后续动作】补判空",
-            "【分支】fix/ENG-1\n【MR链接】http://mr/2",
+            "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/2",
         ],
     )
 
@@ -209,7 +209,7 @@ async def test_develop_comment_includes_summary(store, fake_linear):
     # 回写 Linear 的评论应附上 developer 输出的【说明】修复摘要
     _seed_pending(store)
     dev_output = (
-        "【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java\n"
+        "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java\n"
         "【说明】SUCCESS 状态不再作废已有任务，改为等待自然完成"
     )
     coord, agent, _ = _make_coordinator(store, fake_linear, [dev_output])
@@ -218,6 +218,38 @@ async def test_develop_comment_includes_summary(store, fake_linear):
 
     bodies = [body for _, body in fake_linear.comments]
     assert any("不再作废已有任务" in b for b in bodies)
+
+
+@pytest.mark.unit
+async def test_develop_not_completed_skips_build_and_rejects(store, fake_linear):
+    # developer 未完成（卡批准/没按格式收尾，无【状态】完成）→ 不触发构建，落 REJECTED，回写 agent 输出
+    _seed_pending(store)
+    incomplete_output = (
+        "修改内容说明：把 SUCCESS 分支改为不作废...\n请批准编辑以继续。"  # 无【状态】完成、无分支
+    )
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [incomplete_output])
+
+    await coord.start_development("issue-1")
+
+    run = store.get("issue-1")
+    assert run.stage == Stage.REJECTED
+    assert jenkins.triggered == []  # 关键：没触发构建
+    bodies = [body for _, body in fake_linear.comments]
+    assert any("请批准编辑以继续" in b for b in bodies)  # 回写了 agent 实际输出
+
+
+@pytest.mark.unit
+async def test_develop_completed_status_triggers_build(store, fake_linear):
+    # developer 明确【状态】完成 + 有分支 → 正常触发构建
+    _seed_pending(store)
+    dev_output = "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java"
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_development("issue-1")
+
+    run = store.get("issue-1")
+    assert run.stage == Stage.BUILDING
+    assert jenkins.triggered == [("ai-agent/foo", "fix/ENG-1")]
 
 
 @pytest.mark.unit
@@ -264,7 +296,7 @@ def _seed_manual(store, stage=Stage.PENDING_REVIEW):
 async def test_start_manual_repair_happy_path(store, fake_linear):
     # 人工单 created 即开修：不要求 PENDING_REVIEW，直接 DEVELOPING→BUILDING
     _seed_manual(store)
-    dev_output = "【分支】fix/ENG-M1\n【MR链接】http://mr/m1\n【复现测试】FooTest.java"
+    dev_output = "【状态】完成\n【分支】fix/ENG-M1\n【MR链接】http://mr/m1\n【复现测试】FooTest.java"
     coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
 
     await coord.start_manual_repair("manual-1")
@@ -294,6 +326,7 @@ async def test_start_manual_repair_resolves_repo_from_agent_output(store, fake_l
         )
     )
     dev_output = (
+        "【状态】完成\n"
         "【仓库】piaozone/elc-integration/api-elc-invoice-imputation\n"
         "【分支】fix/ENG-M2\n【MR链接】http://mr/m2\n【复现测试】FooTest.java"
     )
