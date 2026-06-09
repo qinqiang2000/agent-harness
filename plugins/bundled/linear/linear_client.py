@@ -215,7 +215,7 @@ class LinearClient:
             issue_id: Linear Issue UUID
 
         Returns:
-            包含 id/identifier/title/description/team/state/assignee/delegate 的字典
+            包含 id/identifier/title/description/team/state/assignee/delegate/label_names 的字典
         """
         data = await self._query(
             """
@@ -227,6 +227,7 @@ class LinearClient:
                     assignee { id name }
                     delegate { id name }
                     priority priorityLabel
+                    labels { nodes { id name } }
                 }
             }
             """,
@@ -237,6 +238,8 @@ class LinearClient:
             issue["assigneeId"] = issue["assignee"]["id"]
         if issue.get("delegate"):
             issue["delegateId"] = issue["delegate"]["id"]
+        labels = (issue.get("labels") or {}).get("nodes") or []
+        issue["label_names"] = [lb["name"] for lb in labels if lb.get("name")]
         return issue
 
     async def update_issue(

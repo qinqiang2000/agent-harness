@@ -72,6 +72,26 @@ class LinearSessionHandler:
         trace_id = _new_trace_id()
 
         try:
+            # 人工修复单分流：带 autofix label 的单 → 直接登记并开修，跳过普通 skill 自选。
+            handled = False
+            if issue_id:
+                try:
+                    handled = await self._try_manual_repair(
+                        session_id=session_id,
+                        issue_id=issue_id,
+                        workspace_id=workspace_id,
+                        trace_id=trace_id,
+                    )
+                except Exception:
+                    logger.error(
+                        f"[{trace_id}][Linear] manual repair dispatch failed, "
+                        f"fall back to normal flow",
+                        exc_info=True,
+                    )
+                    handled = False
+            if handled:
+                return
+
             await self._process(
                 session_id=session_id,
                 issue_id=issue_id,
@@ -81,6 +101,113 @@ class LinearSessionHandler:
             )
         finally:
             self._active_sessions.discard(session_id)
+
+    async def _classify_is_repair(self, description: str) -> bool:
+        """调 AgentService 判断 issue 是否「要改代码的 bug」。拿不准默认 True。
+
+        失败（异常/空结果）时默认 True，倒向修复（用户决策）。
+        """
+        from plugins.bundled.repair import prompts
+
+        try:
+            from api.models.requests import QueryRequest
+
+            request = QueryRequest(
+                prompt=prompts.build_classify_prompt(description),
+                language="中文",
+            )
+            result_text = ""
+            async for event in self.agent_service.process_query(request):
+                etype = event.get("type") or event.get("event", "")
+                data = event.get("data", {})
+                if isinstance(data, str):
+                    import json
+
+                    try:
+                        data = json.loads(data)
+                    except Exception:
+                        data = {}
+                if etype == "result":
+                    result_text = data.get("result", "") or data.get("content", "")
+            return prompts.parse_is_code_bug(result_text)
+        except Exception:
+            logger.warning("[Linear] classify_is_repair failed, default to repair", exc_info=True)
+            return True
+
+    async def _try_manual_repair(
+        self,
+        session_id: str,
+        issue_id: str,
+        workspace_id: str,
+        trace_id: str,
+    ) -> bool:
+        """人工修复单分流。
+
+        @agent 关联到 issue 触发 created → 先分类判断是否「要改代码的 bug」，
+        是则直接登记 RepairRun 并调 coordinator.start_manual_repair（created 即开修，
+        不经审核门）。返回 True 表示已拦截（调用方不再走普通 skill 自选流程）。
+
+        - repair 插件未启用（coordinator=None）→ 返回 False（走普通流程）。
+        - 分类判为非代码 bug（咨询/诊断）→ 返回 False（走普通流程）。
+        - 判为代码 bug → 登记 run + 开修，返回 True。repo 从描述解析，
+          解析不到留空，由 bug-fix-developer 从描述识别服务名再查表（agent 兜底）。
+        """
+        try:
+            from plugins.bundled.repair.coordinator import get_coordinator
+            from plugins.bundled.repair import prompts
+            from plugins.bundled.repair.store import RepairRun, Stage
+        except Exception:
+            logger.debug("[Linear] repair plugin unavailable, skip manual repair", exc_info=True)
+            return False
+
+        coordinator = get_coordinator()
+        if coordinator is None:
+            return False
+
+        token = self._get_token(workspace_id)
+        if not token:
+            return False
+        client = LinearClient(token)
+
+        issue = await client.get_issue(issue_id)
+        identifier = issue.get("identifier", "")
+        description = issue.get("description", "") or ""
+
+        # 分类：这是不是一个要改代码的 bug？否则走普通流程（诊断/咨询）。
+        is_repair = await self._classify_is_repair(description)
+        if not is_repair:
+            logger.info(
+                f"[{trace_id}][Linear] {identifier} classified as non-code-bug, fall through"
+            )
+            return False
+
+        # repo 标签能解析到就用；解析不到留空，由 bug-fix-developer 从描述
+        # 识别服务名再查 service-repo-map 表（agent 兜底）。
+        repo = prompts.parse_repo_from_description(description)
+
+        try:
+            await client.send_thought(session_id, "已识别为代码修复任务，正在准备修复...")
+        except Exception:
+            pass
+
+        # 登记 RepairRun（挂到现有单，主键为 issue UUID，幂等 upsert）
+        coordinator.store.upsert(
+            RepairRun(
+                linear_issue_id=issue_id,
+                linear_identifier=identifier,
+                workspace_id=workspace_id or "",
+                stage=Stage.PENDING_REVIEW,
+                repo=repo,
+                root_cause="（人工单未单列根因，按修复描述处理）",
+                repair_plan=description,
+            )
+        )
+        logger.info(
+            f"[{trace_id}][Linear] manual repair registered: {identifier} "
+            f"repo={repo or '(待 agent 从描述识别)'}, starting"
+        )
+        await coordinator.start_manual_repair(issue_id)
+        return True
 
     async def handle_prompted(self, payload: Dict[str, Any]) -> None:
         """处理 AgentSession prompted 事件（用户追加消息）。

@@ -89,7 +89,39 @@ class RepairCoordinator:
                 run.stage,
             )
             return
+        await self._develop_and_build(run, on_agent_failure=Stage.PENDING_REVIEW)
 
+    async def start_manual_repair(self, linear_issue_id: str) -> None:
+        """人工修复单：created 即开修，不经审核门。
+
+        handler 已先 upsert 一条带 repo+repair_plan 的 run（stage=PENDING_REVIEW）。
+        与 start_development 的差异：
+        - 入口门只挡「已在流水线中」的 run（building/developing/...）以幂等，
+          不要求审核通过；
+        - agent 失败时落可见终态 REJECTED（人工单无审核态可退），不静默卡死。
+        """
+        run = self.store.get(linear_issue_id)
+        if not run:
+            logger.warning("[Repair] start_manual_repair: run not found %s", linear_issue_id)
+            return
+        if run.stage != Stage.PENDING_REVIEW:
+            logger.info(
+                "[Repair] start_manual_repair skip: %s stage=%s (already in pipeline)",
+                linear_issue_id,
+                run.stage,
+            )
+            return
+        await self._develop_and_build(run, on_agent_failure=Stage.REJECTED)
+
+    async def _develop_and_build(self, run: RepairRun, on_agent_failure: str) -> None:
+        """共用：developing → 调 developer → building → 触发 Jenkins → 回写。
+
+        Args:
+            run: 当前 RepairRun（stage 已确认为 PENDING_REVIEW）
+            on_agent_failure: developer agent 抛错时落到的 stage
+                （start_development 回退 PENDING_REVIEW；人工单落 REJECTED）
+        """
+        linear_issue_id = run.linear_issue_id
         self.store.update(linear_issue_id, stage=Stage.DEVELOPING)
         branch = run.branch or f"fix/{run.linear_identifier}"
 
@@ -109,11 +141,14 @@ class RepairCoordinator:
             )
         except Exception:
             logger.error("[Repair] developer agent failed: %s", linear_issue_id, exc_info=True)
-            self.store.update(linear_issue_id, stage=Stage.PENDING_REVIEW)
+            self.store.update(linear_issue_id, stage=on_agent_failure)
+            comment = (
+                "⚠️ 自动开发启动失败，已退回待审核，请重新触发或人工介入。"
+                if on_agent_failure == Stage.PENDING_REVIEW
+                else "🚫 自动修复启动失败（开发阶段异常），已转人工，请人工介入。"
+            )
             try:
-                await self._linear(run.workspace_id).create_comment(
-                    linear_issue_id, "⚠️ 自动开发启动失败，已退回待审核，请重新触发或人工介入。"
-                )
+                await self._linear(run.workspace_id).create_comment(linear_issue_id, comment)
             except Exception:
                 logger.warning("[Repair] failed to comment after dev failure", exc_info=True)
             return
@@ -121,12 +156,15 @@ class RepairCoordinator:
         parsed = prompts.parse_developer_output(result_text)
         new_branch = parsed["branch"] or branch
         mr_url = parsed["mr_url"]
+        # 人工单 repo 可能留空，由 agent 查表解析后在输出里回填【仓库】
+        resolved_repo = parsed["repo"] or run.repo
 
-        build_id = self.jenkins.trigger_build(repo=run.repo, branch=new_branch)
+        build_id = self.jenkins.trigger_build(repo=resolved_repo, branch=new_branch)
 
         self.store.update(
             linear_issue_id,
             stage=Stage.BUILDING,
+            repo=resolved_repo,
             branch=new_branch,
             mr_url=mr_url,
             develop_session_id=session_id or "",

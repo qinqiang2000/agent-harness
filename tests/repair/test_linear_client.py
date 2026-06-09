@@ -55,6 +55,63 @@ async def test_create_comment_builds_mutation():
 
 
 @pytest.mark.unit
+async def test_get_issue_returns_label_names():
+    client = LinearClient("token-x")
+    fake_data = {
+        "issue": {
+            "id": "uuid-1",
+            "identifier": "ENG-1",
+            "title": "bug",
+            "description": "desc",
+            "team": {"id": "team-1", "name": "Eng"},
+            "state": {"id": "s1", "name": "Backlog", "type": "backlog"},
+            "assignee": None,
+            "delegate": None,
+            "priority": 0,
+            "priorityLabel": "No priority",
+            "labels": {
+                "nodes": [
+                    {"id": "l1", "name": "auto-fix"},
+                    {"id": "l2", "name": "bug"},
+                ]
+            },
+        }
+    }
+    with patch.object(client, "_query", new=AsyncMock(return_value=fake_data)) as q:
+        issue = await client.get_issue("uuid-1")
+
+    # GraphQL query 必须请求 labels
+    args, _ = q.call_args
+    assert "labels" in args[0]
+    # 返回整理成 label_names 列表
+    assert issue["label_names"] == ["auto-fix", "bug"]
+
+
+@pytest.mark.unit
+async def test_get_issue_label_names_empty_when_no_labels():
+    client = LinearClient("token-x")
+    fake_data = {
+        "issue": {
+            "id": "uuid-1",
+            "identifier": "ENG-1",
+            "title": "bug",
+            "description": "desc",
+            "team": {"id": "team-1", "name": "Eng"},
+            "state": {"id": "s1", "name": "Backlog", "type": "backlog"},
+            "assignee": None,
+            "delegate": None,
+            "priority": 0,
+            "priorityLabel": "No priority",
+            "labels": {"nodes": []},
+        }
+    }
+    with patch.object(client, "_query", new=AsyncMock(return_value=fake_data)):
+        issue = await client.get_issue("uuid-1")
+
+    assert issue["label_names"] == []
+
+
+@pytest.mark.unit
 async def test_get_workflow_states_returns_list():
     client = LinearClient("token-x")
     fake_data = {

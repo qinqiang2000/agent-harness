@@ -5,6 +5,18 @@ from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
+# 仅供修复流水线 coordinator 内部调用的 skill：出现在入口自选清单时加括注，
+# 防止入口把流水线内部 skill 当候选误选。
+_COORDINATOR_ONLY_SKILLS = frozenset({"bug-fix-developer", "repair-report-analyzer"})
+_COORDINATOR_ONLY_NOTE = "（仅供修复流水线内部调用，请勿自选）"
+
+
+def _format_skill_choice(name: str) -> str:
+    """格式化自选清单里的单个 skill 名，coordinator-only 的追加勿自选括注。"""
+    if name in _COORDINATOR_ONLY_SKILLS:
+        return f"{name}{_COORDINATOR_ONLY_NOTE}"
+    return name
+
 
 async def build_initial_prompt(
     tenant_id: str,
@@ -38,7 +50,7 @@ async def build_initial_prompt(
     if skill:
         parts.append(f"严格按skill: {skill} 执行任务")
     elif default_skills:
-        skills_list = "、".join(default_skills)
+        skills_list = "、".join(_format_skill_choice(s) for s in default_skills)
         parts.append(f"根据用户请求，从以下 skill 中选择最合适的一个并严格按该 skill 执行任务: {skills_list}")
     parts.append(f"用户请求: {user_prompt}")
 

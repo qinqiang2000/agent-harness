@@ -227,3 +227,109 @@ async def test_start_development_rolls_back_on_agent_failure(store, fake_linear)
     await coord.start_development("issue-1")
 
     assert store.get("issue-1").stage == Stage.PENDING_REVIEW
+
+
+def _seed_manual(store, stage=Stage.PENDING_REVIEW):
+    """人工修复单：handler 先 upsert 一条带 repo+repair_plan 的 run。"""
+    store.upsert(
+        RepairRun(
+            linear_issue_id="manual-1",
+            linear_identifier="ENG-M1",
+            workspace_id="ws-1",
+            stage=stage,
+            repo="ai-agent/foo",
+            root_cause="（人工单未填，按修复描述处理）",
+            repair_plan="任务作废逻辑改为不作废，失败自动重试新增当天任务",
+        )
+    )
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_happy_path(store, fake_linear):
+    # 人工单 created 即开修：不要求 PENDING_REVIEW，直接 DEVELOPING→BUILDING
+    _seed_manual(store)
+    dev_output = "【分支】fix/ENG-M1\n【MR链接】http://mr/m1\n【复现测试】FooTest.java"
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_manual_repair("manual-1")
+
+    run = store.get("manual-1")
+    assert run.stage == Stage.BUILDING
+    assert run.branch == "fix/ENG-M1"
+    assert run.mr_url == "http://mr/m1"
+    assert run.develop_session_id == "claude-sess-1"
+    assert jenkins.triggered == [("ai-agent/foo", "fix/ENG-M1")]
+    # developer 用的是 bug-fix-developer skill
+    assert agent.calls[-1].skill == "bug-fix-developer"
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_resolves_repo_from_agent_output(store, fake_linear):
+    # 人工单 repo 留空 → agent 查表解析后在输出回填【仓库】→ coordinator 用它触发 Jenkins 并持久化
+    store.upsert(
+        RepairRun(
+            linear_issue_id="manual-2",
+            linear_identifier="ENG-M2",
+            workspace_id="ws-1",
+            stage=Stage.PENDING_REVIEW,
+            repo="",  # 留空，交给 agent
+            root_cause="（人工单）",
+            repair_plan="api-elcinvoice-imputation 任务作废问题",
+        )
+    )
+    dev_output = (
+        "【仓库】piaozone/elc-integration/api-elc-invoice-imputation\n"
+        "【分支】fix/ENG-M2\n【MR链接】http://mr/m2\n【复现测试】FooTest.java"
+    )
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output])
+
+    await coord.start_manual_repair("manual-2")
+
+    run = store.get("manual-2")
+    assert run.repo == "piaozone/elc-integration/api-elc-invoice-imputation"
+    assert jenkins.triggered == [
+        ("piaozone/elc-integration/api-elc-invoice-imputation", "fix/ENG-M2")
+    ]
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_missing_run_is_noop(store, fake_linear):
+    coord, agent, _ = _make_coordinator(store, fake_linear, ["unused"])
+    await coord.start_manual_repair("does-not-exist")  # 不抛错
+    assert len(agent.calls) == 0
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_skips_when_already_building(store, fake_linear):
+    # 已在流水线中（building）的 run 不重复开修，幂等保护
+    _seed_manual(store, stage=Stage.BUILDING)
+    coord, agent, _ = _make_coordinator(store, fake_linear, ["should not be used"])
+
+    await coord.start_manual_repair("manual-1")
+
+    assert len(agent.calls) == 0
+
+
+@pytest.mark.unit
+async def test_start_manual_repair_agent_failure_goes_rejected_with_comment(store, fake_linear):
+    # agent 抛异常 → 落可见终态 REJECTED + 回写评论，不静默卡死
+    _seed_manual(store)
+
+    class BoomAgent:
+        calls = []
+        async def process_query(self, request, context_file_path=None):
+            raise RuntimeError("boom")
+            yield  # make it a generator
+
+    from tests.repair.conftest import FakeJenkins
+
+    coord = RepairCoordinator(
+        agent_service=BoomAgent(),
+        store=store,
+        jenkins=FakeJenkins(ready=True),
+        linear_client_factory=lambda ws: fake_linear,
+    )
+    await coord.start_manual_repair("manual-1")
+
+    assert store.get("manual-1").stage == Stage.REJECTED
+    assert len(fake_linear.comments) >= 1
