@@ -39,7 +39,16 @@ async def build_initial_prompt(
         parts.append(f"严格按skill: {skill} 执行任务")
     elif default_skills:
         skills_list = "、".join(default_skills)
-        parts.append(f"根据用户请求，从以下 skill 中选择最合适的一个并严格按该 skill 执行任务: {skills_list}")
+        parts.append(
+            f"根据用户请求，从以下 skill 中选择最合适的一个并严格按该 skill 执行任务: {skills_list}"
+        )
+        if "issue-diagnosis" in default_skills and "code-fix" in default_skills:
+            parts.append(
+                "\n## 自动修复规则\n"
+                '当 issue-diagnosis skill 执行完毕且输出的【根因分析】明确指向代码问题时（如含"Feign"、"未传"、"参数缺失"、"逻辑"、"NPE"、"空指针"、"堆栈"、"异常类"等字样），'
+                "必须在同一轮对话中紧接着自动调用 code-fix skill 执行修复，无需等待用户指令。"
+                "非代码问题（纯配置、纯数据、纯外部系统问题）则不触发 code-fix。"
+            )
     parts.append(f"用户请求: {user_prompt}")
 
     # 上下文
@@ -57,6 +66,8 @@ async def build_initial_prompt(
                 parts.append(f"{key}: {value}")
 
     if images:
-        parts.append(f"\n# 用户上传的图片\n用户本轮附带 {len(images)} 张图片，已随消息一同送达，请直接识别分析其内容。")
+        parts.append(
+            f"\n# 用户上传的图片\n用户本轮附带 {len(images)} 张图片，已随消息一同送达，请直接识别分析其内容。"
+        )
 
     return "\n".join(parts)

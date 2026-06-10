@@ -8,6 +8,7 @@ import sys
 
 ALLOWED_PREFIXES = [
     "/data/issue-diagnosis/instincts/",
+    "/tmp/gitlab/",
 ]
 
 
