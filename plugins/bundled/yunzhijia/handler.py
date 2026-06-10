@@ -24,11 +24,18 @@ logger = logging.getLogger(__name__)
 class YunzhijiaHandler:
     """云之家消息处理器"""
 
-    # 云之家通知 URL 模板（yzjtype 通过环境变量配置，对话型机器人用 12，通知型用 0）
-    NOTIFY_URL_TEMPLATE = os.getenv(
-        "YZJ_NOTIFY_URL_TEMPLATE",
-        "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={}"
-    )
+    # 云之家通知 URL 模板（从 YZJ_ALERT_WEBHOOK 提取 token 构建，无需单独配置）
+    _alert_webhook = os.getenv("YZJ_ALERT_WEBHOOK", "")
+    if "yzjtoken=" in _alert_webhook:
+        # 从完整 URL 提取基础部分，替换 token 为 {} 占位
+        import re as _re
+        NOTIFY_URL_TEMPLATE = _re.sub(r'yzjtoken=[^&]+', 'yzjtoken={}', _alert_webhook)
+    else:
+        # fallback：用旧的独立配置或默认值
+        NOTIFY_URL_TEMPLATE = os.getenv(
+            "YZJ_NOTIFY_URL_TEMPLATE",
+            "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken={}"
+        )
 
     # 停止命令配置
     STOP_KEYWORDS = ["停止", "stop", "取消", "cancel"]
