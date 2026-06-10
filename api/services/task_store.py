@@ -177,13 +177,14 @@ def get_task(task_id: str) -> Optional[dict]:
         return _row_to_dict(row)
 
 
-def list_tasks(limit: int = 50, status: str = None, creator: str = None) -> list:
+def list_tasks(limit: int = 50, status: str = None, creator: str = None, alert_resolved: Optional[bool] = None) -> list:
     """列出最近的任务（按创建时间倒序）。
 
     Args:
         limit: 返回数量上限
-        status: 按状态精确筛选
-        creator: 按创建人模糊匹配（LIKE）
+        status: 按执行状态精确筛选
+        creator: 按创建人模糊匹配
+        alert_resolved: 按告警恢复状态筛选 (True=已恢复, False=未恢复, None=不筛选)
     """
     conditions = []
     params = []
@@ -193,6 +194,10 @@ def list_tasks(limit: int = 50, status: str = None, creator: str = None) -> list
     if creator:
         conditions.append("creator LIKE ?")
         params.append(f"%{creator}%")
+    if alert_resolved is True:
+        conditions.append("alert_resolved = 1")
+    elif alert_resolved is False:
+        conditions.append("alert_resolved = 0 AND task_type = 'ops-diagnosis' AND status IN ('completed', 'failed')")
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     sql = f"SELECT * FROM tasks {where_clause} ORDER BY created_at DESC LIMIT ?"
@@ -263,12 +268,26 @@ def get_stats() -> dict:
         failed = conn.execute("SELECT COUNT(*) FROM tasks WHERE status = 'failed'").fetchone()[0]
         running = conn.execute("SELECT COUNT(*) FROM tasks WHERE status = 'running'").fetchone()[0]
         pending = conn.execute("SELECT COUNT(*) FROM tasks WHERE status = 'pending'").fetchone()[0]
+        # 告警维度：未恢复（已完单但 alert_resolved=0 的诊断任务）
+        alert_unresolved = conn.execute("""
+            SELECT COUNT(*) FROM tasks
+            WHERE task_type = 'ops-diagnosis'
+              AND status IN ('completed', 'failed')
+              AND alert_resolved = 0
+        """).fetchone()[0]
+        alert_resolved = conn.execute("""
+            SELECT COUNT(*) FROM tasks
+            WHERE task_type = 'ops-diagnosis'
+              AND alert_resolved = 1
+        """).fetchone()[0]
         return {
             "total": total,
             "completed": completed,
             "failed": failed,
             "running": running,
             "pending": pending,
+            "alert_unresolved": alert_unresolved,
+            "alert_resolved": alert_resolved,
         }
 
 

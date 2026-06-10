@@ -15,11 +15,19 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 async def tasks_list_page(
     status: str = Query(None),
     creator: str = Query(None),
+    alert: str = Query(None, description="告警状态筛选: resolved / unresolved"),
     limit: int = 50,
 ):
     """任务列表页面。"""
     stats = get_stats()
-    tasks = list_tasks(limit=limit, status=status, creator=creator)
+
+    alert_resolved_filter = None
+    if alert == "resolved":
+        alert_resolved_filter = True
+    elif alert == "unresolved":
+        alert_resolved_filter = False
+
+    tasks = list_tasks(limit=limit, status=status, creator=creator, alert_resolved=alert_resolved_filter)
     creators = list_creators()
 
     # 构建任务行
@@ -32,10 +40,22 @@ async def tasks_list_page(
             "failed": '<span style="color:#ff4d4f">❌ 失败</span>',
         }.get(t["status"], t["status"])
 
+        # 告警状态徽章（只对 ops-diagnosis 任务有意义）
+        if t.get("task_type") == "ops-diagnosis":
+            if t.get("alert_resolved"):
+                alert_badge = '<span style="color:#52c41a;background:#f6ffed;border:1px solid #b7eb8f;padding:2px 8px;border-radius:3px;font-size:12px">🟢 已恢复</span>'
+            elif t["status"] in ("completed", "failed"):
+                alert_badge = '<span style="color:#ff4d4f;background:#fff2f0;border:1px solid #ffa39e;padding:2px 8px;border-radius:3px;font-size:12px">🔴 未恢复</span>'
+            else:
+                alert_badge = '<span style="color:#999">-</span>'
+        else:
+            alert_badge = '<span style="color:#999">N/A</span>'
+
         rows_html += f"""
         <tr onclick="window.location='/api/tasks/{t['id']}'" style="cursor:pointer">
             <td><code>{t['id']}</code></td>
             <td>{status_badge}</td>
+            <td>{alert_badge}</td>
             <td>{t['creator']}</td>
             <td>{t['task_type']}</td>
             <td title="{t.get('target','')}">{(t.get('target','') or '')[:40]}</td>
@@ -57,12 +77,14 @@ async def tasks_list_page(
 
     # 当前筛选条件文字提示
     filter_hint = ""
-    if creator or status:
+    if creator or status or alert:
         parts = []
         if creator:
             parts.append(f"创建人=「{creator}」")
         if status:
             parts.append(f"状态=「{status}」")
+        if alert:
+            parts.append(f"告警=「{'已恢复' if alert == 'resolved' else '未恢复'}」")
         filter_hint = f'<span style="color:#666;font-size:13px;margin-left:8px">筛选条件: {", ".join(parts)}（共 {len(tasks)} 条）<a href="/api/tasks/" style="margin-left:8px;color:#1890ff">清空</a></span>'
 
     html = f"""<!DOCTYPE html>
@@ -111,6 +133,8 @@ async def tasks_list_page(
             <div class="stat-card"><div class="num" style="color:#1890ff">{stats['running']}</div><div class="label">执行中</div></div>
             <div class="stat-card"><div class="num" style="color:#ff4d4f">{stats['failed']}</div><div class="label">失败</div></div>
             <div class="stat-card"><div class="num" style="color:#faad14">{stats['pending']}</div><div class="label">等待</div></div>
+            <div class="stat-card" style="border-left:3px solid #ff4d4f"><div class="num" style="color:#ff4d4f">{stats['alert_unresolved']}</div><div class="label">🔴 未恢复告警</div></div>
+            <div class="stat-card" style="border-left:3px solid #52c41a"><div class="num" style="color:#52c41a">{stats['alert_resolved']}</div><div class="label">🟢 已恢复告警</div></div>
         </div>
 
         <div class="filter-section">
@@ -130,6 +154,13 @@ async def tasks_list_page(
             </div>
 
             <div class="filter-row">
+                <span class="label">告警状态:</span>
+                <a href="/api/tasks/" class="{'active' if not alert else ''}">全部</a>
+                <a href="/api/tasks/?alert=unresolved" class="{'active' if alert == 'unresolved' else ''}">🔴 未恢复</a>
+                <a href="/api/tasks/?alert=resolved" class="{'active' if alert == 'resolved' else ''}">🟢 已恢复</a>
+            </div>
+
+            <div class="filter-row">
                 <span class="label">搜索:</span>
                 <form class="search-form" method="GET" action="/api/tasks/">
                     {f'<input type="hidden" name="status" value="{status}">' if status else ''}
@@ -144,6 +175,7 @@ async def tasks_list_page(
                 <tr>
                     <th>任务ID</th>
                     <th>状态</th>
+                    <th>告警状态</th>
                     <th>创建人</th>
                     <th>分类</th>
                     <th>目标</th>
@@ -152,7 +184,7 @@ async def tasks_list_page(
                 </tr>
             </thead>
             <tbody>
-                {rows_html if rows_html else '<tr><td colspan="7" class="empty">暂无任务</td></tr>'}
+                {rows_html if rows_html else '<tr><td colspan="8" class="empty">暂无任务</td></tr>'}
             </tbody>
         </table>
     </div>
