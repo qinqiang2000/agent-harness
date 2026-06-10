@@ -145,19 +145,43 @@ def _build_diagnosis_prompt(alert_type: str, ip: str, alert_time: str, alertname
 
 async def _run_diagnosis(prompt: str, key: tuple[str, str]):
     """Run diagnosis in background with concurrency limit and inflight release."""
+    from api.services import task_store
+
     sem = _get_semaphore()
+    alert_type, target_ip = key
+
+    # 创建任务单
+    task = task_store.create_task(
+        creator="alertmanager",
+        task_type="ops-diagnosis",
+        target=f"{alert_type} - {target_ip}",
+        content=prompt,
+    )
+    task_id = task["id"]
+    service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
+    task_url = f"{service_base_url}/api/tasks/{task_id}"
 
     # 全局并发限流：拿不到信号量就等
     async with sem:
+        task_store.update_status(task_id, task_store.STATUS_RUNNING)
+        task_store.add_stage(task_id, "🚀 开始执行 Agent 诊断")
+
         agent_service = get_agent_service()
+        # 把任务单链接注入 prompt，让 Agent 推送时使用任务单链接而非 report 链接
+        enhanced_prompt = (
+            prompt + f"\n\n"
+            f"⚠️ 本次诊断的任务单链接为: {task_url}\n"
+            f"在 Step 5.2 推送云之家时，「详情」链接必须使用此任务单链接，不要使用 /api/reports/ 链接。"
+        )
         request = QueryRequest(
             tenant_id="alertmanager",
-            prompt=prompt,
+            prompt=enhanced_prompt,
             skill="ops-diagnosis",
             language="中文",
         )
 
         diagnosis_error = None
+        final_result = None
         try:
             async for message in agent_service.process_query(request):
                 event = message.get("event")
@@ -173,25 +197,40 @@ async def _run_diagnosis(prompt: str, key: tuple[str, str]):
                             result_obj = json.loads(data)
                             if result_obj.get("is_error"):
                                 diagnosis_error = result_obj.get("result", "unknown error")
+                            else:
+                                final_result = result_obj.get("result", "")
                         except (json.JSONDecodeError, TypeError):
-                            pass
+                            final_result = data
+                    else:
+                        final_result = data if isinstance(data, str) else str(data)
                     logger.info(f"Diagnosis completed [{key}]: {data}")
         except Exception as e:
             diagnosis_error = str(e)
             logger.error(f"Diagnosis failed [{key}]: {e}", exc_info=True)
         finally:
-            # 诊断失败时推送失败通知到云之家
+            # 更新任务单状态
             if diagnosis_error:
-                alert_type, target_ip = key
-                # 截断错误信息，避免消息过长
+                task_store.add_stage(task_id, f"❌ 执行失败: {str(diagnosis_error)[:100]}")
+                task_store.update_status(
+                    task_id, task_store.STATUS_FAILED,
+                    result_summary=str(diagnosis_error)[:500],
+                )
+                # 推送失败通知到云之家
                 err_short = str(diagnosis_error)[:150]
                 fail_msg = (
                     f"⚠️ 【诊断失败】\n"
                     f"{alert_type} - {target_ip}\n"
                     f"原因: {err_short}\n"
-                    f"请人工排查或检查 LLM 配额。"
+                    f"任务单: {task_url}"
                 )
                 await _push_text_to_yunzhijia(fail_msg)
+            elif final_result:
+                task_store.add_stage(task_id, "✅ 诊断完成")
+                task_store.update_status(
+                    task_id, task_store.STATUS_COMPLETED,
+                    result_summary=final_result[:500] if isinstance(final_result, str) else "",
+                    full_report=final_result if isinstance(final_result, str) else str(final_result),
+                )
 
             # 不管成功失败，都释放 inflight 并进入冷却期
             await _release_inflight(key)
