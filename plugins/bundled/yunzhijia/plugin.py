@@ -68,12 +68,24 @@ class YunzhijiaChannelPlugin(ChannelPlugin):
         @router.post("/yzj/chat")
         async def yzj_chat(
             request: Request,
-            msg: YZJRobotMsg,
             background_tasks: BackgroundTasks,
             yzj_token: str = Query(None, description="云之家机器人 token（对话型机器人不带此参数）"),
             skill: str = Query(None, description="指定使用的 skill"),
         ):
             """云之家消息接收端点"""
+            # 打印完整原始 body（排查引用消息等额外字段）
+            raw_body = await request.body()
+            logger.info(f"[YZJ RAW] {raw_body.decode('utf-8', errors='replace')}")
+
+            # 手动解析为 model（允许额外字段不报错）
+            import json as _json
+            try:
+                body_dict = _json.loads(raw_body)
+            except Exception:
+                return JSONResponse(status_code=400, content={"success": False, "data": {"type": 2, "content": "无法解析请求体"}})
+
+            msg = YZJRobotMsg(**{k: v for k, v in body_dict.items() if k in YZJRobotMsg.model_fields})
+
             session_id = request.headers.get("sessionId")
             msg.sessionId = session_id
 
