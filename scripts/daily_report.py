@@ -27,8 +27,11 @@ LOG_DIR = PROJECT_ROOT / "log"
 INTERACTIONS_LOG = LOG_DIR / "interactions.log"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 
-WEBHOOK_URL = "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=48318e043db147b39b110b66ea58c344"
-AT_MENTION = "@金帆"
+WEBHOOK_URL = os.getenv(
+    "YZJ_DAILY_REPORT_WEBHOOK_URL",
+    "https://www.yunzhijia.com/gateway/robot/webhook/send?yzjtype=0&yzjtoken=48318e043db147b39b110b66ea58c344",
+)
+AT_MENTION = os.getenv("YZJ_DAILY_REPORT_AT_MENTION", "@金帆")
 MAX_CHARS = 7800  # 留 200 buffer，云之家限制 8000
 
 # ─────────────── 智能客服分析：常量 ───────────────
