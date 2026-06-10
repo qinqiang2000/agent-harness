@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from api.services.task_store import get_task, list_tasks, get_stats
+from api.services.task_store import get_task, list_tasks, get_stats, list_creators, mark_alert_resolved
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +12,15 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.get("/", response_class=HTMLResponse)
-async def tasks_list_page(status: str = Query(None), limit: int = 50):
+async def tasks_list_page(
+    status: str = Query(None),
+    creator: str = Query(None),
+    limit: int = 50,
+):
     """任务列表页面。"""
     stats = get_stats()
-    tasks = list_tasks(limit=limit, status=status)
+    tasks = list_tasks(limit=limit, status=status, creator=creator)
+    creators = list_creators()
 
     # 构建任务行
     rows_html = ""
@@ -38,9 +43,27 @@ async def tasks_list_page(status: str = Query(None), limit: int = 50):
             <td>{t.get('completed_at') or '-'}</td>
         </tr>"""
 
-    # 筛选按钮
-    filter_active = lambda s: 'active' if status == s else ''
-    current_filter = status or '全部'
+    # 创建人快捷筛选标签
+    creator_tags_html = ""
+    for c in creators[:10]:  # 最多显示 10 个
+        active_class = 'active' if creator == c["name"] else ''
+        # URL 拼接保留当前 status
+        params = []
+        if status:
+            params.append(f"status={status}")
+        params.append(f"creator={c['name']}")
+        url = "/api/tasks/?" + "&".join(params)
+        creator_tags_html += f'<a href="{url}" class="creator-tag {active_class}">{c["name"]} ({c["count"]})</a>'
+
+    # 当前筛选条件文字提示
+    filter_hint = ""
+    if creator or status:
+        parts = []
+        if creator:
+            parts.append(f"创建人=「{creator}」")
+        if status:
+            parts.append(f"状态=「{status}」")
+        filter_hint = f'<span style="color:#666;font-size:13px;margin-left:8px">筛选条件: {", ".join(parts)}（共 {len(tasks)} 条）<a href="/api/tasks/" style="margin-left:8px;color:#1890ff">清空</a></span>'
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -57,10 +80,19 @@ async def tasks_list_page(status: str = Query(None), limit: int = 50):
         .stat-card {{ background: #fff; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-width: 120px; text-align: center; }}
         .stat-card .num {{ font-size: 28px; font-weight: 700; }}
         .stat-card .label {{ font-size: 12px; color: #999; margin-top: 4px; }}
-        .filters {{ margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; }}
-        .filters a {{ padding: 6px 14px; border-radius: 4px; text-decoration: none; font-size: 13px; background: #fff; color: #333; border: 1px solid #d9d9d9; }}
-        .filters a.active {{ background: #1890ff; color: #fff; border-color: #1890ff; }}
-        .filters a:hover {{ border-color: #1890ff; }}
+        .filter-section {{ background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+        .filter-row {{ display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }}
+        .filter-row:last-child {{ margin-bottom: 0; }}
+        .filter-row .label {{ font-size: 13px; color: #666; min-width: 60px; }}
+        .filter-row a {{ padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; background: #fafafa; color: #333; border: 1px solid #d9d9d9; }}
+        .filter-row a.active {{ background: #1890ff; color: #fff; border-color: #1890ff; }}
+        .filter-row a:hover {{ border-color: #1890ff; }}
+        .creator-tag {{ font-size: 12px !important; }}
+        .search-form {{ display: flex; gap: 8px; align-items: center; }}
+        .search-form input {{ flex: 1; max-width: 300px; padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }}
+        .search-form input:focus {{ outline: none; border-color: #1890ff; }}
+        .search-form button {{ padding: 6px 16px; background: #1890ff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }}
+        .search-form button:hover {{ background: #096dd9; }}
         table {{ width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
         th {{ background: #fafafa; text-align: left; padding: 12px 16px; font-size: 13px; color: #666; border-bottom: 1px solid #f0f0f0; }}
         td {{ padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f5f5f5; }}
@@ -71,7 +103,7 @@ async def tasks_list_page(status: str = Query(None), limit: int = 50):
 </head>
 <body>
     <div class="container">
-        <h1>📋 任务工单</h1>
+        <h1>📋 任务工单 {filter_hint}</h1>
 
         <div class="stats">
             <div class="stat-card"><div class="num">{stats['total']}</div><div class="label">总计</div></div>
@@ -81,12 +113,30 @@ async def tasks_list_page(status: str = Query(None), limit: int = 50):
             <div class="stat-card"><div class="num" style="color:#faad14">{stats['pending']}</div><div class="label">等待</div></div>
         </div>
 
-        <div class="filters">
-            <a href="/api/tasks/" class="{'active' if not status else ''}">全部</a>
-            <a href="/api/tasks/?status=running" class="{'active' if status == 'running' else ''}">执行中</a>
-            <a href="/api/tasks/?status=completed" class="{'active' if status == 'completed' else ''}">已完成</a>
-            <a href="/api/tasks/?status=failed" class="{'active' if status == 'failed' else ''}">失败</a>
-            <a href="/api/tasks/?status=pending" class="{'active' if status == 'pending' else ''}">等待</a>
+        <div class="filter-section">
+            <div class="filter-row">
+                <span class="label">状态:</span>
+                <a href="/api/tasks/{('?creator=' + creator) if creator else ''}" class="{'active' if not status else ''}">全部</a>
+                <a href="/api/tasks/?status=running{('&creator=' + creator) if creator else ''}" class="{'active' if status == 'running' else ''}">执行中</a>
+                <a href="/api/tasks/?status=completed{('&creator=' + creator) if creator else ''}" class="{'active' if status == 'completed' else ''}">已完成</a>
+                <a href="/api/tasks/?status=failed{('&creator=' + creator) if creator else ''}" class="{'active' if status == 'failed' else ''}">失败</a>
+                <a href="/api/tasks/?status=pending{('&creator=' + creator) if creator else ''}" class="{'active' if status == 'pending' else ''}">等待</a>
+            </div>
+
+            <div class="filter-row">
+                <span class="label">创建人:</span>
+                <a href="/api/tasks/{('?status=' + status) if status else ''}" class="creator-tag {'active' if not creator else ''}">全部</a>
+                {creator_tags_html}
+            </div>
+
+            <div class="filter-row">
+                <span class="label">搜索:</span>
+                <form class="search-form" method="GET" action="/api/tasks/">
+                    {f'<input type="hidden" name="status" value="{status}">' if status else ''}
+                    <input type="text" name="creator" placeholder="按创建人姓名筛选（支持模糊匹配）" value="{creator or ''}" />
+                    <button type="submit">搜索</button>
+                </form>
+            </div>
         </div>
 
         <table>
@@ -112,9 +162,9 @@ async def tasks_list_page(status: str = Query(None), limit: int = 50):
 
 
 @router.get("/list", response_class=JSONResponse)
-async def get_tasks_api(limit: int = 50, status: str = Query(None)):
+async def get_tasks_api(limit: int = 50, status: str = Query(None), creator: str = Query(None)):
     """获取任务列表 JSON API。"""
-    return list_tasks(limit=limit, status=status)
+    return list_tasks(limit=limit, status=status, creator=creator)
 
 
 @router.get("/stats", response_class=JSONResponse)
@@ -140,6 +190,26 @@ async def view_task(task_id: str):
     status_text, status_color, status_bg, status_border = status_map.get(
         task["status"], ("❓ 未知", "#999", "#f5f5f5", "#d9d9d9")
     )
+
+    # 告警恢复徽章和按钮
+    is_resolved = bool(task.get("alert_resolved"))
+    resolved_at = task.get("alert_resolved_at") or "-"
+    resolved_by = task.get("alert_resolved_by") or "-"
+
+    if is_resolved:
+        resolve_section = f'''
+        <span class="status-badge" style="background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f;margin-left:8px">
+            🟢 告警已恢复 · {resolved_at} · {resolved_by}
+        </span>'''
+    else:
+        # 只有任务执行完成才能标记恢复
+        if task["status"] in ("completed", "failed"):
+            resolve_section = f'''
+            <button id="resolve-btn" onclick="resolveAlert()" style="margin-left:12px;padding:6px 14px;background:#52c41a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">
+                🟢 标记告警已恢复
+            </button>'''
+        else:
+            resolve_section = ""
 
     # 构建阶段列表 HTML
     stages_html = ""
@@ -180,7 +250,7 @@ async def view_task(task_id: str):
         <a href="/api/tasks/" class="back">← 返回任务列表</a>
         <div class="header">
             <h1>📋 任务单 <code>{task['id']}</code></h1>
-            <span class="status-badge">{status_text}</span>
+            <span class="status-badge">{status_text}</span>{resolve_section}
             <div class="meta-grid">
                 <div class="meta-item"><label>创建人</label><span>{task['creator']}</span></div>
                 <div class="meta-item"><label>任务分类</label><span>{task['task_type']}</span></div>
@@ -210,6 +280,27 @@ async def view_task(task_id: str):
         </div>
         '''}
     </div>
+    <script>
+        async function resolveAlert() {{
+            const reason = prompt("请输入您的姓名（用于记录），留空则记为 manual：") || "manual";
+            try {{
+                const resp = await fetch("/api/tasks/{task['id']}/resolve", {{
+                    method: "POST",
+                    headers: {{"Content-Type": "application/json"}},
+                    body: JSON.stringify({{resolved_by: reason}})
+                }});
+                const data = await resp.json();
+                if (data.msg === "ok" || data.msg === "already_resolved") {{
+                    alert("✅ 已标记告警恢复");
+                    location.reload();
+                }} else {{
+                    alert("操作失败：" + JSON.stringify(data));
+                }}
+            }} catch (e) {{
+                alert("请求失败：" + e.message);
+            }}
+        }}
+    </script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -222,3 +313,53 @@ async def get_task_json(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     return task
+
+
+@router.patch("/{task_id}", response_class=JSONResponse)
+async def patch_task(task_id: str, body: dict):
+    """更新任务单内容（Agent 调用，用于写入完整诊断报告）。
+
+    支持字段: full_report, result_summary
+    """
+    from api.services.task_store import get_task as _get, update_status, add_stage, STATUS_COMPLETED
+
+    task = _get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    full_report = body.get("full_report")
+    result_summary = body.get("summary") or body.get("result_summary")
+
+    if full_report or result_summary:
+        update_status(
+            task_id,
+            task.get("status", STATUS_COMPLETED),
+            result_summary=result_summary,
+            full_report=full_report,
+        )
+        if full_report:
+            add_stage(task_id, "📝 完整报告已保存")
+
+    return {"msg": "ok", "task_id": task_id}
+
+
+@router.post("/{task_id}/resolve", response_class=JSONResponse)
+async def resolve_task(task_id: str, body: dict = None):
+    """标记任务对应的告警已恢复。
+
+    Body 可选:
+    - resolved_by: 标记人（默认 "manual"）
+    """
+    resolved_by = "manual"
+    if body and isinstance(body, dict):
+        resolved_by = body.get("resolved_by") or "manual"
+
+    success = mark_alert_resolved(task_id, resolved_by=resolved_by)
+    if not success:
+        # 任务不存在 或 已经标记过
+        existing = get_task(task_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        return {"msg": "already_resolved", "task_id": task_id}
+
+    return {"msg": "ok", "task_id": task_id}

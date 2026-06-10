@@ -161,43 +161,41 @@ REMOTE_EOF
 
 ## Step 5：推送云之家
 
-**🚨 强制执行顺序：必须先 5.1 保存报告拿到 report_id，再 5.2 推送摘要。严禁跳过 5.1 直接推送完整内容到云之家！**
+**🚨 强制执行顺序：必须先 5.1 保存完整报告到任务单，再 5.2 推送摘要到云之家。严禁跳过 5.1！**
 
-### 5.1 保存完整报告（必须执行，不可跳过）
+### 5.1 保存完整报告到任务单（必须执行，不可跳过）
 
-通过 HTTP 接口保存完整诊断报告（包含采集的原始数据和分析过程），获取 report_id：
+通过 PATCH 接口将完整诊断内容（包含采集的原始数据和分析过程）保存到任务单：
 
 ```bash
-curl -s -X POST "http://127.0.0.1:9123/api/reports/" \
+curl -s -X PATCH "http://127.0.0.1:9123/api/tasks/{task_id}" \
   -H "Content-Type: application/json" \
   -d '{
-    "server_name": "{server_name}",
-    "ip": "{target_ip}",
-    "alert_type": "{alert_type}",
-    "alert_time": "{alert_time}",
-    "summary": "{Step 5 结论的一句话摘要}",
-    "full_report": "{完整诊断内容，包含采集数据和分析过程}"
+    "summary": "{Step 4 结论的一句话摘要}",
+    "full_report": "{完整诊断内容，包含采集数据和分析过程，使用 \\n 换行}"
   }'
 ```
 
-接口返回 `{"report_id": "xxxx"}`，**必须提取 report_id 用于下一步**。
+**⚠️ `{task_id}` 从 prompt 中提供的任务单链接里提取（格式为 OPS-yyyyMMdd-XXXX）。**
+**⚠️ `full_report` 必须包含完整的 SSH 采集原始输出和分析过程，不要只写摘要！**
+**⚠️ JSON 中双引号用 `\"`，换行用 `\\n`，确保合法。**
 
 ### 5.2 推送摘要到云之家（严禁推送完整分析内容）
 
-**⚠️ 云之家消息只允许推送精简摘要 + 报告链接，严禁将完整根因分析、建议等内容直接推送！**
+**⚠️ 云之家消息只允许推送精简摘要 + 任务单链接，严禁将完整根因分析、建议等内容直接推送！**
 
 推送格式（控制在 150 字以内）：
 
 ```bash
 curl -s -X POST "$YZJ_ALERT_WEBHOOK" \
   -H "Content-Type: application/json" \
-  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: http://42.193.101.189:9123/api/reports/{report_id}"}'
+  -d '{"msgType": 0, "content": "【{alert_type}告警】{server_name}({target_ip})\n时间: {alert_time}\n状态: 🚨 {异常对象} -> {使用率}\n\n{一句话根因，不超过50字}\n\n详情: {task_url}"}'
 ```
 
 **⚠️ content 中的换行用 `\n`，双引号用 `\"`，确保 JSON 合法。**
 **⚠️ `$YZJ_ALERT_WEBHOOK` 从环境变量获取，值为完整的云之家群机器人 webhook URL。**
-**⚠️ SERVICE_BASE_URL 固定为 `http://42.193.101.189:9123`，直接硬编码到 URL 中。**
-**⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于报告页面中。**
+**⚠️ `{task_url}` 使用 prompt 中提供的任务单链接。**
+**⚠️ 云之家推送内容禁止包含"建议"、"详细分析"等段落，这些内容只存在于任务单页面中。**
 
 推送完成后，将同样的摘要作为最终回复输出。
 

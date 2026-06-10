@@ -170,8 +170,10 @@ async def _run_diagnosis(prompt: str, key: tuple[str, str]):
         # 把任务单链接注入 prompt，让 Agent 推送时使用任务单链接而非 report 链接
         enhanced_prompt = (
             prompt + f"\n\n"
+            f"⚠️ 本次诊断的任务单 ID 为: {task_id}\n"
             f"⚠️ 本次诊断的任务单链接为: {task_url}\n"
-            f"在 Step 5.2 推送云之家时，「详情」链接必须使用此任务单链接，不要使用 /api/reports/ 链接。"
+            f"在 Step 5.1 保存完整报告时，使用 PATCH http://127.0.0.1:9123/api/tasks/{task_id}\n"
+            f"在 Step 5.2 推送云之家时，「详情」链接必须使用: {task_url}"
         )
         request = QueryRequest(
             tenant_id="alertmanager",
@@ -343,10 +345,10 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
     alerts = data.get("alerts", [])
     triggered = []
     skipped = []
+    resolved_alerts = []
 
     for alert in alerts:
-        if alert.get("status") != "firing":
-            continue
+        alert_status = alert.get("status")
 
         labels = alert.get("labels", {})
         alertname = labels.get("alertname", "")
@@ -360,6 +362,39 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
         alert_type = _match_alert_type(alertname)
         if not alert_type:
             logger.info(f"Alert '{alertname}' no matching type, skipping")
+            continue
+
+        # === 处理 resolved 告警：推送恢复消息到云之家 ===
+        if alert_status == "resolved":
+            ends_at = alert.get("endsAt", "")
+            try:
+                dt = datetime.fromisoformat(ends_at.replace("Z", "+00:00"))
+                resolved_time = dt.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError, AttributeError):
+                resolved_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+            # 自动标记对应任务单为已恢复
+            from api.services import task_store
+            active_task = task_store.find_active_alert_task(alert_type, ip)
+            task_link = ""
+            if active_task:
+                task_store.mark_alert_resolved(active_task["id"], resolved_by="alertmanager")
+                service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
+                task_link = f"\n任务单: {service_base_url}/api/tasks/{active_task['id']}"
+
+            recovery_msg = (
+                f"✅ 【告警已恢复】\n"
+                f"{alert_type} - {ip}\n"
+                f"恢复时间: {resolved_time}"
+                f"{task_link}"
+            )
+            background_tasks.add_task(_push_text_to_yunzhijia, recovery_msg)
+            resolved_alerts.append({"ip": ip, "alert_type": alert_type, "alertname": alertname})
+            logger.info(f"Resolved alert pushed: {alert_type} on {ip}")
+            continue
+
+        # 只处理 firing 告警，其他状态忽略
+        if alert_status != "firing":
             continue
 
         # Parse alert time (convert to Asia/Shanghai UTC+8)
@@ -399,8 +434,10 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
             "msg": "ok",
             "triggered": len(triggered),
             "skipped": len(skipped),
+            "resolved": len(resolved_alerts),
             "details": triggered,
             "skipped_details": skipped,
+            "resolved_details": resolved_alerts,
         },
     )
 

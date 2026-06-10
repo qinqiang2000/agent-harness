@@ -69,6 +69,15 @@ def _init_db():
                 full_report TEXT
             )
         """)
+        # 增量加列（兼容老数据库）
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+        if "alert_resolved" not in existing_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN alert_resolved INTEGER DEFAULT 0")
+        if "alert_resolved_at" not in existing_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN alert_resolved_at TEXT")
+        if "alert_resolved_by" not in existing_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN alert_resolved_by TEXT")
+
         # 索引
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC)")
@@ -168,20 +177,82 @@ def get_task(task_id: str) -> Optional[dict]:
         return _row_to_dict(row)
 
 
-def list_tasks(limit: int = 50, status: str = None) -> list:
-    """列出最近的任务（按创建时间倒序）。"""
+def list_tasks(limit: int = 50, status: str = None, creator: str = None) -> list:
+    """列出最近的任务（按创建时间倒序）。
+
+    Args:
+        limit: 返回数量上限
+        status: 按状态精确筛选
+        creator: 按创建人模糊匹配（LIKE）
+    """
+    conditions = []
+    params = []
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if creator:
+        conditions.append("creator LIKE ?")
+        params.append(f"%{creator}%")
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    sql = f"SELECT * FROM tasks {where_clause} ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
     with _get_db() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                (status, limit)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?",
-                (limit,)
-            ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
         return [_row_to_dict(row) for row in rows]
+
+
+def list_creators() -> list:
+    """列出所有不同的创建人（用于筛选下拉）。"""
+    with _get_db() as conn:
+        rows = conn.execute(
+            "SELECT creator, COUNT(*) as cnt FROM tasks GROUP BY creator ORDER BY cnt DESC"
+        ).fetchall()
+        return [{"name": r["creator"], "count": r["cnt"]} for r in rows]
+
+
+def mark_alert_resolved(task_id: str, resolved_by: str = "manual") -> bool:
+    """标记告警已恢复（手动或 Alertmanager 自动）。返回 True 表示成功。"""
+    now = _now_str()
+    with _get_db() as conn:
+        row = conn.execute("SELECT alert_resolved FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if not row:
+            return False
+        if row["alert_resolved"]:
+            return False  # 已经标记过
+
+        conn.execute(
+            "UPDATE tasks SET alert_resolved = 1, alert_resolved_at = ?, alert_resolved_by = ?, updated_at = ? WHERE id = ?",
+            (now, resolved_by, now, task_id)
+        )
+        # 追加一条 stage 记录
+        stages_row = conn.execute("SELECT stages FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        stages = json.loads(stages_row["stages"] or "[]")
+        stages.append({"time": now, "msg": f"🟢 告警已恢复（{resolved_by}）"})
+        conn.execute("UPDATE tasks SET stages = ? WHERE id = ?",
+                     (json.dumps(stages, ensure_ascii=False), task_id))
+
+    logger.info(f"[TaskStore] Task {task_id} alert resolved by {resolved_by}")
+    return True
+
+
+def find_active_alert_task(alert_type: str, target: str) -> Optional[dict]:
+    """查找指定告警类型+目标的最近未恢复任务（用于 Alertmanager 自动标记）。
+
+    target 通常是 IP，会模糊匹配 task.target 字段。
+    """
+    with _get_db() as conn:
+        row = conn.execute("""
+            SELECT * FROM tasks
+            WHERE task_type = 'ops-diagnosis'
+              AND target LIKE ?
+              AND alert_resolved = 0
+              AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (f"%{target}%",)).fetchone()
+        return _row_to_dict(row) if row else None
 
 
 def get_stats() -> dict:
