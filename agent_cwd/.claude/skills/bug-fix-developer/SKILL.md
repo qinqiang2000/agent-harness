@@ -44,14 +44,25 @@ WORK="/tmp/repair/$ID"
 GITLAB_BASE="${GITLAB_BASE_URL:-http://123.207.158.7:5000/ai-agent/git}"
 
 mkdir -p "$WORK"
-# clone（只读 token），已存在则 pull
-[ -d "$WORK/.git" ] && git -C "$WORK" pull || \
-  git clone "$(echo $GITLAB_BASE | sed 's|://|://token:'"$GITLAB_TOKEN"'@|')/$REPO.git" "$WORK"
 
-cd "$WORK" && git checkout -b "$BRANCH" 2>/dev/null || git -C "$WORK" checkout "$BRANCH"
+# clone（只读 token），已存在则 pull；任一步失败立即停，不要掉进重新 clone
+if [ -d "$WORK/.git" ]; then
+  git -C "$WORK" pull || { echo "pull 失败，停止"; exit 1; }
+else
+  git clone "$(echo $GITLAB_BASE | sed 's|://|://token:'"$GITLAB_TOKEN"'@|')/$REPO.git" "$WORK" \
+    || { echo "clone 失败，停止"; exit 1; }
+fi
+
+# 切到修复分支：已存在则直接 checkout（重修模式走这里），否则新建
+cd "$WORK" || { echo "进入工作目录失败，停止"; exit 1; }
+if git -C "$WORK" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git -C "$WORK" checkout "$BRANCH"
+else
+  git -C "$WORK" checkout -b "$BRANCH"
+fi
 ```
 
-重修模式：跳过 `checkout -b`，直接在已有分支上继续，先读上一轮失败报告再改。
+重修模式：分支已存在，上面会直接 `checkout` 到该分支（不会新建），在已有改动上继续；动手前先读上一轮失败报告。
 
 ## Step 2：理解代码（改码前必做，禁止跳过）
 
@@ -66,7 +77,7 @@ cd "$WORK" && git checkout -b "$BRANCH" 2>/dev/null || git -C "$WORK" checkout "
 
 ## Step 3：RED — 写复现 bug 的失败测试
 
-REQUIRED SUB-SKILL：用 superpowers:test-driven-development 的纪律。
+TDD 纪律：先写测试、确认它因 bug 而失败（RED），再改代码让它通过（GREEN，见 Step 4），最后重构（REFACTOR，见 Step 5）。不要先改代码再补测试。
 - 按根因和证据，在仓库测试目录写一个**能复现该 bug 的失败测试**。
 - 本地尽力跑该测试（仓库有构建/测试能力时）：跑出 FAIL 即证明复现成功。
 - 仓库本地跑不动（缺依赖/需 Java 环境）→ 标注「测试待 Jenkins 验证」，记下测试文件路径，继续。
@@ -80,7 +91,16 @@ REQUIRED SUB-SKILL：用 superpowers:test-driven-development 的纪律。
 
 - 必要的重构，跑相关测试确认无回归（本地能跑则跑）。
 
-## Step 6：commit + push + 建 MR
+## Step 6：代码自审（push 前的质量闸门）
+
+**先自审，再 push。** 对照修复目标自审本次改动，产出结构化问题清单，按 CRITICAL / HIGH / MEDIUM 三级标注。重点核对：
+- 改动是否真正覆盖根因，复现测试是否确实因本次改动转绿；
+- 是否引入回归（上下游调用方、相关配置、边界条件）；
+- 是否有超出修复范围的多余改动（YAGNI / Surgical Changes）。
+
+**发现 CRITICAL / HIGH 问题先回到 Step 4 修，修完重新自审，不带病 push。** 自审清单连同结果一并在最终输出里报告。
+
+## Step 7：commit + push + 建 MR
 
 push 用**写权限** `GITLAB_PUSH_TOKEN`（与 clone 的只读 `GITLAB_TOKEN` 分离）。push 前把 remote 切成带写 token 的 URL：
 
@@ -102,10 +122,6 @@ git push -o merge_request.create \
 ```
 
 从 push 的 remote 输出解析 MR 链接（形如 `remote: View merge request ... <url>`）。
-
-## Step 7：代码自审
-
-REQUIRED SUB-SKILL：用 superpowers:requesting-code-review 自审，产出结构化问题清单（CRITICAL/HIGH/MEDIUM）。
 
 ## 输出格式（coordinator 解析，必须严格遵守）
 
