@@ -105,6 +105,16 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_run_sync, "interval", minutes=interval_minutes, id="apifox_sync")
         logger.info("Apifox sync scheduled every %d minutes for %d projects", interval_minutes, len(sync_services))
 
+    # 任务超时扫描（每 5 分钟），把跑了超过 30 分钟还在 running 的任务标记为超时
+    from api.services.task_store import scan_timeout_tasks
+    def _scan_timeouts():
+        try:
+            scan_timeout_tasks()
+        except Exception:
+            logger.exception("scan_timeout_tasks failed")
+    scheduler.add_job(_scan_timeouts, "interval", minutes=5, id="task_timeout_scan")
+    logger.info("Task timeout scan scheduled every 5 minutes")
+
     try:
         scheduler.start()
     except Exception:

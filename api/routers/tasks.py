@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from api.services.task_store import get_task, list_tasks, get_stats, list_creators, mark_alert_resolved
+from api.services.task_store import get_task, list_tasks, get_stats, list_creators, mark_alert_resolved, cancel_task
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,8 @@ async def tasks_list_page(
             "running": '<span style="color:#1890ff">🔄 执行中</span>',
             "completed": '<span style="color:#52c41a">✅ 完成</span>',
             "failed": '<span style="color:#ff4d4f">❌ 失败</span>',
+            "timeout": '<span style="color:#fa8c16">⏰ 超时</span>',
+            "cancelled": '<span style="color:#8c8c8c">⛔ 已取消</span>',
         }.get(t["status"], t["status"])
 
         # 告警状态徽章（只对 ops-diagnosis 任务有意义）
@@ -218,10 +220,17 @@ async def view_task(task_id: str):
         "running": ("🔄 执行中", "#1890ff", "#e6f7ff", "#91d5ff"),
         "completed": ("✅ 已完单", "#52c41a", "#f6ffed", "#b7eb8f"),
         "failed": ("❌ 失败", "#ff4d4f", "#fff2f0", "#ffa39e"),
+        "timeout": ("⏰ 超时", "#fa8c16", "#fff7e6", "#ffd591"),
+        "cancelled": ("⛔ 已取消", "#8c8c8c", "#fafafa", "#d9d9d9"),
     }
     status_text, status_color, status_bg, status_border = status_map.get(
         task["status"], ("❓ 未知", "#999", "#f5f5f5", "#d9d9d9")
     )
+
+    # 取消按钮（pending/running 状态可取消）
+    cancel_btn = ""
+    if task["status"] in ("pending", "running"):
+        cancel_btn = '<button onclick="cancelTask()" style="margin-left:8px;padding:6px 14px;background:#ff4d4f;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">⛔ 取消任务</button>'
 
     # 告警恢复徽章和按钮
     is_resolved = bool(task.get("alert_resolved"))
@@ -282,7 +291,7 @@ async def view_task(task_id: str):
         <a href="/api/tasks/" class="back">← 返回任务列表</a>
         <div class="header">
             <h1>📋 任务单 <code>{task['id']}</code></h1>
-            <span class="status-badge">{status_text}</span>{resolve_section}
+            <span class="status-badge">{status_text}</span>{resolve_section}{cancel_btn}
             <div class="meta-grid">
                 <div class="meta-item"><label>创建人</label><span>{task['creator']}</span></div>
                 <div class="meta-item"><label>任务分类</label><span>{task['task_type']}</span></div>
@@ -327,6 +336,27 @@ async def view_task(task_id: str):
                     location.reload();
                 }} else {{
                     alert("操作失败：" + JSON.stringify(data));
+                }}
+            }} catch (e) {{
+                alert("请求失败：" + e.message);
+            }}
+        }}
+
+        async function cancelTask() {{
+            if (!confirm("确定要取消此任务吗？取消后无法恢复。")) return;
+            const reason = prompt("请输入取消原因（可选）：") || "manual";
+            try {{
+                const resp = await fetch("/api/tasks/{task['id']}/cancel", {{
+                    method: "POST",
+                    headers: {{"Content-Type": "application/json"}},
+                    body: JSON.stringify({{reason: reason}})
+                }});
+                const data = await resp.json();
+                if (data.msg === "ok") {{
+                    alert("⛔ 任务已取消");
+                    location.reload();
+                }} else {{
+                    alert("操作失败：" + (data.reason || JSON.stringify(data)));
                 }}
             }} catch (e) {{
                 alert("请求失败：" + e.message);
@@ -394,4 +424,24 @@ async def resolve_task(task_id: str, body: dict = None):
             raise HTTPException(status_code=404, detail="任务不存在")
         return {"msg": "already_resolved", "task_id": task_id}
 
+    return {"msg": "ok", "task_id": task_id}
+
+
+@router.post("/{task_id}/cancel", response_class=JSONResponse)
+async def cancel_task_endpoint(task_id: str, body: dict = None):
+    """手动取消任务（仅适用于 pending/running 状态的任务）。"""
+    reason = "manual"
+    if body and isinstance(body, dict):
+        reason = body.get("reason") or "manual"
+
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    if task["status"] not in ("pending", "running"):
+        return {"msg": "cannot_cancel", "reason": f"任务当前状态 {task['status']}，无需取消"}
+
+    success = cancel_task(task_id, reason=reason)
+    if not success:
+        return {"msg": "failed"}
     return {"msg": "ok", "task_id": task_id}

@@ -24,6 +24,11 @@ STATUS_PENDING = "pending"
 STATUS_RUNNING = "running"
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
+STATUS_TIMEOUT = "timeout"        # 超时（执行时间超过阈值）
+STATUS_CANCELLED = "cancelled"    # 手动取消
+
+# 任务最长执行时间（秒），超过则视为超时
+TASK_MAX_DURATION_SEC = 1800  # 30 分钟
 
 
 def _now_str() -> str:
@@ -86,6 +91,93 @@ def _init_db():
 
 # 模块加载时初始化
 _init_db()
+
+
+def cleanup_stale_running_tasks():
+    """启动时调用：把所有 running/pending 的任务标记为失败（服务重启导致中断）。"""
+    now = _now_str()
+    with _get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, stages FROM tasks WHERE status IN (?, ?)",
+            (STATUS_RUNNING, STATUS_PENDING)
+        ).fetchall()
+        for row in rows:
+            stages = json.loads(row["stages"] or "[]")
+            stages.append({"time": now, "msg": "❌ 服务重启，任务被中断"})
+            conn.execute("""
+                UPDATE tasks SET
+                    status = ?,
+                    completed_at = ?,
+                    updated_at = ?,
+                    stages = ?,
+                    result_summary = ?
+                WHERE id = ?
+            """, (
+                STATUS_FAILED, now, now,
+                json.dumps(stages, ensure_ascii=False),
+                "服务重启导致任务中断",
+                row["id"]
+            ))
+        if rows:
+            logger.warning(f"[TaskStore] Cleaned up {len(rows)} stale running tasks on startup")
+        return len(rows)
+
+
+def cancel_task(task_id: str, reason: str = "manual") -> bool:
+    """手动取消任务。"""
+    now = _now_str()
+    with _get_db() as conn:
+        row = conn.execute("SELECT status, stages FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if not row:
+            return False
+        if row["status"] not in (STATUS_PENDING, STATUS_RUNNING):
+            return False  # 已结束的任务不能取消
+
+        stages = json.loads(row["stages"] or "[]")
+        stages.append({"time": now, "msg": f"⛔ 任务被取消（{reason}）"})
+        conn.execute("""
+            UPDATE tasks SET status = ?, completed_at = ?, updated_at = ?, stages = ?, result_summary = ? WHERE id = ?
+        """, (
+            STATUS_CANCELLED, now, now,
+            json.dumps(stages, ensure_ascii=False),
+            f"任务被取消（{reason}）",
+            task_id
+        ))
+    logger.info(f"[TaskStore] Task {task_id} cancelled by {reason}")
+    return True
+
+
+def scan_timeout_tasks(max_duration_sec: int = TASK_MAX_DURATION_SEC) -> int:
+    """扫描超过执行时间的任务，标记为 timeout。返回处理数量。"""
+    now_dt = datetime.now(timezone(timedelta(hours=8)))
+    cutoff_dt = now_dt - timedelta(seconds=max_duration_sec)
+    cutoff_str = cutoff_dt.strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    with _get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, stages FROM tasks
+            WHERE status = ? AND created_at < ?
+        """, (STATUS_RUNNING, cutoff_str)).fetchall()
+
+        for row in rows:
+            stages = json.loads(row["stages"] or "[]")
+            stages.append({"time": now_str, "msg": f"⏰ 超时（执行超过 {max_duration_sec // 60} 分钟）"})
+            conn.execute("""
+                UPDATE tasks SET status = ?, completed_at = ?, updated_at = ?, stages = ?, result_summary = ? WHERE id = ?
+            """, (
+                STATUS_TIMEOUT, now_str, now_str,
+                json.dumps(stages, ensure_ascii=False),
+                f"任务执行超时（{max_duration_sec}秒）",
+                row["id"]
+            ))
+        if rows:
+            logger.warning(f"[TaskStore] Marked {len(rows)} tasks as timeout")
+    return len(rows)
+
+
+# 启动时清理僵尸任务
+cleanup_stale_running_tasks()
 
 
 def create_task(
