@@ -40,11 +40,6 @@ async def view_task(task_id: str):
     for stage in task.get("stages", []):
         stages_html += f'<div class="stage-item"><span class="stage-time">{stage["time"]}</span> {stage["msg"]}</div>\n'
 
-    # 报告链接
-    report_link = ""
-    if task.get("report_id"):
-        report_link = f'<a href="/api/reports/{task["report_id"]}" target="_blank">📊 查看完整诊断报告</a>'
-
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -97,7 +92,13 @@ async def view_task(task_id: str):
         <div class="section">
             <h3>📊 执行结果</h3>
             <div class="result {"failed" if task["status"] == "failed" else ""}">{task["result_summary"]}</div>
-            <p style="margin-top:12px">{report_link}</p>
+        </div>
+        '''}
+
+        {"" if not task.get('full_report') else f'''
+        <div class="section">
+            <h3>📋 完整诊断详情</h3>
+            <pre style="white-space:pre-wrap;word-wrap:break-word;font-size:13px;line-height:1.7;background:#fafafa;padding:16px;border-radius:6px;border:1px solid #eee;">{task["full_report"]}</pre>
         </div>
         '''}
     </div>

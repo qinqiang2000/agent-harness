@@ -282,6 +282,7 @@ class YunzhijiaHandler:
                         task_store.update_status(
                             task["id"], task_store.STATUS_COMPLETED,
                             result_summary=final_result[:500],
+                            full_report=final_result,
                         )
                 else:
                     logger.error("[YZJ] No result content in ResultMessage")

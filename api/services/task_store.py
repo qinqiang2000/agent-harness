@@ -63,6 +63,7 @@ def create_task(
             {"time": _now_str(), "msg": "📥 任务已创建"}
         ],
         "result_summary": None,
+        "full_report": None,
         "report_id": None,
     }
     _save(task)
@@ -81,7 +82,7 @@ def add_stage(task_id: str, msg: str):
     _save(task)
 
 
-def update_status(task_id: str, status: str, result_summary: str = None, report_id: str = None):
+def update_status(task_id: str, status: str, result_summary: str = None, report_id: str = None, full_report: str = None):
     """更新任务状态。"""
     task = get_task(task_id)
     if not task:
@@ -95,6 +96,8 @@ def update_status(task_id: str, status: str, result_summary: str = None, report_
         task["result_summary"] = result_summary
     if report_id:
         task["report_id"] = report_id
+    if full_report:
+        task["full_report"] = full_report
     _save(task)
     logger.info(f"[TaskStore] Task {task_id} status -> {status}")
 
