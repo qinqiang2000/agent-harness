@@ -96,7 +96,7 @@ git remote set-url --push origin "$PUSH_URL"
 
 # 用 GitLab push options 建 MR（禁止自动合并）
 git push -o merge_request.create \
-         -o merge_request.target=master \
+         -o merge_request.target=test \
          -o merge_request.title="fix($ID): <标题>" \
          origin "$BRANCH"
 ```
