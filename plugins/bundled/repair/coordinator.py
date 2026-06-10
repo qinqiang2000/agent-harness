@@ -35,6 +35,7 @@ async def _run_agent(
         language="中文",
         skill=skill if not session_id else None,
         session_id=session_id,
+        metadata={"max_turns": 1000},
     )
     result_text = ""
     new_session_id = session_id
@@ -82,6 +83,19 @@ class RepairCoordinator:
 
     def _linear(self, workspace_id: str):
         return self._linear_factory(workspace_id)
+
+    async def _set_issue_linear_state(self, client, linear_issue_id: str, state_type: str) -> None:
+        """把 Linear issue 推到指定 workflow state type 的第一个状态，失败只打警告。"""
+        try:
+            issue = await client.get_issue(linear_issue_id)
+            team_id = (issue.get("team") or {}).get("id")
+            if team_id:
+                state_id = await self._state_id_by_type(client, team_id, state_type)
+                if state_id:
+                    await client.update_issue(linear_issue_id, state_id=state_id)
+                    logger.info("[Repair] issue %s -> %s state", linear_issue_id, state_type)
+        except Exception:
+            logger.warning("[Repair] failed to set issue %s state: %s", state_type, linear_issue_id, exc_info=True)
 
     async def _state_id_by_type(self, client, team_id: str, type_name: str) -> Optional[str]:
         """按 workflow state type（started/completed/canceled）取第一个 stateId。"""
@@ -168,6 +182,10 @@ class RepairCoordinator:
                 logger.warning("[Repair] notify failed (session=%s)", session_id, exc_info=True)
 
         self.store.update(linear_issue_id, stage=Stage.DEVELOPING)
+
+        # 把 Linear issue 状态推到第一个 started 状态，防止重复触发
+        await self._set_issue_linear_state(client, linear_issue_id, "started")
+
         branch = run.branch or f"fix/{run.linear_identifier}"
 
         prompt = prompts.build_developer_prompt(
@@ -195,6 +213,11 @@ class RepairCoordinator:
         except Exception:
             logger.error("[Repair] developer agent failed: %s", linear_issue_id, exc_info=True)
             self.store.update(linear_issue_id, stage=on_agent_failure)
+            # agent 抛异常：人工单落 canceled，审核单退回 backlog
+            if on_agent_failure == Stage.REJECTED:
+                await self._set_issue_linear_state(client, linear_issue_id, "canceled")
+            else:
+                await self._set_issue_linear_state(client, linear_issue_id, "backlog")
             fail_msg = (
                 "⚠️ 自动开发启动失败，已退回待审核，请重新触发或人工介入。"
                 if on_agent_failure == Stage.PENDING_REVIEW
@@ -221,6 +244,7 @@ class RepairCoordinator:
                 linear_issue_id,
             )
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            await self._set_issue_linear_state(client, linear_issue_id, "canceled")
             await notify(
                 "🚫 自动修复未完成（开发阶段未产出有效修复/未推分支），已转人工。\n\n"
                 f"Agent 最后输出：\n{result_text}",
@@ -359,6 +383,8 @@ class RepairCoordinator:
             run.linear_issue_id,
             f"⚠️ 原根因判错（第 {count} 次），需重新诊断。\n{raw}",
         )
+        # 回退到 backlog，让用户重新触发诊断
+        await self._set_issue_linear_state(client, run.linear_issue_id, "backlog")
         self.store.update(run.linear_issue_id, stage=Stage.PENDING_REVIEW)
 
     async def _handle_missing_dependency(self, run: RepairRun, raw: str) -> None:
@@ -375,6 +401,8 @@ class RepairCoordinator:
             f"🔗 修复牵出外部依赖，已建子单 {child.get('identifier')}，"
             f"父单 blockedBy 子单（本期记录，合并接力待人工）。\n{raw}",
         )
+        # issue 推回 backlog，等依赖子单解决后人工重新触发
+        await self._set_issue_linear_state(client, run.linear_issue_id, "backlog")
         self.store.update(run.linear_issue_id, stage=Stage.BLOCKED)
 
     async def _reject(self, run: RepairRun, reason: str) -> None:

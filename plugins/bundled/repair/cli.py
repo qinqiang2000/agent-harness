@@ -58,6 +58,26 @@ def _make_store():
     return RepairStore(full)
 
 
+async def _resolve_team_id(client, team_id: str) -> str:
+    """team_id 为空或为团队 key（如 ARALGO）时，解析成 UUID。"""
+    if not team_id:
+        raise RuntimeError(
+            "payload 缺少 team_key，请填写团队标识符（如 ARALGO、QUASAF）"
+        )
+    # 已经是 UUID 格式，直接用
+    if "-" in team_id and len(team_id) > 30:
+        return team_id
+    # 当作 key 查找
+    data = await client._query("{ teams { nodes { id name key } } }")
+    nodes = data.get("teams", {}).get("nodes", [])
+    key_upper = team_id.upper()
+    for t in nodes:
+        if t.get("key", "").upper() == key_upper:
+            return t["id"]
+    available = ", ".join(t.get("key", "") for t in nodes)
+    raise RuntimeError(f"未找到团队 key={team_id!r}，可用: {available}")
+
+
 async def create_issue_cmd(input_path: str) -> None:
     """建 Linear 单 + 落 repair_runs(pending_review)，结果打到 stdout。"""
     from plugins.bundled.repair.store import RepairRun, Stage
@@ -66,10 +86,12 @@ async def create_issue_cmd(input_path: str) -> None:
     title = payload.get("title")
     if not title:
         raise ValueError("payload 缺少必填字段 'title'")
-    team_id = payload.get("team_id", "")
+    # 优先取 team_key（标识符如 ARALGO），兼容旧的 team_id（UUID）
+    team_key = payload.get("team_key") or payload.get("team_id", "")
     workspace_id = payload.get("workspace_id", "")
 
     client, workspace_id = _make_linear_client(workspace_id)
+    team_id = await _resolve_team_id(client, team_key)
 
     description = build_description(
         payload.get("root_cause", ""),

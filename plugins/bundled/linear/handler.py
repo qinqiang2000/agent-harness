@@ -275,10 +275,14 @@ class LinearSessionHandler:
             )
             return
 
+        issue_id = agent_session.get("issueId")
         trace_id = _new_trace_id()
         claude_session_id = self._session_map.get(session_id)
+        # Linear 每次 prompted 会生成新的 agentSession.id，用 issue_id 作为兜底查找
+        if not claude_session_id and issue_id:
+            claude_session_id = self._session_map.get(f"issue:{issue_id}")
         logger.info(
-            f"[{trace_id}][Linear] prompted: linear_session={session_id}, claude_session={claude_session_id}"
+            f"[{trace_id}][Linear] prompted: linear_session={session_id}, issue={issue_id}, claude_session={claude_session_id}"
         )
 
         token = self._get_token(workspace_id)
@@ -327,6 +331,8 @@ class LinearSessionHandler:
 
             if new_claude_session_id:
                 self._session_map[session_id] = new_claude_session_id
+                if issue_id:
+                    self._session_map[f"issue:{issue_id}"] = new_claude_session_id
 
         except Exception as e:
             error_text = str(e)
@@ -507,6 +513,8 @@ class LinearSessionHandler:
                     claude_session_id = data.get("session_id")
                     if claude_session_id:
                         self._session_map[session_id] = claude_session_id
+                        if issue_id:
+                            self._session_map[f"issue:{issue_id}"] = claude_session_id
                         logger.info(
                             f"[{trace_id}][Linear] session mapped: {session_id} -> {claude_session_id}"
                         )

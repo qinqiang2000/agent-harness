@@ -22,6 +22,56 @@ from api.services.vision_service import describe_images, VisionFallbackError
 
 logger = logging.getLogger(__name__)
 
+# 全局默认轮次，可通过环境变量覆盖
+_DEFAULT_MAX_TURNS = int(os.getenv("DEFAULT_MAX_TURNS", "200"))
+
+# skill max_turns 缓存，避免重复解析 SKILL.md
+_skill_max_turns_cache: dict[str, int] = {}
+
+
+def _get_skill_max_turns(skill_name: str) -> Optional[int]:
+    """从 SKILL.md frontmatter 读取 skill 的 max_turns，带内存缓存。
+
+    返回 None 表示该 skill 未配置 max_turns，调用方应使用默认值。
+    """
+    if skill_name in _skill_max_turns_cache:
+        return _skill_max_turns_cache[skill_name]
+
+    skill_file = AGENT_CWD / ".claude" / "skills" / skill_name / "SKILL.md"
+    if not skill_file.exists():
+        _skill_max_turns_cache[skill_name] = None
+        return None
+
+    try:
+        content = skill_file.read_text(encoding="utf-8")
+        # 解析 YAML frontmatter（--- 之间的内容）
+        if content.startswith("---"):
+            end = content.find("---", 3)
+            if end != -1:
+                import re
+                frontmatter = content[3:end]
+                m = re.search(r"^max_turns:\s*(\d+)", frontmatter, re.MULTILINE)
+                if m:
+                    val = int(m.group(1))
+                    _skill_max_turns_cache[skill_name] = val
+                    return val
+    except Exception:
+        logger.warning(f"Failed to parse max_turns from SKILL.md: {skill_name}", exc_info=True)
+
+    _skill_max_turns_cache[skill_name] = None
+    return None
+
+
+def _resolve_max_turns(skill: Optional[str], meta_override: Optional[int]) -> int:
+    """解析最终 max_turns，优先级：metadata > skill SKILL.md > DEFAULT_MAX_TURNS。"""
+    if meta_override is not None:
+        return meta_override
+    if skill:
+        skill_turns = _get_skill_max_turns(skill)
+        if skill_turns is not None:
+            return skill_turns
+    return _DEFAULT_MAX_TURNS
+
 
 class AgentService:
     """
@@ -163,7 +213,7 @@ class AgentService:
             model=_current_config.model or "claude-sonnet-4-6",
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
-            max_turns=40,
+            max_turns=200,
             system_prompt={"type": "preset", "preset": "claude_code", "exclude_dynamic_sections": True},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
@@ -274,16 +324,18 @@ class AgentService:
                 t.mark("PROMPT_BUILT")
 
             # Configure Claude SDK
-            # Allow model/max_turns override via request.metadata (e.g. for audit plugin)
+            # 优先级：metadata["max_turns"] > skill SKILL.md max_turns > DEFAULT_MAX_TURNS
             # 新 session 时加载完整 skills 列表，确保后续 resume 时所有 skill 都可用
             if not request.session_id:
                 skills = _default_skills  # None 表示加载全部
             else:
                 skills = None
+            _meta_max_turns = int(_meta["max_turns"]) if "max_turns" in _meta else None
+            _max_turns = _resolve_max_turns(request.skill, _meta_max_turns)
             options = dc_replace(
                 _base_options,
                 model=_meta.get("model") or _base_options.model,
-                max_turns=int(_meta.get("max_turns", 40)),
+                max_turns=_max_turns,
                 resume=request.session_id,
                 skills=skills,
             )

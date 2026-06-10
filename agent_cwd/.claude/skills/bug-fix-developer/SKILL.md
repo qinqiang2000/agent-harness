@@ -1,5 +1,6 @@
 ---
 name: bug-fix-developer
+max_turns: 300
 description: >-
   TDD 驱动的 bug 自动修复 skill。在拿到「根因 + 证据 + 修复计划 + 目标仓库 + 修复分支名」后，
   clone 仓库、写复现测试、改最小代码转绿、推分支并用 GitLab push options 建 MR。

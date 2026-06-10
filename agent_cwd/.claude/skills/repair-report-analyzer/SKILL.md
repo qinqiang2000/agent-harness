@@ -1,5 +1,6 @@
 ---
 name: repair-report-analyzer
+max_turns: 50
 description: >-
   修复测试报告的三类归因分析 skill。输入本地 TDD 结果 + Jenkins 测试报告 + 原根因/修复计划，
   判定修复是否成功，未成功则归因为「代码错 / 根因错 / 漏依赖」之一，供 coordinator 决定回转路径。

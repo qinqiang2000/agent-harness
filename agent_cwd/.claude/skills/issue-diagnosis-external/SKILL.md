@@ -1,5 +1,6 @@
 ---
 name: issue-diagnosis-external
+max_turns: 80
 description: >-
   面向外部客户的服务问题诊断与根因定位，通过「FAQ检索 → 日志分析 → 源码定位」三步流程给出根因结论。
   当用户提供报错信息、异常堆栈、traceId，或描述服务/接口异常时使用此 Skill。
