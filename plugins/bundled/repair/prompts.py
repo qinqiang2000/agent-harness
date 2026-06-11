@@ -1,5 +1,6 @@
 """状态映射 + 各阶段 prompt 模板 + 输出解析（纯函数，易测）。"""
 
+import json
 import os
 import re
 from typing import Dict
@@ -98,6 +99,7 @@ def parse_is_code_bug(text: str) -> bool:
 # ── developer / analyzer prompt 模板 ───────────────────────────────────────
 
 def build_developer_prompt(
+    issue_id: str,
     identifier: str,
     root_cause: str,
     evidence: str,
@@ -117,6 +119,7 @@ def build_developer_prompt(
     parts = [
         f"严格按 skill: bug-fix-developer 执行 TDD 修复任务。",
         f"\n# 修复任务 {identifier}",
+        f"Issue UUID（申请 repo 锁时用）: {issue_id}",
         repo_line,
         f"修复分支名（必须用此分支名）: {branch}",
         f"\n## 根因\n{root_cause}",
@@ -161,15 +164,22 @@ def _extract(pattern: str, text: str) -> str:
 def parse_developer_output(text: str) -> Dict[str, str]:
     """从 developer skill 输出解析状态、仓库、分支、MR URL、测试路径。
 
-    缺失字段返回空串。`repo` 是 agent 实际解析/使用的完整 project_id，
-    用于人工单 repo 留空时由 agent 查表解析后回填，供 Jenkins 触发。
-
-    `status` = "completed" 仅当输出含明确的【状态】完成/成功；否则一律 "failed"
-    （包括无【状态】字段——agent 中途卡住/没按格式收尾时保守判失败，绝不误触发构建）。
+    【仓库】兼容单值（piaozone/base/api-auth）和 JSON 数组（["a","b"]）。
+    返回 repos（list[str]）和 repo（str，向后兼容取第一个）。
     """
+    repo_raw = _extract(r"【仓库】\s*(\[[^\n]+\]|\S+)", text)
+    if repo_raw.startswith("["):
+        try:
+            repos_list = json.loads(repo_raw)
+        except Exception:
+            repos_list = [repo_raw] if repo_raw else []
+    else:
+        repos_list = [repo_raw] if repo_raw else []
+
     return {
         "status": _parse_dev_status(text),
-        "repo": _extract(r"【仓库】\s*(\S+)", text),
+        "repos": repos_list,
+        "repo": repos_list[0] if repos_list else "",
         "branch": _extract(r"【分支】\s*(\S+)", text),
         "mr_url": _extract(r"【MR链接】\s*(\S+)", text),
         "test_path": _extract(r"【复现测试】\s*(\S+)", text),
@@ -178,14 +188,16 @@ def parse_developer_output(text: str) -> Dict[str, str]:
 
 
 def _parse_dev_status(text: str) -> str:
-    """解析 developer【状态】。仅明确完成/成功 → completed；其余（含缺失）→ failed。
+    """解析 developer【状态】。
 
-    注意「未完成」含「完成」二字，须先判否定词，避免误判为 completed。
+    优先级：阻塞（锁冲突）→ 否定/失败信号 → 完成/成功 → 其余(含缺失)=failed。
+    「未完成」含「完成」二字，故否定词须先于完成判断。
     """
     line = _extract(r"【状态】\s*([^\n]+)", text)
     if not line:
         return "failed"
-    # 否定/失败信号优先（未完成、失败、待批准、未通过…）
+    if "阻塞" in line or "被占用" in line:
+        return "blocked"
     for neg in ("未完成", "没完成", "未成功", "失败", "待批准", "未通过", "中止", "放弃"):
         if neg in line:
             return "failed"

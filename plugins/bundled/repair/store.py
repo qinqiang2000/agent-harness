@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class RepairRun:
     repair_plan: str = ""
     evidence: str = ""
     last_report: str = ""
+    repos: str = ""  # JSON 数组，如 '["piaozone/base/api-auth"]'
     created_at: int = 0
     updated_at: int = 0
 
@@ -95,8 +96,19 @@ class RepairStore:
                     repair_plan       TEXT DEFAULT '',
                     evidence          TEXT DEFAULT '',
                     last_report       TEXT DEFAULT '',
+                    repos             TEXT DEFAULT '',
                     created_at        INTEGER NOT NULL,
                     updated_at        INTEGER NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS repo_locks (
+                    repo              TEXT PRIMARY KEY,
+                    holder_issue_id   TEXT NOT NULL,
+                    holder_identifier TEXT NOT NULL,
+                    acquired_at       INTEGER NOT NULL
                 )
                 """
             )
@@ -168,6 +180,52 @@ class RepairStore:
                 (linear_issue_id,),
             ).fetchone()
         return row[column] if row else 0
+
+    def acquire_repos(
+        self, issue_id: str, identifier: str, repos: List[str]
+    ) -> Tuple[bool, str]:
+        """原子申请一组 repo 锁。任一被别的 holder 占用则整组失败，不占任何一个。
+
+        同一 holder 重入算成功（幂等）。返回 (ok, blocking_identifier)：
+        成功 (True, "")；被占 (False, 占用方人类可读单号)。
+        同一 holder 重入会用 `INSERT OR REPLACE` 重置 `acquired_at`（无副作用，poller 按当前时间判陈旧）。
+        """
+        now = int(time.time())
+        with self._conn() as conn:
+            # BEGIN IMMEDIATE：立即取写锁，使「检查 + 占用」成为一个串行化事务，
+            # 杜绝两个并发申请各自 SELECT 判空后双双 INSERT 的竞态（busy_timeout 让后者等待）。
+            conn.execute("BEGIN IMMEDIATE")
+            blocker = None
+            for repo in repos:
+                row = conn.execute(
+                    "SELECT holder_issue_id, holder_identifier FROM repo_locks WHERE repo = ?",
+                    (repo,),
+                ).fetchone()
+                if row is not None and row["holder_issue_id"] != issue_id:
+                    blocker = row["holder_identifier"]
+                    break
+            if blocker is not None:
+                return (False, blocker)
+            for repo in repos:
+                conn.execute(
+                    "INSERT OR REPLACE INTO repo_locks "
+                    "(repo, holder_issue_id, holder_identifier, acquired_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (repo, issue_id, identifier, now),
+                )
+        return (True, "")
+
+    def release_repos(self, issue_id: str) -> None:
+        """释放某单持有的全部 repo 锁，幂等。"""
+        with self._conn() as conn:
+            conn.execute(
+                "DELETE FROM repo_locks WHERE holder_issue_id = ?", (issue_id,)
+            )
+
+    def list_locks(self) -> List[sqlite3.Row]:
+        """列出所有持有中的 repo 锁，供 poller reconcile。"""
+        with self._conn() as conn:
+            return conn.execute("SELECT * FROM repo_locks").fetchall()
 
     @staticmethod
     def _row_to_run(row: sqlite3.Row) -> RepairRun:

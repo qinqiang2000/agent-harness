@@ -112,6 +112,7 @@ def test_parse_analyzer_unknown_verdict_defaults_code_error():
 @pytest.mark.unit
 def test_build_developer_prompt_contains_inputs():
     p = prompts.build_developer_prompt(
+        issue_id="issue-uuid-123",
         identifier="ENG-123",
         root_cause="空指针",
         evidence="日志 X",
@@ -131,6 +132,7 @@ def test_build_developer_prompt_contains_inputs():
 @pytest.mark.unit
 def test_build_developer_prompt_retry_includes_report():
     p = prompts.build_developer_prompt(
+        issue_id="issue-uuid-123",
         identifier="ENG-123",
         root_cause="空指针",
         evidence="日志 X",
@@ -155,3 +157,63 @@ def test_build_analyzer_prompt_contains_report():
     assert "repair-report-analyzer" in p
     assert "3 passed" in p
     assert "ENG-123" in p
+
+
+@pytest.mark.unit
+def test_parse_dev_status_recognizes_blocked():
+    text = "【状态】阻塞\n【说明】涉及服务被 ENG-3 占用"
+    assert prompts.parse_developer_output(text)["status"] == "blocked"
+
+
+@pytest.mark.unit
+def test_parse_dev_status_blocked_by_keyword_beizhanyong():
+    text = "【状态】被占用\n【说明】repo 正被其他单修复"
+    assert prompts.parse_developer_output(text)["status"] == "blocked"
+
+
+@pytest.mark.unit
+def test_parse_dev_status_completed_still_works():
+    text = "【状态】完成\n【分支】fix/ENG-1"
+    assert prompts.parse_developer_output(text)["status"] == "completed"
+
+
+@pytest.mark.unit
+def test_parse_dev_status_missing_is_failed():
+    assert prompts.parse_developer_output("无状态字段")["status"] == "failed"
+
+
+@pytest.mark.unit
+def test_parse_developer_output_single_repo():
+    from plugins.bundled.repair.prompts import parse_developer_output
+    text = "【状态】完成\n【仓库】piaozone/base/api-auth\n【分支】fix/ENG-1\n【MR链接】\n【复现测试】FooTest.java\n【说明】修了空指针"
+    result = parse_developer_output(text)
+    assert result["repos"] == ["piaozone/base/api-auth"]
+    assert result["repo"] == "piaozone/base/api-auth"
+
+
+@pytest.mark.unit
+def test_parse_developer_output_multi_repo():
+    import json
+    from plugins.bundled.repair.prompts import parse_developer_output
+    repos = ["piaozone/base/api-auth", "piaozone/base/api-company"]
+    text = f'【状态】完成\n【仓库】{json.dumps(repos, ensure_ascii=False)}\n【分支】fix/ENG-1\n【MR链接】\n【复现测试】FooTest.java\n【说明】修了空指针'
+    result = parse_developer_output(text)
+    assert result["repos"] == repos
+    assert result["repo"] == repos[0]
+
+
+@pytest.mark.unit
+def test_build_developer_prompt_includes_issue_id():
+    p = prompts.build_developer_prompt(
+        issue_id="issue-uuid-xyz",
+        identifier="ENG-1",
+        root_cause="空指针",
+        evidence="日志",
+        repair_plan="判空",
+        repo="ai-agent/foo",
+        branch="fix/ENG-1",
+        is_retry=False,
+        last_report="",
+    )
+    assert "issue-uuid-xyz" in p
+    assert "ENG-1" in p
