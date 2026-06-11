@@ -17,6 +17,16 @@ from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
 from tests.repair.conftest import FakeAgentService, FakeJenkins, FakeLinearClient
 
 
+class _FakeMRBuilder:
+    def __init__(self, url="http://mr/built"):
+        self.url = url
+        self.calls = []
+
+    def build_mr(self, identifier, branch, title):
+        self.calls.append((identifier, branch, title))
+        return self.url
+
+
 @pytest.mark.integration
 async def test_happy_path_end_to_end(tmp_path):
     store = RepairStore(str(tmp_path / "r.db"))
@@ -32,9 +42,10 @@ async def test_happy_path_end_to_end(tmp_path):
         )
     )
     fake_linear = FakeLinearClient()
+    fake_mr = _FakeMRBuilder(url="http://mr/resolved/1")
     agent = FakeAgentService(
         [
-            "【状态】完成\n【分支】fix/ENG-1\n【MR链接】http://mr/1\n【复现测试】FooTest.java",  # developer
+            "【状态】完成\n【分支】fix/ENG-1\n【复现测试】FooTest.java",  # developer — no MR link; MR built in resolved phase
             "【判定】已解决\n【依据】全绿\n【后续动作】无",  # analyzer
         ]
     )
@@ -43,16 +54,24 @@ async def test_happy_path_end_to_end(tmp_path):
         store=store,
         jenkins=FakeJenkins(ready=True),
         linear_client_factory=lambda ws: fake_linear,
+        mr_builder=fake_mr,
     )
 
     await coord.start_development("issue-1")
     assert store.get("issue-1").stage == Stage.BUILDING
+    # dev phase does NOT set mr_url anymore
+    assert store.get("issue-1").mr_url == ""
     await coord.poll_building_runs()
 
     run = store.get("issue-1")
     assert run.stage == Stage.RESOLVED
-    assert run.mr_url == "http://mr/1"
+    # MR is now created in the resolved phase via mr_builder
+    assert run.mr_url == "http://mr/resolved/1"
+    assert fake_mr.calls == [("ENG-1", "fix/ENG-1", fake_mr.calls[0][2])]
+    assert "fix(ENG-1)" in fake_mr.calls[0][2]
     assert any(kw["state_id"] == "s-done" for _, kw in fake_linear.updated)
+    bodies = [b for _, b in fake_linear.comments]
+    assert any("http://mr/resolved/1" in b for b in bodies)
 
 
 @pytest.mark.integration
@@ -95,3 +114,42 @@ async def test_code_error_retry_then_resolve(tmp_path):
     assert run.stage == Stage.RESOLVED
     dev_calls = [c for c in agent.calls if c.session_id]
     assert any(c.session_id == "claude-sess-1" for c in dev_calls)
+
+
+@pytest.mark.integration
+async def test_timeout_rejects_without_retry(tmp_path):
+    import json as _json
+    from plugins.bundled.repair.coordinator import RepairCoordinator
+    from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
+    from tests.repair.conftest import FakeAgentService, FakeJenkins, FakeLinearClient
+
+    store = RepairStore(str(tmp_path / "r.db"))
+    store.upsert(RepairRun(
+        linear_issue_id="issue-timeout",
+        linear_identifier="ENG-TM",
+        workspace_id="ws-1",
+        stage=Stage.BUILDING,
+        repo="ai-agent/foo",
+        repos=_json.dumps(["ai-agent/foo"]),
+        root_cause="空指针",
+        repair_plan="判空",
+        jenkins_build_id="build-timeout",
+    ))
+
+    fake_linear = FakeLinearClient()
+    agent = FakeAgentService([])  # 不应被调用
+    coord = RepairCoordinator(
+        agent_service=agent,
+        store=store,
+        jenkins=FakeJenkins(ready=True, timeout=True),
+        linear_client_factory=lambda ws: fake_linear,
+    )
+
+    await coord.poll_building_runs()
+
+    run = store.get("issue-timeout")
+    assert run.stage == Stage.REJECTED
+    assert len(agent.calls) == 0  # analyzer 未被调用
+    assert run.fix_retry_count == 0  # 未计重试
+    bodies = [b for _, b in fake_linear.comments]
+    assert any("超时" in b for b in bodies)
