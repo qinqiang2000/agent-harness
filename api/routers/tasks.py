@@ -43,18 +43,28 @@ async def tasks_list_page(
         }.get(t["status"], t["status"])
 
         # 告警状态徽章（只对 ops-diagnosis 任务有意义）
+        is_unresolved_alert = False
         if t.get("task_type") == "ops-diagnosis":
             if t.get("alert_resolved"):
                 alert_badge = '<span style="color:#52c41a;background:#f6ffed;border:1px solid #b7eb8f;padding:2px 8px;border-radius:3px;font-size:12px">🟢 已恢复</span>'
             elif t["status"] in ("completed", "failed"):
                 alert_badge = '<span style="color:#ff4d4f;background:#fff2f0;border:1px solid #ffa39e;padding:2px 8px;border-radius:3px;font-size:12px">🔴 未恢复</span>'
+                is_unresolved_alert = True
             else:
                 alert_badge = '<span style="color:#999">-</span>'
         else:
             alert_badge = '<span style="color:#999">N/A</span>'
 
+        # checkbox 只在未恢复任务上启用
+        checkbox = (
+            f'<input type="checkbox" class="task-cb" data-id="{t["id"]}" onclick="event.stopPropagation()">'
+            if is_unresolved_alert else
+            '<input type="checkbox" disabled style="opacity:0.3">'
+        )
+
         rows_html += f"""
         <tr onclick="window.location='/api/tasks/{t['id']}'" style="cursor:pointer">
+            <td onclick="event.stopPropagation()" style="text-align:center;width:40px">{checkbox}</td>
             <td><code>{t['id']}</code></td>
             <td>{status_badge}</td>
             <td>{alert_badge}</td>
@@ -129,6 +139,14 @@ async def tasks_list_page(
     <div class="container">
         <h1>📋 任务工单 {filter_hint}</h1>
 
+        <!-- 批量操作浮动栏 -->
+        <div id="batch-bar" style="display:none;position:sticky;top:0;z-index:10;background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:none;align-items:center;gap:12px">
+            <span id="batch-count" style="font-size:14px;color:#ad6800">已选中 0 项</span>
+            <button onclick="batchResolve()" style="padding:6px 14px;background:#52c41a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">🟢 批量标记已恢复</button>
+            <button onclick="selectUnresolved()" style="padding:6px 14px;background:#fff;color:#333;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:13px">🔴 全选未恢复告警</button>
+            <button onclick="clearSelection()" style="padding:6px 14px;background:#fff;color:#666;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:13px">取消选择</button>
+        </div>
+
         <div class="stats">
             <div class="stat-card"><div class="num">{stats['total']}</div><div class="label">总计</div></div>
             <div class="stat-card"><div class="num" style="color:#52c41a">{stats['completed']}</div><div class="label">已完成</div></div>
@@ -175,6 +193,7 @@ async def tasks_list_page(
         <table>
             <thead>
                 <tr>
+                    <th style="text-align:center;width:40px"><input type="checkbox" id="select-all" onclick="toggleAll(this)"></th>
                     <th>任务ID</th>
                     <th>状态</th>
                     <th>告警状态</th>
@@ -186,10 +205,65 @@ async def tasks_list_page(
                 </tr>
             </thead>
             <tbody>
-                {rows_html if rows_html else '<tr><td colspan="8" class="empty">暂无任务</td></tr>'}
+                {rows_html if rows_html else '<tr><td colspan="9" class="empty">暂无任务</td></tr>'}
             </tbody>
         </table>
     </div>
+    <script>
+        function getCheckboxes() {{
+            return Array.from(document.querySelectorAll('.task-cb'));
+        }}
+        function getCheckedIds() {{
+            return getCheckboxes().filter(cb => cb.checked).map(cb => cb.dataset.id);
+        }}
+        function updateBatchBar() {{
+            const ids = getCheckedIds();
+            const bar = document.getElementById('batch-bar');
+            const count = document.getElementById('batch-count');
+            if (ids.length > 0) {{
+                bar.style.display = 'flex';
+                count.textContent = `已选中 ${{ids.length}} 项`;
+            }} else {{
+                bar.style.display = 'none';
+            }}
+        }}
+        function toggleAll(masterCb) {{
+            getCheckboxes().forEach(cb => cb.checked = masterCb.checked);
+            updateBatchBar();
+        }}
+        function selectUnresolved() {{
+            getCheckboxes().forEach(cb => cb.checked = true);
+            document.getElementById('select-all').checked = true;
+            updateBatchBar();
+        }}
+        function clearSelection() {{
+            getCheckboxes().forEach(cb => cb.checked = false);
+            document.getElementById('select-all').checked = false;
+            updateBatchBar();
+        }}
+        // 行内 checkbox 变化时更新顶部栏
+        document.addEventListener('change', e => {{
+            if (e.target.classList.contains('task-cb')) updateBatchBar();
+        }});
+        async function batchResolve() {{
+            const ids = getCheckedIds();
+            if (ids.length === 0) return alert('请先选择任务');
+            if (!confirm(`确定要标记 ${{ids.length}} 条任务的告警为已恢复吗？`)) return;
+            const reason = prompt("请输入您的姓名（用于记录），留空则记为 manual：") || "manual";
+            try {{
+                const resp = await fetch('/api/tasks/batch/resolve', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{task_ids: ids, resolved_by: reason}})
+                }});
+                const data = await resp.json();
+                alert(`✅ 处理完成：成功 ${{data.resolved}} / ${{data.total}}，跳过 ${{data.already_resolved}}`);
+                location.reload();
+            }} catch (e) {{
+                alert('请求失败：' + e.message);
+            }}
+        }}
+    </script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -425,6 +499,42 @@ async def resolve_task(task_id: str, body: dict = None):
         return {"msg": "already_resolved", "task_id": task_id}
 
     return {"msg": "ok", "task_id": task_id}
+
+
+@router.post("/batch/resolve", response_class=JSONResponse)
+async def batch_resolve(body: dict):
+    """批量标记任务告警已恢复。
+
+    Body:
+    - task_ids: ["OPS-...", "OPS-..."]
+    - resolved_by: 标记人（可选，默认 "manual"）
+    """
+    task_ids = body.get("task_ids") or []
+    resolved_by = body.get("resolved_by") or "manual"
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="task_ids 不能为空")
+
+    success_count = 0
+    skipped = []
+    not_found = []
+    for tid in task_ids:
+        if not get_task(tid):
+            not_found.append(tid)
+            continue
+        if mark_alert_resolved(tid, resolved_by=resolved_by):
+            success_count += 1
+        else:
+            skipped.append(tid)
+
+    return {
+        "msg": "ok",
+        "total": len(task_ids),
+        "resolved": success_count,
+        "already_resolved": len(skipped),
+        "not_found": len(not_found),
+        "skipped_ids": skipped,
+        "not_found_ids": not_found,
+    }
 
 
 @router.post("/{task_id}/cancel", response_class=JSONResponse)

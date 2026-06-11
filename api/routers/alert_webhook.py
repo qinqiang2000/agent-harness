@@ -373,14 +373,19 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
             except (ValueError, TypeError, AttributeError):
                 resolved_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
 
-            # 自动标记对应任务单为已恢复
+            # 自动标记对应任务单为已恢复（所有匹配的未恢复任务一起标记）
             from api.services import task_store
-            active_task = task_store.find_active_alert_task(alert_type, ip)
+            active_tasks = task_store.find_active_alert_tasks(alert_type, ip)
             task_link = ""
-            if active_task:
-                task_store.mark_alert_resolved(active_task["id"], resolved_by="alertmanager")
+            if active_tasks:
+                for t in active_tasks:
+                    task_store.mark_alert_resolved(t["id"], resolved_by="alertmanager")
+                logger.info(f"Auto-resolved {len(active_tasks)} task(s) for {alert_type} on {ip}")
+                # 链接指向最新一条（list 已按时间倒序）
+                latest = active_tasks[0]
                 service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
-                task_link = f"\n任务单: {service_base_url}/api/tasks/{active_task['id']}"
+                task_link = f"\n关联任务单: {len(active_tasks)} 条已自动恢复"
+                task_link += f"\n最新: {service_base_url}/api/tasks/{latest['id']}"
 
             recovery_msg = (
                 f"✅ 【告警已恢复】\n"

@@ -335,21 +335,30 @@ def mark_alert_resolved(task_id: str, resolved_by: str = "manual") -> bool:
 
 
 def find_active_alert_task(alert_type: str, target: str) -> Optional[dict]:
-    """查找指定告警类型+目标的最近未恢复任务（用于 Alertmanager 自动标记）。
+    """查找指定告警类型+目标的最近未恢复任务（向后兼容用，建议改用 find_active_alert_tasks）。"""
+    tasks = find_active_alert_tasks(alert_type, target, limit=1)
+    return tasks[0] if tasks else None
+
+
+def find_active_alert_tasks(alert_type: str, target: str, limit: int = 100) -> list:
+    """查找指定告警类型+目标的所有未恢复任务（按创建时间倒序）。
 
     target 通常是 IP，会模糊匹配 task.target 字段。
+    同时按 alert_type 关键词过滤，避免不同告警类型互相误标。
     """
     with _get_db() as conn:
-        row = conn.execute("""
+        # task.target 形如 "磁盘空间不足 - 172.31.36.49"，同时包含告警类型和 IP
+        rows = conn.execute("""
             SELECT * FROM tasks
             WHERE task_type = 'ops-diagnosis'
               AND target LIKE ?
+              AND target LIKE ?
               AND alert_resolved = 0
-              AND status = 'completed'
+              AND status IN ('completed', 'failed')
             ORDER BY created_at DESC
-            LIMIT 1
-        """, (f"%{target}%",)).fetchone()
-        return _row_to_dict(row) if row else None
+            LIMIT ?
+        """, (f"%{alert_type}%", f"%{target}%", limit)).fetchall()
+        return [_row_to_dict(row) for row in rows]
 
 
 def get_stats() -> dict:
