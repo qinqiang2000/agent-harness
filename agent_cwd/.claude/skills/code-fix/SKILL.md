@@ -1,42 +1,44 @@
 ---
 name: code-fix
 description: >-
-  仅在 issue-diagnosis 已输出【根因分析】且结论明确为代码问题之后触发，可由 issue-diagnosis 自动调用或用户主动要求。
-  触发的必要前提：当前对话中已存在 issue-diagnosis 输出的【根因分析】块，且根因指向代码问题。
-  触发词：用户说"帮我修复"、"自动修复"、"fix一下"、"修代码"、"提PR"、"帮我改"、"修一下"；或由 issue-diagnosis 在诊断结论为代码问题时自动调用。
-  禁止触发的场景：用户只提供了 traceId、报错信息、或描述了问题但尚未经过 issue-diagnosis 诊断——这些场景应由 issue-diagnosis 处理。
+  代码自动修复 skill。接收诊断结论（含根因描述和服务名）后，自动完成源码定位、分支创建、代码修复和 push。
+  触发方式：1）issue-diagnosis 诊断为代码问题后自动调用；2）用户说"帮我修复"、"fix"、"修代码"、"提PR"等。
+  输入格式："{服务名}:{根因一句话摘要}" 或直接传入 issue-diagnosis 的完整诊断结论文本。
+  禁止触发的场景：用户只提供 traceId 或报错信息但尚未经过诊断——这些场景应由 issue-diagnosis 处理。
 ---
 
 # 代码自动修复
-
-**执行前提**：issue-diagnosis 已完成诊断，根因明确为代码问题。
 
 **⚠️ 全程步骤静默执行，禁止在输出中暴露步骤标题（如"Step 1"等）。只在最后一步输出修复结论。**
 
 ---
 
-## Step 1：前提检查 + 提取诊断上下文
+## Step 1：提取诊断上下文
 
-**⚠️ 硬性前提检查（第一步必须执行，不满足则立即终止）**：
+从以下两个来源之一提取根因信息（优先级从高到低）：
 
-检查当前对话中是否存在 issue-diagnosis 输出的【根因分析】块。判断标准：
-- 对话历史中有包含「【根因分析】」字样的消息
-- 且根因内容指向代码问题（含"代码"、"Feign"、"未传"、"逻辑"、"注入"、"参数"、"服务名"等字样）
+**来源A：直接传入的诊断摘要**（由 issue-diagnosis 或 handler 层直接传入）
+- 格式为 `{服务名}:{根因描述}` 或完整的诊断结论文本
+- 直接从中提取 `repoName`、`rootCause`、`fixSuggestion`
 
-**不满足时**：立即用 `AskUserQuestion` 反问，禁止继续执行后续任何步骤：
-> 未找到 issue-diagnosis 的诊断结论。请先描述报错信息或 traceId，由诊断流程定位根因后，再执行代码修复。
+**来源B：对话历史中的诊断结论**（用户在 Chat UI 多轮对话时）
+- 从对话历史中找包含「【根因分析】」的消息
+- 从【根因分析】和【证据】中提取信息
 
-**满足后**，从【根因分析】和【证据】中提取：
+**两个来源都没有根因信息时**：用 `AskUserQuestion` 反问：
+> 请提供诊断结论或根因描述，以便执行代码修复。
+
+**提取后构建以下变量**：
 
 - `repoName`：需修复的服务仓库名（从根因描述中的服务名推断，查 `references/service-repo-map.md` 映射）
 - `projectId`：GitLab 仓库路径（如 `piaozone/input/api-invoice-recognition`）
 - `sessionSuffix`：取当前时间戳 `$(date +%H%M%S)`
-- `localDir`：`/tmp/gitlab/fix/{repoName}_{sessionSuffix}`（**注意：路径前缀是 `/tmp/gitlab/fix/` 而不是 `/tmp/gitlab/src/`**，与 issue-diagnosis 的源码查阅目录完全隔离，避免并发修改冲突）
-- `targetFile`：需修复的源码文件路径（若【证据】中有 `源码: {ClassName}.java:{行号}` 则直接使用；否则进入 Step 1.5 定位）
+- `localDir`：`/tmp/gitlab/fix/{repoName}_{sessionSuffix}`（前缀 `/tmp/gitlab/fix/`，与 issue-diagnosis 的 `/tmp/gitlab/src/` 完全隔离）
+- `targetFile`：需修复的源码文件路径（若有 `源码: {ClassName}.java:{行号}` 则直接使用；否则进入 Step 1.5 定位）
 - `rootCause`：根因描述
 - `fixSuggestion`：解决建议
 
-**禁止重新查询 ELK 日志或重走诊断流程**，所有信息只从对话历史提取或在本地 clone 目录中查找。
+**禁止重新查询 ELK 日志或重走诊断流程**。
 
 ---
 

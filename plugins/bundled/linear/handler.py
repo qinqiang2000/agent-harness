@@ -325,6 +325,16 @@ class LinearSessionHandler:
                 exc_info=True,
             )
 
+        # 诊断结论为代码问题时自动触发 code-fix（orchestration 层强制调用，不依赖 LLM 判断）
+        if not error_text and result_text and self._is_code_issue(result_text):
+            await self._trigger_code_fix(
+                session_id=session_id,
+                result_text=result_text,
+                workspace_id=workspace_id,
+                trace_id=trace_id,
+                client=client,
+            )
+
         logger.info(f"[{trace_id}][Linear] Completed: session={session_id}")
 
     async def _set_issue_in_progress(
@@ -379,3 +389,101 @@ class LinearSessionHandler:
             return self.token_store.get_token(workspace_id)
         ws_id = self.token_store.get_first_workspace_id()
         return self.token_store.get_token(ws_id) if ws_id else None
+
+    def _is_code_issue(self, result_text: str) -> bool:
+        """判断诊断结论是否为代码问题，用于决定是否自动触发 code-fix。
+
+        Args:
+            result_text: issue-diagnosis 输出的诊断结论文本
+
+        Returns:
+            True 表示是代码问题，需触发修复
+        """
+        if "【根因分析】" not in result_text:
+            return False
+        code_keywords = [
+            "Feign",
+            "未传",
+            "参数缺失",
+            "逻辑",
+            "NPE",
+            "空指针",
+            "堆栈",
+            "异常类",
+            "代码",
+            "MissingServlet",
+            "NullPointer",
+            "ClassCast",
+            "IndexOutOf",
+            "StackOverflow",
+            "字段赋值",
+            "枚举",
+            "注入",
+            "源码",
+        ]
+        return any(kw in result_text for kw in code_keywords)
+
+    async def _trigger_code_fix(
+        self,
+        session_id: str,
+        result_text: str,
+        workspace_id: str,
+        trace_id: str,
+        client: "LinearClient",
+    ) -> None:
+        """诊断为代码问题后，自动发起 code-fix 调用并将结果回写 Linear。
+
+        Args:
+            session_id: Linear AgentSession ID
+            result_text: issue-diagnosis 的诊断结论，作为 code-fix 的上下文
+            workspace_id: Linear workspace ID
+            trace_id: 追踪 ID
+            client: LinearClient 实例
+        """
+        logger.info(f"[{trace_id}][Linear] Code issue detected, triggering code-fix")
+        try:
+            await client.send_thought(session_id, "检测到代码问题，正在自动修复...")
+        except Exception:
+            pass
+
+        fix_result = ""
+        fix_error = ""
+        try:
+            from api.models.requests import QueryRequest
+
+            # 将诊断结论作为上下文，指定使用 code-fix skill
+            request = QueryRequest(
+                prompt=result_text,
+                skill="code-fix",
+                language="中文",
+            )
+            async for event in self.agent_service.process_query(request):
+                event_type = event.get("type") or event.get("event", "")
+                data = event.get("data", {})
+                if isinstance(data, str):
+                    import json
+
+                    try:
+                        data = json.loads(data)
+                    except Exception:
+                        data = {}
+                if event_type == "result":
+                    fix_result = data.get("result", "") or data.get("content", "")
+                elif event_type == "error":
+                    fix_error = data.get("error", "") or str(data)
+        except Exception as e:
+            fix_error = str(e)
+            logger.error(
+                f"[{trace_id}][Linear] code-fix AgentService call failed: {e}",
+                exc_info=True,
+            )
+
+        try:
+            if fix_error:
+                await client.send_response(session_id, f"自动修复失败：{fix_error}")
+            elif fix_result:
+                await client.send_response(session_id, fix_result)
+        except Exception:
+            logger.warning(
+                f"[{trace_id}][Linear] Failed to send code-fix result", exc_info=True
+            )
