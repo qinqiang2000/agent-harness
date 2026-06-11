@@ -3,7 +3,7 @@
 import json
 import os
 import re
-from typing import Dict
+from typing import Any, Dict
 
 
 # ── Linear 状态名 → 是否「审核通过（进入开发）」────────────────────────────
@@ -161,7 +161,7 @@ def _extract(pattern: str, text: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def parse_developer_output(text: str) -> Dict[str, str]:
+def parse_developer_output(text: str) -> Dict[str, Any]:
     """从 developer skill 输出解析状态、仓库、分支、MR URL、测试路径。
 
     【仓库】兼容单值（piaozone/base/api-auth）和 JSON 数组（["a","b"]）。
