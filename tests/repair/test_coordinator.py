@@ -594,7 +594,7 @@ async def test_analyze_handler_exception_rolls_back_to_building(store, fake_line
     await coord.analyze_report("issue-1")
 
 
-@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_analyze_report_timeout_rejects_without_analyzer(tmp_path):
     from plugins.bundled.repair.coordinator import RepairCoordinator
     from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
