@@ -85,9 +85,12 @@ class YunzhijiaHandler:
     async def process_message(self, msg: YZJRobotMsg, yzj_token: str, skill: Optional[str] = None):
         """处理云之家消息"""
         yzj_session_id = msg.sessionId
-        effective_skill = skill or self.default_skill
+        # skill 优先级：URL 参数 > 让 agent 自动选（None 时不指定 skill，由 LLM 根据 prompt 自己挑）
+        # default_skill 仅作为最终 fallback（极端兜底）
+        effective_skill = skill if skill else None
+        log_skill = effective_skill or "auto-select"
         logger.info(f"[YZJ] Received message: {msg.model_dump()}")
-        logger.info(f"[YZJ] Processing: session={yzj_session_id}, skill={effective_skill}, content={msg.content[:50]}...")
+        logger.info(f"[YZJ] Processing: session={yzj_session_id}, skill={log_skill}, content={msg.content[:50]}...")
 
         try:
             # 0. 清理过期会话
@@ -133,7 +136,7 @@ class YunzhijiaHandler:
                 # 创建任务工单
                 task = task_store.create_task(
                     creator=msg.operatorName or "unknown",
-                    task_type=effective_skill,
+                    task_type=effective_skill or "auto",
                     target=msg.content[:100] if msg.content else "",
                     content=msg.content or "",
                 )
