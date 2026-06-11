@@ -73,6 +73,7 @@ class RepairCoordinator:
         linear_client_factory: Callable,
         fix_retry_limit: int = 3,
         rediagnose_limit: int = 2,
+        mr_builder=None,
     ):
         self.agent_service = agent_service
         self.store = store
@@ -80,6 +81,10 @@ class RepairCoordinator:
         self._linear_factory = linear_client_factory
         self.N = fix_retry_limit
         self.M = rediagnose_limit
+        if mr_builder is None:
+            from plugins.bundled.repair.mr_builder import MRBuilder
+            mr_builder = MRBuilder()
+        self.mr_builder = mr_builder
 
     def _linear(self, workspace_id: str):
         return self._linear_factory(workspace_id)
@@ -189,6 +194,7 @@ class RepairCoordinator:
         branch = run.branch or f"fix/{run.linear_identifier}"
 
         prompt = prompts.build_developer_prompt(
+            issue_id=run.linear_issue_id,
             identifier=run.linear_identifier,
             root_cause=run.root_cause,
             evidence=run.evidence or run.last_report or "（见 Linear 单描述）",
@@ -213,6 +219,7 @@ class RepairCoordinator:
         except Exception:
             logger.error("[Repair] developer agent failed: %s", linear_issue_id, exc_info=True)
             self.store.update(linear_issue_id, stage=on_agent_failure)
+            self.store.release_repos(linear_issue_id)  # 开发异常：还锁（若已占）
             # agent 抛异常：人工单落 canceled，审核单退回 backlog
             if on_agent_failure == Stage.REJECTED:
                 await self._set_issue_linear_state(client, linear_issue_id, "canceled")
@@ -228,11 +235,23 @@ class RepairCoordinator:
 
         parsed = prompts.parse_developer_output(result_text)
         new_branch = parsed["branch"] or branch
-        mr_url = parsed["mr_url"]
         summary = parsed["summary"]
         # 人工单 repo 可能留空，由 agent 查表解析后在输出里回填【仓库】
         resolved_repo = parsed["repo"] or run.repo
         session_id_for_store = claude_session_id
+
+        # 锁冲突：developer 申请 repo 锁被挡 → 不构建，退回初始态，人工重推。
+        if parsed["status"] == "blocked":
+            logger.info("[Repair] developer blocked by repo lock: %s", linear_issue_id)
+            self.store.release_repos(linear_issue_id)  # 防御：被挡时本单未占到锁，幂等
+            self.store.update(linear_issue_id, stage=Stage.PENDING_REVIEW)
+            await self._set_issue_linear_state(client, linear_issue_id, "backlog")
+            await notify(
+                "🔒 涉及的服务正被其他修复单占用，已退回。请待其完成后重新触发。\n\n"
+                f"{result_text}",
+                final=True,
+            )
+            return
 
         # developer 未真正完成（卡批准/没按格式收尾/中途放弃）→ 不触发构建，
         # 回写 agent 实际输出 + 落可见终态 REJECTED，等人工介入。
@@ -244,6 +263,7 @@ class RepairCoordinator:
                 linear_issue_id,
             )
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            self.store.release_repos(linear_issue_id)  # 开发失败：还锁
             await self._set_issue_linear_state(client, linear_issue_id, "canceled")
             await notify(
                 "🚫 自动修复未完成（开发阶段未产出有效修复/未推分支），已转人工。\n\n"
@@ -252,21 +272,22 @@ class RepairCoordinator:
             )
             return
 
-        build_id = self.jenkins.trigger_build(repo=resolved_repo, branch=new_branch)
+        resolved_repos = parsed["repos"] or ([resolved_repo] if resolved_repo else [])
+        build_id = self.jenkins.trigger_build(repos=resolved_repos, branch=new_branch)
 
         self.store.update(
             linear_issue_id,
             stage=Stage.BUILDING,
             repo=resolved_repo,
+            repos=json.dumps(resolved_repos, ensure_ascii=False),
             branch=new_branch,
-            mr_url=mr_url,
             develop_session_id=session_id_for_store or "",
             jenkins_build_id=build_id,
         )
 
         result_msg = (
-            f"已自动开发并建 MR：{mr_url or '(未解析到 MR 链接)'}\n"
-            f"分支：{new_branch}\n构建已触发，等待测试报告。"
+            f"已完成代码修复并推送分支：{new_branch}\n"
+            f"构建+测试已触发，等待测试报告。MR 将在测试通过后自动创建。"
         )
         if summary:
             result_msg += f"\n\n修复摘要：{summary}"
@@ -282,6 +303,19 @@ class RepairCoordinator:
         report = self.jenkins.get_report(run.jenkins_build_id)
         if report is None:
             logger.info("[Repair] report not ready: %s", linear_issue_id)
+            return
+
+        if report.get("status") == "timeout":
+            client = self._linear(run.workspace_id)
+            self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            self.store.release_repos(linear_issue_id)
+            await self._set_issue_linear_state(client, linear_issue_id, "canceled")
+            await client.create_comment(
+                linear_issue_id,
+                "⚠️ 构建+测试超时（超过配置时限未完成），已转人工。\n"
+                "请检查 Jenkins/部署环境后，在本单评论「重跑」重新触发。",
+            )
+            logger.warning("[Repair] build timeout, rejected: %s", linear_issue_id)
             return
 
         self.store.update(linear_issue_id, stage=Stage.ANALYZING)
@@ -306,17 +340,32 @@ class RepairCoordinator:
         verdict = parsed["verdict"]
         run = self.store.get(linear_issue_id)  # 重新读最新
 
-        if verdict == "resolved":
-            await self._handle_resolved(run, parsed["raw"])
-        elif verdict == "code_error":
-            await self._handle_code_error(run, parsed["raw"])
-        elif verdict == "root_cause_error":
-            await self._handle_root_cause_error(run, parsed["raw"])
-        elif verdict == "missing_dependency":
-            await self._handle_missing_dependency(run, parsed["raw"])
+        try:
+            if verdict == "resolved":
+                await self._handle_resolved(run, parsed["raw"])
+            elif verdict == "code_error":
+                await self._handle_code_error(run, parsed["raw"])
+            elif verdict == "root_cause_error":
+                await self._handle_root_cause_error(run, parsed["raw"])
+            elif verdict == "missing_dependency":
+                await self._handle_missing_dependency(run, parsed["raw"])
+        except Exception:
+            logger.error(
+                "[Repair] verdict handler failed (%s), rolling back to BUILDING: %s",
+                verdict, linear_issue_id, exc_info=True,
+            )
+            self.store.update(linear_issue_id, stage=Stage.BUILDING)
+            return
 
     async def _handle_resolved(self, run: RepairRun, raw: str) -> None:
         client = self._linear(run.workspace_id)
+        # 测试通过，现在才建 MR（git push -o merge_request.create）
+        title = f"fix({run.linear_identifier}): 自动修复"
+        mr_url = self.mr_builder.build_mr(
+            identifier=run.linear_identifier, branch=run.branch, title=title
+        )
+        self.store.update(run.linear_issue_id, mr_url=mr_url)
+
         issue = await client.get_issue(run.linear_issue_id)
         team_id = issue.get("team", {}).get("id", "")
         done_id = await self._state_id_by_type(client, team_id, "completed") if team_id else None
@@ -324,9 +373,11 @@ class RepairCoordinator:
             await client.update_issue(run.linear_issue_id, state_id=done_id)
         await client.create_comment(
             run.linear_issue_id,
-            f"✅ Bug 已修复并通过测试。\n分支：{run.branch}\nMR：{run.mr_url}\n\n{raw}",
+            f"✅ Bug 已修复并通过测试。\n分支：{run.branch}\n"
+            f"MR（待人工合并到 test）：{mr_url or '(建 MR 失败，请人工检查工作目录)'}\n\n{raw}",
         )
         self.store.update(run.linear_issue_id, stage=Stage.RESOLVED)
+        self.store.release_repos(run.linear_issue_id)  # 建完 MR 即释放锁
 
     async def _handle_code_error(self, run: RepairRun, raw: str) -> None:
         count = self.store.increment_fix_retry(run.linear_issue_id)
@@ -334,6 +385,7 @@ class RepairCoordinator:
             await self._reject(run, f"代码错重修达上限 N={self.N}，转人工。\n{raw}")
             return
         prompt = prompts.build_developer_prompt(
+            issue_id=run.linear_issue_id,
             identifier=run.linear_identifier,
             root_cause=run.root_cause,
             evidence="（见上一轮失败报告）",
@@ -363,12 +415,11 @@ class RepairCoordinator:
                 f"Agent 最后输出：\n{result_text}",
             )
             return
-        mr_url = parsed["mr_url"] or run.mr_url
-        build_id = self.jenkins.trigger_build(repo=run.repo, branch=run.branch)
+        repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
+        build_id = self.jenkins.trigger_build(repos=repos, branch=run.branch)
         self.store.update(
             run.linear_issue_id,
             stage=Stage.BUILDING,
-            mr_url=mr_url,
             develop_session_id=session_id or run.develop_session_id,
             jenkins_build_id=build_id,
         )
@@ -386,6 +437,7 @@ class RepairCoordinator:
         # 回退到 backlog，让用户重新触发诊断
         await self._set_issue_linear_state(client, run.linear_issue_id, "backlog")
         self.store.update(run.linear_issue_id, stage=Stage.PENDING_REVIEW)
+        self.store.release_repos(run.linear_issue_id)
 
     async def _handle_missing_dependency(self, run: RepairRun, raw: str) -> None:
         client = self._linear(run.workspace_id)
@@ -404,6 +456,7 @@ class RepairCoordinator:
         # issue 推回 backlog，等依赖子单解决后人工重新触发
         await self._set_issue_linear_state(client, run.linear_issue_id, "backlog")
         self.store.update(run.linear_issue_id, stage=Stage.BLOCKED)
+        self.store.release_repos(run.linear_issue_id)
 
     async def _reject(self, run: RepairRun, reason: str) -> None:
         client = self._linear(run.workspace_id)
@@ -414,10 +467,11 @@ class RepairCoordinator:
             await client.update_issue(run.linear_issue_id, state_id=cancel_id)
         await client.create_comment(run.linear_issue_id, f"🚫 产研退回：{reason}")
         self.store.update(run.linear_issue_id, stage=Stage.REJECTED)
+        self.store.release_repos(run.linear_issue_id)
 
     # ── 轮询入口（scheduler 调用）────────────────────────────────────────
     async def poll_building_runs(self) -> None:
-        """扫描所有 building 的 run，逐个尝试分析报告。"""
+        """扫所有 building 的 run 尝试分析报告；并 reconcile 陈旧 repo 锁。"""
         for run in self.store.list_by_stage(Stage.BUILDING):
             try:
                 await self.analyze_report(run.linear_issue_id)
@@ -427,6 +481,21 @@ class RepairCoordinator:
                     run.linear_issue_id,
                     exc_info=True,
                 )
+        self._reconcile_locks()
+
+    _ACTIVE_STAGES = (Stage.DEVELOPING, Stage.BUILDING, Stage.ANALYZING)
+
+    def _reconcile_locks(self) -> None:
+        """回收 holder 已不存在或已不在活跃态的陈旧锁，防 run 崩溃焊死 repo。"""
+        for lock in self.store.list_locks():
+            holder = lock["holder_issue_id"]
+            run = self.store.get(holder)
+            if run is None or run.stage not in self._ACTIVE_STAGES:
+                logger.info(
+                    "[Repair] reconcile: releasing stale lock repo=%s holder=%s",
+                    lock["repo"], holder,
+                )
+                self.store.release_repos(holder)
 
 
 # ── module-level singleton ─────────────────────────────────────────────

@@ -64,17 +64,20 @@ class FakeLinearClient:
 
 
 class FakeJenkins:
-    def __init__(self, ready=True):
+    def __init__(self, ready=True, timeout=False):
         self.ready = ready
-        self.triggered = []
+        self.timeout = timeout
+        self.triggered = []  # list of (repos, branch)
 
-    def trigger_build(self, repo, branch):
-        self.triggered.append((repo, branch))
+    def trigger_build(self, repos, branch):
+        self.triggered.append((repos, branch))
         return "build-xyz"
 
     def get_report(self, build_id):
         if not self.ready:
             return None
+        if self.timeout:
+            return {"status": "timeout", "summary": "构建+测试超过配置时限未完成，判定超时", "failures": []}
         return {"status": "success", "summary": "3 passed", "failures": []}
 
 

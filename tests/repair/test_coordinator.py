@@ -16,7 +16,7 @@ from plugins.bundled.repair.store import RepairRun, Stage
 from tests.repair.conftest import FakeAgentService, FakeJenkins
 
 
-def _make_coordinator(store, fake_linear, agent_results, jenkins_ready=True):
+def _make_coordinator(store, fake_linear, agent_results, jenkins_ready=True, mr_builder=None):
     jenkins = FakeJenkins(ready=jenkins_ready)
     agent = FakeAgentService(agent_results)
     coord = RepairCoordinator(
@@ -26,8 +26,19 @@ def _make_coordinator(store, fake_linear, agent_results, jenkins_ready=True):
         linear_client_factory=lambda ws: fake_linear,
         fix_retry_limit=3,
         rediagnose_limit=2,
+        mr_builder=mr_builder or _FakeMRBuilder(),
     )
     return coord, agent, jenkins
+
+
+class _FakeMRBuilder:
+    def __init__(self, url="http://mr/built"):
+        self.url = url
+        self.calls = []
+
+    def build_mr(self, identifier, branch, title):
+        self.calls.append((identifier, branch, title))
+        return self.url
 
 
 def _seed_pending(store, stage=Stage.PENDING_REVIEW):
@@ -55,10 +66,45 @@ async def test_start_development_happy_path(store, fake_linear):
     run = store.get("issue-1")
     assert run.stage == Stage.BUILDING
     assert run.branch == "fix/ENG-1"
-    assert run.mr_url == "http://mr/1"
     assert run.develop_session_id == "claude-sess-1"
-    assert jenkins.triggered == [("ai-agent/foo", "fix/ENG-1")]
+    assert jenkins.triggered == [(["ai-agent/foo"], "fix/ENG-1")]
     assert run.jenkins_build_id == "build-xyz"
+
+
+@pytest.mark.unit
+async def test_develop_blocked_releases_lock_and_returns_to_pending(store, fake_linear):
+    _seed_pending(store)
+    store.acquire_repos("other-issue", "ENG-9", ["ai-agent/foo"])
+    blocked_output = "【状态】阻塞\n【说明】涉及服务 ai-agent/foo 正被 ENG-9 占用"
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [blocked_output])
+
+    await coord.start_development("issue-1")
+
+    run = store.get("issue-1")
+    assert run.stage == Stage.PENDING_REVIEW
+    assert jenkins.triggered == []
+    assert any(kw["state_id"] == "s-backlog" for _, kw in fake_linear.updated)
+    bodies = [b for _, b in fake_linear.comments]
+    assert any("ENG-9" in b for b in bodies)
+    holders = {r["holder_issue_id"] for r in store.list_locks()}
+    assert holders == {"other-issue"}
+
+
+@pytest.mark.unit
+async def test_develop_completed_does_not_build_mr_in_dev_phase(store, fake_linear):
+    _seed_pending(store)
+    dev_output = "【状态】完成\n【分支】fix/ENG-1\n【复现测试】FooTest.java"
+    fake_mr = _FakeMRBuilder()
+    coord, agent, jenkins = _make_coordinator(store, fake_linear, [dev_output], mr_builder=fake_mr)
+
+    await coord.start_development("issue-1")
+
+    run = store.get("issue-1")
+    assert run.stage == Stage.BUILDING
+    assert jenkins.triggered == [(["ai-agent/foo"], "fix/ENG-1")]
+    assert fake_mr.calls == []
+    bodies = [b for _, b in fake_linear.comments]
+    assert not any("merge_request" in b.lower() for b in bodies)
 
 
 @pytest.mark.unit
@@ -249,7 +295,7 @@ async def test_develop_completed_status_triggers_build(store, fake_linear):
 
     run = store.get("issue-1")
     assert run.stage == Stage.BUILDING
-    assert jenkins.triggered == [("ai-agent/foo", "fix/ENG-1")]
+    assert jenkins.triggered == [(["ai-agent/foo"], "fix/ENG-1")]
 
 
 @pytest.mark.unit
@@ -304,9 +350,8 @@ async def test_start_manual_repair_happy_path(store, fake_linear):
     run = store.get("manual-1")
     assert run.stage == Stage.BUILDING
     assert run.branch == "fix/ENG-M1"
-    assert run.mr_url == "http://mr/m1"
     assert run.develop_session_id == "claude-sess-1"
-    assert jenkins.triggered == [("ai-agent/foo", "fix/ENG-M1")]
+    assert jenkins.triggered == [(["ai-agent/foo"], "fix/ENG-M1")]
     # developer 用的是 bug-fix-developer skill
     assert agent.calls[-1].skill == "bug-fix-developer"
 
@@ -337,7 +382,7 @@ async def test_start_manual_repair_resolves_repo_from_agent_output(store, fake_l
     run = store.get("manual-2")
     assert run.repo == "piaozone/elc-integration/api-elc-invoice-imputation"
     assert jenkins.triggered == [
-        ("piaozone/elc-integration/api-elc-invoice-imputation", "fix/ENG-M2")
+        (["piaozone/elc-integration/api-elc-invoice-imputation"], "fix/ENG-M2")
     ]
 
 
@@ -356,7 +401,7 @@ async def test_start_manual_repair_with_session_streams_to_session(store, fake_l
     # 中间过程进会话 thought
     assert any(sid == "sess-9" for sid, _ in fake_linear.thoughts)
     # 最终结果进会话 response（含 MR）
-    assert any(sid == "sess-9" and "http://mr/m1" in body for sid, body in fake_linear.responses)
+    assert any(sid == "sess-9" and "fix/ENG-M1" in body for sid, body in fake_linear.responses)
     # 不再发 issue 评论
     assert fake_linear.comments == []
 
@@ -375,6 +420,88 @@ async def test_start_manual_repair_without_session_uses_comment(store, fake_line
 
 
 @pytest.mark.unit
+async def test_resolved_builds_mr_and_releases_lock(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.update("issue-1", jenkins_build_id="build-xyz", branch="fix/ENG-1")
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])  # dev 阶段已占锁
+    fake_mr = _FakeMRBuilder(url="http://mr/final/1")
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear, ["【判定】已解决\n【依据】全绿\n【后续动作】无"], mr_builder=fake_mr
+    )
+
+    await coord.analyze_report("issue-1")
+
+    run = store.get("issue-1")
+    assert run.stage == Stage.RESOLVED
+    assert run.mr_url == "http://mr/final/1"
+    assert fake_mr.calls == [("ENG-1", "fix/ENG-1", fake_mr.calls[0][2])]
+    assert "fix(ENG-1)" in fake_mr.calls[0][2]
+    assert store.list_locks() == []
+    bodies = [b for _, b in fake_linear.comments]
+    assert any("http://mr/final/1" in b for b in bodies)
+
+
+@pytest.mark.unit
+async def test_code_error_retry_keeps_lock(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.update("issue-1", develop_session_id="claude-sess-1", branch="fix/ENG-1")
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear,
+        [
+            "【判定】代码错\n【依据】NPE 仍在\n【后续动作】补判空",
+            "【状态】完成\n【分支】fix/ENG-1",
+        ],
+    )
+
+    await coord.analyze_report("issue-1")
+
+    holders = {r["holder_issue_id"] for r in store.list_locks()}
+    assert holders == {"issue-1"}
+
+
+@pytest.mark.unit
+async def test_root_cause_error_releases_lock(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear, ["【判定】根因错\n【依据】根因站不住\n【后续动作】回诊断"]
+    )
+
+    await coord.analyze_report("issue-1")
+
+    assert store.list_locks() == []
+
+
+@pytest.mark.unit
+async def test_missing_dependency_releases_lock(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear, ["【判定】漏依赖\n【依据】需改上游\n【后续动作】建子单：修上游 X"]
+    )
+
+    await coord.analyze_report("issue-1")
+
+    assert store.list_locks() == []
+
+
+@pytest.mark.unit
+async def test_reject_releases_lock(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.update("issue-1", rediagnose_count=1)
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear, ["【判定】根因错\n【依据】x\n【后续动作】y"]
+    )
+
+    await coord.analyze_report("issue-1")
+
+    assert store.get("issue-1").stage == Stage.REJECTED
+    assert store.list_locks() == []
+
+
+@pytest.mark.unit
 async def test_start_manual_repair_missing_run_is_noop(store, fake_linear):
     coord, agent, _ = _make_coordinator(store, fake_linear, ["unused"])
     await coord.start_manual_repair("does-not-exist")  # 不抛错
@@ -390,6 +517,39 @@ async def test_start_manual_repair_skips_when_already_building(store, fake_linea
     await coord.start_manual_repair("manual-1")
 
     assert len(agent.calls) == 0
+
+
+@pytest.mark.unit
+async def test_poll_reconciles_stale_lock_when_holder_terminal(store, fake_linear):
+    _seed_pending(store, stage=Stage.RESOLVED)
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(store, fake_linear, [])
+
+    await coord.poll_building_runs()
+
+    assert store.list_locks() == []
+
+
+@pytest.mark.unit
+async def test_poll_reconciles_lock_when_holder_run_missing(store, fake_linear):
+    store.acquire_repos("ghost-issue", "ENG-X", ["ai-agent/bar"])
+    coord, agent, _ = _make_coordinator(store, fake_linear, [])
+
+    await coord.poll_building_runs()
+
+    assert store.list_locks() == []
+
+
+@pytest.mark.unit
+async def test_poll_keeps_lock_when_holder_active(store, fake_linear):
+    _seed_pending(store, stage=Stage.DEVELOPING)
+    store.acquire_repos("issue-1", "ENG-1", ["ai-agent/foo"])
+    coord, agent, _ = _make_coordinator(store, fake_linear, [])
+
+    await coord.poll_building_runs()
+
+    holders = {r["holder_issue_id"] for r in store.list_locks()}
+    assert holders == {"issue-1"}
 
 
 @pytest.mark.unit
@@ -415,3 +575,59 @@ async def test_start_manual_repair_agent_failure_goes_rejected_with_comment(stor
 
     assert store.get("manual-1").stage == Stage.REJECTED
     assert len(fake_linear.comments) >= 1
+
+
+@pytest.mark.unit
+async def test_analyze_handler_exception_rolls_back_to_building(store, fake_linear):
+    _seed_pending(store, stage=Stage.BUILDING)
+    store.update("issue-1", jenkins_build_id="build-xyz", branch="fix/ENG-1")
+    coord, agent, _ = _make_coordinator(
+        store, fake_linear, ["【判定】已解决\n【依据】全绿\n【后续动作】无"]
+    )
+
+    # make the resolved handler blow up (mr_builder raises)
+    class BoomMR:
+        def build_mr(self, identifier, branch, title):
+            raise RuntimeError("boom")
+    coord.mr_builder = BoomMR()
+
+    await coord.analyze_report("issue-1")
+
+
+@pytest.mark.asyncio
+async def test_analyze_report_timeout_rejects_without_analyzer(tmp_path):
+    from plugins.bundled.repair.coordinator import RepairCoordinator
+    from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
+    from tests.repair.conftest import FakeAgentService, FakeJenkins, FakeLinearClient
+    import json
+
+    store = RepairStore(str(tmp_path / "r.db"))
+    store.upsert(RepairRun(
+        linear_issue_id="issue-t",
+        linear_identifier="ENG-T",
+        workspace_id="ws-1",
+        stage=Stage.BUILDING,
+        repo="ai-agent/foo",
+        repos=json.dumps(["ai-agent/foo"]),
+        root_cause="空指针",
+        repair_plan="判空",
+        jenkins_build_id="build-xyz",
+    ))
+
+    fake_linear = FakeLinearClient()
+    agent = FakeAgentService([])  # 超时旁路不应调用 analyzer
+    coord = RepairCoordinator(
+        agent_service=agent,
+        store=store,
+        jenkins=FakeJenkins(ready=True, timeout=True),
+        linear_client_factory=lambda ws: fake_linear,
+    )
+
+    await coord.analyze_report("issue-t")
+
+    run = store.get("issue-t")
+    assert run.stage == Stage.REJECTED
+    assert len(agent.calls) == 0  # analyzer 未被调用
+    bodies = [b for _, b in fake_linear.comments]
+    assert any("超时" in b for b in bodies)
+    assert store.list_locks() == []
