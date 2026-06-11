@@ -60,9 +60,17 @@
     },
     "repair": {
       "repair_db_path": "data/repair/repair_runs.db",
+      "jenkins_builds_db_path": "data/repair/jenkins_builds.db",
       "poll_interval_seconds": 60,
       "fix_retry_limit": 3,
-      "rediagnose_limit": 2
+      "rediagnose_limit": 2,
+      "jenkins_deploy": true,
+      "autotest_run_mode": "smoke",
+      "autotest_threads": 4,
+      "build_timeout_seconds": 86400,
+      "cicd_poll_seconds": 15,
+      "autotest_poll_seconds": 30,
+      "queue_poll_seconds": 5
     }
   }
 }

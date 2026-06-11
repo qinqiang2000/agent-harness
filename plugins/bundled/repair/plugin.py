@@ -22,7 +22,9 @@ if TYPE_CHECKING:
 
 from plugins.bundled.repair import coordinator as coord_mod
 from plugins.bundled.repair.coordinator import RepairCoordinator
+from plugins.bundled.repair.jenkins_build_store import JenkinsBuildStore
 from plugins.bundled.repair.jenkins_client import JenkinsClient
+from plugins.bundled.repair.mr_builder import MRBuilder
 from plugins.bundled.repair.store import RepairStore
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,30 @@ class RepairChannelPlugin(ChannelPlugin):
         self.config = api.config
 
         store = RepairStore(_resolve(self.config.get("repair_db_path", "data/repair/repair_runs.db")))
-        jenkins = JenkinsClient(mock_ready=True)
+
+        jenkins_builds_db = _resolve(
+            self.config.get("jenkins_builds_db_path", "data/repair/jenkins_builds.db")
+        )
+        build_store = JenkinsBuildStore(jenkins_builds_db)
+
+        jenkins = JenkinsClient(
+            base_url=os.getenv("JENKINS_BASE_URL", ""),
+            user=os.getenv("JENKINS_USER", ""),
+            api_token=os.getenv("JENKINS_API_TOKEN", ""),
+            cicd_job=os.getenv("JENKINS_CICD_JOB", "cicd-pipeline"),
+            cicd_token=os.getenv("JENKINS_CICD_TOKEN", ""),
+            autotest_job=os.getenv("JENKINS_AUTOTEST_JOB", "at-automated-test"),
+            autotest_token=os.getenv("JENKINS_AUTOTEST_TOKEN", ""),
+            build_store=build_store,
+            deploy=self.config.get("jenkins_deploy", True),
+            autotest_run_mode=self.config.get("autotest_run_mode", "smoke"),
+            autotest_threads=int(self.config.get("autotest_threads", 4)),
+            build_timeout_seconds=int(self.config.get("build_timeout_seconds", 86400)),
+            cicd_poll_seconds=int(self.config.get("cicd_poll_seconds", 15)),
+            autotest_poll_seconds=int(self.config.get("autotest_poll_seconds", 30)),
+            queue_poll_seconds=int(self.config.get("queue_poll_seconds", 5)),
+        )
+        self.jenkins = jenkins
 
         coord = RepairCoordinator(
             agent_service=api.agent_service,
@@ -49,6 +74,7 @@ class RepairChannelPlugin(ChannelPlugin):
             linear_client_factory=self._linear_client_factory,
             fix_retry_limit=int(self.config.get("fix_retry_limit", 3)),
             rediagnose_limit=int(self.config.get("rediagnose_limit", 2)),
+            mr_builder=MRBuilder(),
         )
         self.store = store
         self.coordinator = coord
@@ -123,11 +149,14 @@ class RepairChannelPlugin(ChannelPlugin):
         )
         self._scheduler.start()
         logger.info("[Repair] poll scheduler started, interval=%ds", interval)
+        await self.jenkins.resume_pending_drivers()
+        logger.info("[Repair] resumed pending Jenkins drivers on start")
 
     async def on_stop(self) -> None:
         if self._scheduler:
             self._scheduler.shutdown(wait=False)
             logger.info("[Repair] poll scheduler stopped")
+        await self.jenkins.aclose()
 
 
 def register(api: "PluginAPI") -> RepairChannelPlugin:
