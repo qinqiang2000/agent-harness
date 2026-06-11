@@ -80,3 +80,86 @@ async def test_create_issue_flow_writes_store_and_prints(tmp_path, capsys):
     assert result["identifier"] == "ENG-7"
     assert result["issue_id"] == "issue-uuid"
     store.upsert.assert_called_once()
+
+
+@pytest.mark.unit
+def test_acquire_lock_success_prints_ok(tmp_path, capsys):
+    from unittest.mock import MagicMock
+    store = MagicMock()
+    store.acquire_repos.return_value = (True, "")
+    with patch.object(cli, "_make_store", return_value=store):
+        cli.acquire_lock_cmd(
+            issue_id="issue-uuid", identifier="ENG-7", repos_csv="repo/a,repo/b"
+        )
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out == {"ok": True}
+    store.acquire_repos.assert_called_once_with(
+        "issue-uuid", "ENG-7", ["repo/a", "repo/b"]
+    )
+
+
+@pytest.mark.unit
+def test_acquire_lock_blocked_prints_blocked_by(tmp_path, capsys):
+    from unittest.mock import MagicMock
+    store = MagicMock()
+    store.acquire_repos.return_value = (False, "ENG-3")
+    with patch.object(cli, "_make_store", return_value=store):
+        cli.acquire_lock_cmd(
+            issue_id="issue-uuid", identifier="ENG-7", repos_csv="repo/a"
+        )
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out == {"ok": False, "blocked_by": "ENG-3"}
+
+
+def test_retrigger_build_rejects_wrong_stage(tmp_path, monkeypatch):
+    import json
+    from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
+    db = str(tmp_path / "r.db")
+    store = RepairStore(db)
+    store.upsert(RepairRun(
+        linear_issue_id="issue-1",
+        linear_identifier="ENG-1",
+        workspace_id="ws-1",
+        stage=Stage.DEVELOPING,
+        repo="ai-agent/foo",
+        repos='["ai-agent/foo"]',
+        branch="fix/ENG-1",
+    ))
+    monkeypatch.setenv("REPAIR_DB_PATH", db)
+
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, "plugins/bundled/repair/cli.py", "retrigger-build", "--issue", "issue-1"],
+        capture_output=True, text=True,
+        cwd="/Users/jinfan/code/git-agent/agent-harness",
+    )
+    output = json.loads(result.stdout)
+    assert output["ok"] is False
+    assert "不可重跑" in output.get("error", "")
+
+
+def test_retrigger_build_rejects_empty_branch(tmp_path, monkeypatch):
+    import json
+    from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
+    db = str(tmp_path / "r.db")
+    store = RepairStore(db)
+    store.upsert(RepairRun(
+        linear_issue_id="issue-2",
+        linear_identifier="ENG-2",
+        workspace_id="ws-1",
+        stage=Stage.REJECTED,
+        repo="ai-agent/foo",
+        repos='["ai-agent/foo"]',
+        branch="",
+    ))
+    monkeypatch.setenv("REPAIR_DB_PATH", db)
+
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, "plugins/bundled/repair/cli.py", "retrigger-build", "--issue", "issue-2"],
+        capture_output=True, text=True,
+        cwd="/Users/jinfan/code/git-agent/agent-harness",
+    )
+    output = json.loads(result.stdout)
+    assert output["ok"] is False
+    assert "分支" in output.get("error", "")

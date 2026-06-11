@@ -130,16 +130,110 @@ async def create_issue_cmd(input_path: str) -> None:
     )
 
 
+def acquire_lock_cmd(issue_id: str, identifier: str, repos_csv: str) -> None:
+    """原子申请一组 repo 锁，结果打到 stdout（供 developer skill 解析）。
+
+    成功：{"ok": true}；被占：{"ok": false, "blocked_by": "<占用方单号>"}。
+    DB 异常：{"ok": false, "error": "..."}（agent 视同被挡，保守停止）。
+    """
+    repos = [r.strip() for r in repos_csv.split(",") if r.strip()]
+    store = _make_store()
+    ok, blocker = store.acquire_repos(issue_id, identifier, repos)
+    if ok:
+        print(json.dumps({"ok": True}, ensure_ascii=False))
+    else:
+        print(json.dumps({"ok": False, "blocked_by": blocker}, ensure_ascii=False))
+
+
+def _make_jenkins_client():
+    """构造真实 JenkinsClient（从 env 读配置）。"""
+    from plugins.bundled.repair.jenkins_build_store import JenkinsBuildStore
+    from plugins.bundled.repair.jenkins_client import JenkinsClient
+
+    builds_db = os.getenv("JENKINS_BUILDS_DB_PATH", "data/repair/jenkins_builds.db")
+    full = str(_ROOT / builds_db) if not os.path.isabs(builds_db) else builds_db
+    build_store = JenkinsBuildStore(full)
+
+    return JenkinsClient(
+        base_url=os.getenv("JENKINS_BASE_URL", ""),
+        user=os.getenv("JENKINS_USER", ""),
+        api_token=os.getenv("JENKINS_API_TOKEN", ""),
+        cicd_job=os.getenv("JENKINS_CICD_JOB", "cicd-pipeline"),
+        cicd_token=os.getenv("JENKINS_CICD_TOKEN", ""),
+        autotest_job=os.getenv("JENKINS_AUTOTEST_JOB", "at-automated-test"),
+        autotest_token=os.getenv("JENKINS_AUTOTEST_TOKEN", ""),
+        build_store=build_store,
+    )
+
+
+async def retrigger_build_cmd(issue_id: str) -> None:
+    """重新触发构建+测试（门禁：stage∈{BUILDING,REJECTED} 且 branch 非空）。"""
+    from plugins.bundled.repair.store import Stage
+
+    store = _make_store()
+    run = store.get(issue_id)
+    if run is None:
+        print(json.dumps({"ok": False, "error": f"找不到修复单 {issue_id}"}, ensure_ascii=False))
+        return
+    if run.stage not in (Stage.BUILDING, Stage.REJECTED):
+        print(json.dumps(
+            {"ok": False, "error": f"不可重跑：当前 stage={run.stage}，需为 building 或 rejected"},
+            ensure_ascii=False,
+        ))
+        return
+    if not run.branch:
+        print(json.dumps({"ok": False, "error": "不可重跑：分支为空，开发尚未完成"}, ensure_ascii=False))
+        return
+
+    repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
+    ok, blocker = store.acquire_repos(issue_id, run.linear_identifier, repos)
+    if not ok:
+        print(json.dumps(
+            {"ok": False, "error": f"涉及的服务正被 {blocker} 占用，请稍后重试"},
+            ensure_ascii=False,
+        ))
+        return
+
+    jenkins = _make_jenkins_client()
+    try:
+        build_id = await jenkins.trigger_build(repos=repos, branch=run.branch)
+        store.update(issue_id, stage=Stage.BUILDING, jenkins_build_id=build_id)
+        print(json.dumps({"ok": True, "build_id": build_id, "branch": run.branch}, ensure_ascii=False))
+    except Exception as e:
+        store.release_repos(issue_id)
+        print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+    finally:
+        await jenkins.aclose()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="repair pipeline CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_create = sub.add_parser("create-issue", help="建 Linear bug 单")
     p_create.add_argument("--input", required=True, help="payload JSON 文件路径")
+    p_lock = sub.add_parser("acquire-lock", help="原子申请一组 repo 锁")
+    p_lock.add_argument("--issue", required=True, help="Linear issue UUID")
+    p_lock.add_argument("--identifier", required=True, help="人类可读单号，如 ENG-7")
+    p_lock.add_argument("--repos", required=True, help="逗号分隔的 project_id 列表")
+    p_retrigger = sub.add_parser("retrigger-build", help="重新触发构建+测试")
+    p_retrigger.add_argument("--issue", required=True, help="Linear issue UUID")
     args = parser.parse_args()
 
     if args.cmd == "create-issue":
         try:
             asyncio.run(create_issue_cmd(args.input))
+        except Exception as e:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+            sys.exit(1)
+    elif args.cmd == "acquire-lock":
+        try:
+            acquire_lock_cmd(args.issue, args.identifier, args.repos)
+        except Exception as e:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+            sys.exit(1)
+    elif args.cmd == "retrigger-build":
+        try:
+            asyncio.run(retrigger_build_cmd(args.issue))
         except Exception as e:
             print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
             sys.exit(1)
