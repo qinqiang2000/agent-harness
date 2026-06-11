@@ -108,7 +108,7 @@ async def tasks_list_page(
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #333; padding: 20px; }}
-        .container {{ max-width: 1100px; margin: 0 auto; }}
+        .container {{ max-width: 1280px; margin: 0 auto; }}
         h1 {{ font-size: 22px; margin-bottom: 20px; }}
         .stats {{ display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }}
         .stat-card {{ background: #fff; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-width: 120px; text-align: center; }}
@@ -128,8 +128,9 @@ async def tasks_list_page(
         .search-form button {{ padding: 6px 16px; background: #1890ff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }}
         .search-form button:hover {{ background: #096dd9; }}
         table {{ width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
-        th {{ background: #fafafa; text-align: left; padding: 12px 16px; font-size: 13px; color: #666; border-bottom: 1px solid #f0f0f0; }}
-        td {{ padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f5f5f5; }}
+        th {{ background: #fafafa; text-align: left; padding: 12px 16px; font-size: 13px; color: #666; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }}
+        td {{ padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f5f5f5; white-space: nowrap; }}
+        td:nth-child(7) {{ white-space: normal; max-width: 220px; }}  /* 目标列允许换行 */
         tr:hover td {{ background: #f9fbff; }}
         code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 12px; }}
         .empty {{ text-align: center; padding: 40px; color: #999; }}
@@ -251,7 +252,7 @@ async def tasks_list_page(
             if (!confirm(`确定要标记 ${{ids.length}} 条任务的告警为已恢复吗？`)) return;
             const reason = prompt("请输入您的姓名（用于记录），留空则记为 manual：") || "manual";
             try {{
-                const resp = await fetch('/api/tasks/batch/resolve', {{
+                const resp = await fetch('/api/tasks/-/batch/resolve', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{task_ids: ids, resolved_by: reason}})
@@ -501,7 +502,7 @@ async def resolve_task(task_id: str, body: dict = None):
     return {"msg": "ok", "task_id": task_id}
 
 
-@router.post("/batch/resolve", response_class=JSONResponse)
+@router.post("/-/batch/resolve", response_class=JSONResponse)
 async def batch_resolve(body: dict):
     """批量标记任务告警已恢复。
 
