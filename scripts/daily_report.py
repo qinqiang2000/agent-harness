@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import bisect
 import json
+import logging
 import os
 import re
 import sys
@@ -19,6 +20,8 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from html import escape
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -333,18 +336,20 @@ async def send_to_yunzhijia(text: str) -> bool:
     """POST 到云之家 webhook，返回是否成功。"""
     import aiohttp
     payload = {"content": text}
+    logger.info("[send] 发送日报，内容长度 %d 字符", len(text))
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 WEBHOOK_URL, json=payload, timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.status == 200:
-                    return True
                 body = await resp.text()
-                print(f"[send] HTTP {resp.status}: {body}", file=sys.stderr)
+                if resp.status == 200:
+                    logger.info("[send] 发送成功，响应: %s", body[:200])
+                    return True
+                logger.error("[send] HTTP %d: %s", resp.status, body[:500])
                 return False
     except Exception as e:
-        print(f"[send] 请求失败: {e}", file=sys.stderr)
+        logger.error("[send] 请求失败: %s", e, exc_info=True)
         return False
 
 
@@ -691,6 +696,11 @@ async def generate_and_send(date_str: str, dry_run: bool = False) -> dict:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [daily_report] %(message)s",
+        handlers=[logging.StreamHandler(sys.stderr)],
+    )
     parser = argparse.ArgumentParser(description="生成并发送 issue-diagnosis 日报")
     parser.add_argument("--date", help="日期 YYYYMMDD，默认昨天")
     parser.add_argument("--dry-run", action="store_true", help="只打印，不发送")
@@ -698,7 +708,7 @@ def main():
 
     date_str = args.date or (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
     result = asyncio.run(generate_and_send(date_str, dry_run=args.dry_run))
-    print(f"结果: {result}")
+    logger.info("结果: %s", result)
 
 
 if __name__ == "__main__":
