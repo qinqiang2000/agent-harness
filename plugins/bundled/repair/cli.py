@@ -25,12 +25,16 @@ def load_payload(path: str) -> dict:
         return json.load(f)
 
 
-def build_description(root_cause: str, evidence: str, repair_plan: str) -> str:
-    """把根因/证据/修复计划拼成 Linear 单 Markdown 描述。"""
+def build_description(root_cause: str, evidence: str, repair_plan: str, affected_services: list[str] | None = None) -> str:
+    """把根因/证据/修复计划/受影响服务拼成 Linear 单 Markdown 描述。"""
+    services_section = ""
+    if affected_services:
+        services_section = f"## 受影响服务\n" + "\n".join(f"- {s}" for s in affected_services) + "\n\n"
     return (
         f"## 根因\n{root_cause}\n\n"
         f"## 证据\n{evidence}\n\n"
         f"## 修复计划\n{repair_plan}\n\n"
+        f"{services_section}"
         f"---\n_本单由 issue-diagnosis 自动诊断生成，待审核后进入自动修复流水线。_"
     )
 
@@ -102,10 +106,15 @@ async def create_issue_cmd(input_path: str) -> None:
     client, workspace_id = _make_linear_client(workspace_id)
     team_id = await _resolve_team_id(client, team_key)
 
+    affected_services = payload.get("affected_services", [])
+    if isinstance(affected_services, str):
+        affected_services = [s.strip() for s in affected_services.split(",") if s.strip()]
+
     description = build_description(
         payload.get("root_cause", ""),
         payload.get("evidence", ""),
         payload.get("repair_plan", ""),
+        affected_services,
     )
 
     issue = await client.create_issue(
@@ -120,6 +129,7 @@ async def create_issue_cmd(input_path: str) -> None:
             workspace_id=workspace_id,
             stage=Stage.PENDING_REVIEW,
             repo=payload.get("repo", ""),
+            repos=json.dumps(affected_services, ensure_ascii=False) if affected_services else "",
             root_cause=payload.get("root_cause", ""),
             repair_plan=payload.get("repair_plan", ""),
             evidence=payload.get("evidence", ""),

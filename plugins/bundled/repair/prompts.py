@@ -108,14 +108,20 @@ def build_developer_prompt(
     branch: str,
     is_retry: bool,
     last_report: str,
+    repos: list[str] | None = None,
 ) -> str:
     """拼出调用 bug-fix-developer skill 的 prompt。"""
-    repo_line = (
-        f"目标仓库: {repo}"
-        if repo
-        else "目标仓库: （未指定，请从下方修复计划/描述中识别服务名，"
-        "再查 service-repo-map.md 解析成完整 project_id）"
-    )
+    # 优先用 repos 列表，没有则降级到单个 repo
+    repos_list = repos or ([repo] if repo else [])
+    if len(repos_list) > 1:
+        repo_line = "受影响服务（需全部 clone 并修复）:\n" + "\n".join(f"- {r}" for r in repos_list)
+    elif repos_list:
+        repo_line = f"目标仓库: {repos_list[0]}"
+    else:
+        repo_line = (
+            "目标仓库: （未指定，请从下方修复计划/描述中识别服务名，"
+            "再查 service-repo-map.md 解析成完整 project_id）"
+        )
     parts = [
         f"严格按 skill: bug-fix-developer 执行 TDD 修复任务。",
         f"\n# 修复任务 {identifier}",

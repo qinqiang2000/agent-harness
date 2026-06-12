@@ -203,6 +203,7 @@ class RepairCoordinator:
             branch=branch,
             is_retry=False,
             last_report="",
+            repos=json.loads(run.repos) if run.repos else None,
         )
 
         # 有会话时，把 developer 每步中间输出转成会话 thought（逐步可见）。
@@ -394,6 +395,7 @@ class RepairCoordinator:
             branch=run.branch,
             is_retry=True,
             last_report=run.last_report,
+            repos=json.loads(run.repos) if run.repos else None,
         )
         result_text, session_id = await _run_agent(
             self.agent_service,
