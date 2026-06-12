@@ -78,6 +78,15 @@ async def _resolve_team_id(client, team_id: str) -> str:
     raise RuntimeError(f"未找到团队 key={team_id!r}，可用: {available}")
 
 
+async def list_teams_cmd(workspace_id: str = "") -> None:
+    """列出 Linear 可用团队，输出 JSON 数组供 agent 展示给用户选择。"""
+    client, _ = _make_linear_client(workspace_id)
+    data = await client._query("{ teams { nodes { id name key } } }")
+    nodes = data.get("teams", {}).get("nodes", [])
+    teams = [{"key": t["key"], "name": t["name"], "id": t["id"]} for t in nodes]
+    print(json.dumps(teams, ensure_ascii=False))
+
+
 async def create_issue_cmd(input_path: str) -> None:
     """建 Linear 单 + 落 repair_runs(pending_review)，结果打到 stdout。"""
     from plugins.bundled.repair.store import RepairRun, Stage
@@ -209,6 +218,8 @@ async def retrigger_build_cmd(issue_id: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="repair pipeline CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
+    p_list_teams = sub.add_parser("list-teams", help="列出可用 Linear 团队")
+    p_list_teams.add_argument("--workspace", default="", help="workspace ID（可选）")
     p_create = sub.add_parser("create-issue", help="建 Linear bug 单")
     p_create.add_argument("--input", required=True, help="payload JSON 文件路径")
     p_lock = sub.add_parser("acquire-lock", help="原子申请一组 repo 锁")
@@ -219,7 +230,13 @@ def main() -> None:
     p_retrigger.add_argument("--issue", required=True, help="Linear issue UUID")
     args = parser.parse_args()
 
-    if args.cmd == "create-issue":
+    if args.cmd == "list-teams":
+        try:
+            asyncio.run(list_teams_cmd(args.workspace))
+        except Exception as e:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+            sys.exit(1)
+    elif args.cmd == "create-issue":
         try:
             asyncio.run(create_issue_cmd(args.input))
         except Exception as e:
