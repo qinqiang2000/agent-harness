@@ -7,6 +7,7 @@ stopped 事件：记录日志（当前调用为一次性，无需取消）。
 
 import asyncio
 import logging
+import os
 import uuid
 from typing import Any, Dict, Optional
 
@@ -344,7 +345,11 @@ class LinearSessionHandler:
         workspace_id: str,
         trace_id: str,
     ) -> None:
-        """将 Issue 置为第一个 started 状态，并置 delegate 为 bot 用户。
+        """将 Issue 置为配置的目标状态，并置 delegate 为 bot 用户。
+
+        状态变更受 LINEAR_ISSUE_START_STATE 配置控制：
+        - 配置了状态名 → 按名称精确匹配，找到则更新，找不到则不改状态
+        - 未配置 → 不改状态，只设置 delegate
 
         Args:
             client: LinearClient 实例
@@ -359,11 +364,21 @@ class LinearSessionHandler:
                 return
 
             app_user_id = self.token_store.get_app_user_id(workspace_id)
-            started_state_id = await client.get_team_first_started_state_id(team_id)
-
             update_kwargs: Dict[str, Any] = {}
-            if started_state_id:
-                update_kwargs["state_id"] = started_state_id
+
+            # 按配置的状态名更新，未配置则不改状态
+            start_state_name = self.config.get(
+                "issue_start_state", ""
+            ) or os.environ.get("LINEAR_ISSUE_START_STATE", "")
+            if start_state_name:
+                state_id = await client.get_state_id_by_name(team_id, start_state_name)
+                if state_id:
+                    update_kwargs["state_id"] = state_id
+                else:
+                    logger.warning(
+                        f"[{trace_id}][Linear] State '{start_state_name}' not found in team, skipping state update"
+                    )
+
             if app_user_id:
                 update_kwargs["delegate_id"] = app_user_id
             if update_kwargs:

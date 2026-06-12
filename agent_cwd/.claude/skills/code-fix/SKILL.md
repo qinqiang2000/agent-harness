@@ -169,3 +169,38 @@ push 失败时：
 
 请手动执行 push 或将上述改动应用到您的本地仓库。
 ```
+
+---
+
+## Step 8：触发 CICD 构建与自动化测试
+
+**仅在 push 成功时执行本步骤。** push 失败时跳过。
+
+将 Step 7 的修复结论文本写入临时文件，调用 `run_cicd.py` 触发构建流程：
+
+```bash
+SCRIPT="$(find /root -path "*/code-fix/scripts/run_cicd.py" 2>/dev/null | head -1)"
+if [ -z "$SCRIPT" ]; then
+  SCRIPT="$(find . -path "*/code-fix/scripts/run_cicd.py" 2>/dev/null | head -1)"
+fi
+
+TMP_FIX=$(mktemp /tmp/fix_result_XXXXXX.txt)
+cat > "$TMP_FIX" << 'FIXEOF'
+{Step 7 输出的完整修复结论文本，包含「仓库：」和「分支：」行}
+FIXEOF
+
+python3 "$SCRIPT" --file "$TMP_FIX"
+EXIT_CODE=$?
+rm -f "$TMP_FIX"
+```
+
+脚本会依次：
+1. 从文本中解析所有「仓库：xxx」+「分支：xxx」对（支持一个 issue 涉及多个服务）
+2. **并行**触发所有服务的 `cicd-pipeline` 构建，轮询等待各自完成（约 2~10 分钟）
+3. 全部构建成功后，触发一次 `at-automated-test` 全量测试（约 30 分钟以上）
+4. 将每步进度打印到 stdout
+
+根据 `EXIT_CODE` 在对话中追加结论：
+- `0`（全部成功）：输出"✅ CICD 构建完成，自动化测试已通过"
+- `1` 且有构建失败：输出"❌ 以下服务构建失败，已跳过自动化测试：{服务列表}"
+- `1` 且构建成功但测试失败：输出"❌ 自动化测试未通过，请查看日志"
