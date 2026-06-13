@@ -274,7 +274,7 @@ class RepairCoordinator:
             return
 
         resolved_repos = parsed["repos"] or ([resolved_repo] if resolved_repo else [])
-        build_id = self.jenkins.trigger_build(repos=resolved_repos, branch=new_branch)
+        build_id = await self.jenkins.trigger_build(repos=resolved_repos, branch=new_branch)
 
         self.store.update(
             linear_issue_id,
@@ -418,7 +418,7 @@ class RepairCoordinator:
             )
             return
         repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
-        build_id = self.jenkins.trigger_build(repos=repos, branch=run.branch)
+        build_id = await self.jenkins.trigger_build(repos=repos, branch=run.branch)
         self.store.update(
             run.linear_issue_id,
             stage=Stage.BUILDING,

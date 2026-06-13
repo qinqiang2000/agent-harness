@@ -88,7 +88,22 @@ class LinearSessionHandler:
                         f"fall back to normal flow",
                         exc_info=True,
                     )
-                    handled = False
+                    # 异常发生时修复可能已部分完成（如代码已提交但存库失败），
+                    # 检查 store 避免重复触发修复流程。
+                    try:
+                        from plugins.bundled.repair.coordinator import get_coordinator
+                        from plugins.bundled.repair.store import Stage
+                        _coordinator = get_coordinator()
+                        if _coordinator is not None:
+                            _run = _coordinator.store.get(issue_id)
+                            if _run is not None and _run.stage != Stage.PENDING_REVIEW:
+                                logger.info(
+                                    f"[{trace_id}][Linear] repair run exists "
+                                    f"(stage={_run.stage}), suppressing fallback"
+                                )
+                                handled = True
+                    except Exception:
+                        pass
             if handled:
                 return
 
@@ -304,8 +319,29 @@ class LinearSessionHandler:
         try:
             from api.models.requests import QueryRequest
 
+            # 修复流水线中的 issue（BUILDING/REJECTED）→ 强制走 bug-fix-developer
+            # 注入 issue_id，让 agent 能调 cli.py retrigger-build --issue <id>
+            actual_prompt = prompt_context
+            if issue_id:
+                try:
+                    from plugins.bundled.repair.coordinator import get_coordinator
+                    from plugins.bundled.repair.store import Stage
+                    _coordinator = get_coordinator()
+                    if _coordinator is not None:
+                        _run = _coordinator.store.get(issue_id)
+                        if _run is not None and _run.stage in (Stage.BUILDING, Stage.REJECTED):
+                            actual_prompt = (
+                                f"严格按 skill: bug-fix-developer 执行任务。\n\n"
+                                f"Issue UUID: {issue_id}\n"
+                                f"Issue 单号: {_run.linear_identifier}\n"
+                                f"当前 stage: {_run.stage}\n\n"
+                                f"用户消息: {prompt_context}"
+                            )
+                except Exception:
+                    pass
+
             request = QueryRequest(
-                prompt=prompt_context,
+                prompt=actual_prompt,
                 language="中文",
                 session_id=claude_session_id,
             )

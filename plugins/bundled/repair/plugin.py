@@ -133,7 +133,7 @@ class RepairChannelPlugin(ChannelPlugin):
         return False
 
     async def on_start(self) -> None:
-        poll_enabled = os.getenv("REPAIR_POLL_ENABLED", "false").lower() in ("1", "true", "yes")
+        poll_enabled = os.getenv("REPAIR_POLL_ENABLED", "true").lower() in ("1", "true", "yes")
         if not poll_enabled:
             logger.info("[Repair] poll disabled (set REPAIR_POLL_ENABLED=true to enable)")
             return
