@@ -379,6 +379,11 @@ if kb_assets_path.exists():
     app.mount("/kb/assets", StaticFiles(directory=str(kb_assets_path)), name="kb_assets")
     logger.info(f"Mounted KB assets at /kb/assets -> {kb_assets_path}")
 
+# Mount daily reports directory
+reports_path = Path(__file__).parent / "reports"
+reports_path.mkdir(exist_ok=True)
+app.mount("/reports", StaticFiles(directory=str(reports_path)), name="reports")
+
 # Include API routers
 app.include_router(router)  # Generic /api endpoints
 app.include_router(plugins_router)  # Plugin management API

@@ -36,6 +36,9 @@ WEBHOOK_URL = os.getenv(
 )
 AT_MENTION = os.getenv("YZJ_DAILY_REPORT_AT_MENTION", "@金帆")
 MAX_CHARS = 7800  # 留 200 buffer，云之家限制 8000
+SUMMARY_MAX_CHARS = 800  # 摘要模式（有 HTML 链接时）的字符上限
+SERVICE_BASE_URL = os.getenv("SERVICE_BASE_URL", "").rstrip("/")
+REPORT_KEEP_DAYS = int(os.getenv("REPORT_KEEP_DAYS", "7"))
 
 # ─────────────── 智能客服分析：常量 ───────────────
 
@@ -243,7 +246,7 @@ async def llm_summarize(stats: dict, records: list[dict], date_str: str) -> str:
 3. 未解决问题的规律和跟进建议
 4. 超时或错误的可能原因（如有）
 
-要求：中文，分段落，不超过 500 字，直接给结论和建议，不要重复列数字。"""
+要求：中文，分段落，直接给结论和建议，不要重复列数字。"""
 
     try:
         client = anthropic.AsyncAnthropic(**client_kwargs)
@@ -343,14 +346,168 @@ async def send_to_yunzhijia(text: str) -> bool:
                 WEBHOOK_URL, json=payload, timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 body = await resp.text()
-                if resp.status == 200:
-                    logger.info("[send] 发送成功，响应: %s", body[:200])
-                    return True
-                logger.error("[send] HTTP %d: %s", resp.status, body[:500])
-                return False
+                if resp.status != 200:
+                    logger.error("[send] HTTP %d: %s", resp.status, body[:500])
+                    return False
+                try:
+                    result = json.loads(body)
+                except json.JSONDecodeError:
+                    result = {}
+                if result.get("success") is False:
+                    logger.error("[send] 业务错误: %s", body[:200])
+                    return False
+                logger.info("[send] 发送成功，响应: %s", body[:200])
+                return True
     except Exception as e:
         logger.error("[send] 请求失败: %s", e, exc_info=True)
         return False
+
+
+def _cleanup_old_reports(keep_days: int = REPORT_KEEP_DAYS) -> None:
+    """删除 reports/ 下超过 keep_days 天的日报 HTML 文件。"""
+    if not REPORTS_DIR.exists():
+        return
+    cutoff = datetime.now().date() - timedelta(days=keep_days)
+    for f in REPORTS_DIR.glob("*.html"):
+        m = re.search(r"(\d{8})", f.name)
+        if not m:
+            continue
+        try:
+            file_date = datetime.strptime(m.group(1), "%Y%m%d").date()
+            if file_date < cutoff:
+                f.unlink()
+                logger.info("[cleanup] 删除过期报告: %s", f.name)
+        except ValueError:
+            pass
+
+
+def generate_diagnosis_html(stats: dict, llm_summary: str, date_str: str) -> Path:
+    """生成 issue-diagnosis HTML 报告，保存到 reports/diagnosis_YYYYMMDD.html，返回路径。"""
+    REPORTS_DIR.mkdir(exist_ok=True)
+    dt = datetime.strptime(date_str, "%Y%m%d")
+    date_label = dt.strftime("%Y-%m-%d")
+    path = REPORTS_DIR / f"diagnosis_{date_str}.html"
+
+    if stats.get("total", 0) == 0:
+        html = f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>Issue Diagnosis 日报 {date_label}</title></head>
+<body style="font-family:sans-serif;padding:40px;color:#4a5568">
+<h2>Issue Diagnosis 日报 · {date_label}</h2><p>暂无对话记录。</p>
+</body></html>"""
+        path.write_text(html, encoding="utf-8")
+        return path
+
+    sc = stats.get("status_counts", {})
+    total = stats["total"]
+    success = sc.get("success", 0)
+    error = sc.get("error", 0)
+    timeout = sc.get("timeout", 0)
+    success_rate = f"{success / total * 100:.1f}%" if total else "N/A"
+
+    ds = stats.get("duration_stats", {})
+
+    def ms(v): return f"{v / 1000:.1f}s"
+    def card(color, label, value, sub=""):
+        return f"""
+    <div class="card {color}">
+      <div class="label">{label}</div>
+      <div class="value">{value}</div>
+      {"<div class='sub'>" + sub + "</div>" if sub else ""}
+    </div>"""
+
+    # 高频问题
+    top_qs_html = ""
+    for i, item in enumerate(stats.get("top_questions", []), 1):
+        q = escape(item.get("question", ""))
+        cnt = item.get("count", 1)
+        ans = escape(item.get("answer", ""))
+        top_qs_html += f"""
+        <div class="qa-item">
+          <div class="qa-q">{i}. <span class="badge">×{cnt}</span> {q}</div>
+          {"<div class='qa-a'>AI 回复：" + ans + "</div>" if ans else ""}
+        </div>"""
+
+    # 未解决
+    unresolved_html = ""
+    for item in stats.get("unresolved", []):
+        ts = escape((item.get("timestamp") or "")[:16])
+        q = escape(item.get("question", ""))
+        unresolved_html += f'<div class="list-item"><span class="ts">{ts}</span> {q}</div>\n'
+
+    # 异常
+    errors_html = ""
+    for item in stats.get("errors", []):
+        ts = escape((item.get("timestamp") or "")[:16])
+        st = escape(item.get("status", "").upper())
+        q = escape(item.get("question", ""))
+        errors_html += f'<div class="list-item"><span class="ts">{ts}</span> <span class="badge red">{st}</span> {q}</div>\n'
+
+    # 高轮次
+    high_turns_html = ""
+    for item in stats.get("high_turns", []):
+        q = escape(item.get("question", ""))
+        turns = item.get("num_turns", 0)
+        high_turns_html += f'<div class="list-item"><span class="badge orange">{turns}轮</span> {q}</div>\n'
+
+    llm_html = f'<div class="llm-summary">{escape(llm_summary).replace(chr(10), "<br>")}</div>' if llm_summary else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Issue Diagnosis 日报 {date_label}</title>
+<style>
+  body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fa;color:#2d3748;margin:0;padding:0}}
+  header {{background:linear-gradient(135deg,#4facfe,#00f2fe);color:#fff;padding:28px 40px}}
+  header h1 {{margin:0 0 4px;font-size:1.6rem}} header p {{margin:0;opacity:.85;font-size:.9rem}}
+  main {{max-width:1100px;margin:28px auto;padding:0 24px}}
+  h2 {{font-size:1rem;margin:20px 0 10px;color:#4a5568;border-left:3px solid #4facfe;padding-left:8px}}
+  .cards {{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}}
+  .card {{background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.08)}}
+  .card .label {{font-size:.72rem;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}}
+  .card .value {{font-size:1.8rem;font-weight:700}}
+  .card .sub {{font-size:.76rem;color:#a0aec0;margin-top:3px}}
+  .card.green .value {{color:#38a169}} .card.red .value {{color:#e53e3e}}
+  .card.blue .value {{color:#3182ce}} .card.orange .value {{color:#dd6b20}}
+  .section {{background:#fff;border-radius:10px;padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}}
+  .qa-item {{padding:10px 0;border-bottom:1px solid #edf2f7}} .qa-item:last-child {{border:none}}
+  .qa-q {{font-weight:600;margin-bottom:4px}}
+  .qa-a {{font-size:.85rem;color:#4a5568;margin-left:1rem;line-height:1.6}}
+  .list-item {{padding:6px 0;border-bottom:1px solid #edf2f7;font-size:.875rem}} .list-item:last-child {{border:none}}
+  .ts {{color:#a0aec0;font-size:.8rem;margin-right:6px}}
+  .badge {{display:inline-block;padding:1px 7px;border-radius:9px;font-size:.75rem;font-weight:600;background:#ebf4ff;color:#3182ce;margin-right:4px}}
+  .badge.red {{background:#fff5f5;color:#e53e3e}}
+  .badge.orange {{background:#fffaf0;color:#dd6b20}}
+  .llm-summary {{background:#f7fafc;border-left:3px solid #4facfe;padding:14px 18px;border-radius:0 8px 8px 0;font-size:.9rem;line-height:1.7;color:#2d3748}}
+  footer {{text-align:center;padding:20px;color:#a0aec0;font-size:.78rem}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Issue Diagnosis 日报</h1>
+  <p>{date_label} &nbsp;|&nbsp; {total} 次对话</p>
+</header>
+<main>
+  <h2>基础统计</h2>
+  <div class="cards">
+    {card("blue", "总对话", str(total))}
+    {card("green", "成功率", success_rate, f"成功 {success} / 错误 {error} / 超时 {timeout}")}
+    {card("orange", "平均响应", ms(ds["avg_ms"]) if ds.get("avg_ms") else "N/A")}
+    {card("orange", "P95 响应", ms(ds["p95_ms"]) if ds.get("p95_ms") else "N/A")}
+    {card("red", "最慢响应", ms(ds["max_ms"]) if ds.get("max_ms") else "N/A")}
+  </div>
+  {"<h2>高频问题 Top5 · 建议补充知识库</h2><div class='section'>" + top_qs_html + "</div>" if top_qs_html else ""}
+  {"<h2>可能未解决 · 需跟进（" + str(len(stats.get("unresolved", []))) + " 条）</h2><div class='section'>" + unresolved_html + "</div>" if unresolved_html else ""}
+  {"<h2>异常记录（" + str(len(stats.get("errors", []))) + " 条）</h2><div class='section'>" + errors_html + "</div>" if errors_html else ""}
+  {"<h2>诊断轮次过多 · 疑似兜圈</h2><div class='section'>" + high_turns_html + "</div>" if high_turns_html else ""}
+  {"<h2>AI 总结</h2>" + llm_html if llm_html else ""}
+</main>
+<footer>Generated by agent-harness daily_report · {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</footer>
+</body>
+</html>"""
+
+    path.write_text(html, encoding="utf-8")
+    return path
 
 
 # ─────────────── 智能客服分析函数 ───────────────
@@ -672,27 +829,91 @@ def format_cs_section(metrics: dict, html_path: Path) -> str:
 # ─────────────────────────────────────────────────────────────
 
 async def generate_and_send(date_str: str, dry_run: bool = False) -> dict:
-    """完整流程：读日志 → 聚合 → LLM → 格式化 → 发送。返回结果摘要。"""
+    """完整流程：读日志 → 聚合 → LLM → 生成 HTML → 发送摘要。返回结果摘要。"""
+    _cleanup_old_reports()
+
     records = load_interactions(date_str)
     stats = aggregate(records)
     llm_summary = await llm_summarize(stats, records, date_str) if stats.get("total", 0) > 0 else ""
-    report_text = format_report(stats, date_str, llm_summary)
+
+    # 生成 issue-diagnosis HTML 报告
+    diagnosis_html_path = generate_diagnosis_html(stats, llm_summary, date_str)
 
     # 智能客服分析
     target_date = datetime.strptime(date_str, "%Y%m%d").date()
     cs_metrics = analyze_smart_cs(target_date)
     cs_html_path = generate_cs_html(cs_metrics, target_date)
-    report_text += format_cs_section(cs_metrics, cs_html_path)
 
+    # 拼接报告链接
+    if SERVICE_BASE_URL:
+        diagnosis_url = f"{SERVICE_BASE_URL}/reports/{diagnosis_html_path.name}"
+        cs_url = f"{SERVICE_BASE_URL}/reports/{cs_html_path.name}"
+    else:
+        diagnosis_url = str(diagnosis_html_path)
+        cs_url = str(cs_html_path)
+
+    # 构建摘要消息（只含核心数字 + 链接）
+    dt = datetime.strptime(date_str, "%Y%m%d")
+    date_label = dt.strftime("%Y-%m-%d")
+    total = stats.get("total", 0)
+    sc = stats.get("status_counts", {})
+    ds = stats.get("duration_stats", {})
+
+    lines = [
+        AT_MENTION,
+        "",
+        f"📊 Issue Diagnosis 日报 · {date_label}",
+    ]
+
+    if total == 0:
+        lines.append("暂无对话记录。")
+    else:
+        success = sc.get("success", 0)
+        error = sc.get("error", 0)
+        timeout = sc.get("timeout", 0)
+        success_rate = f"{success / total * 100:.1f}%" if total else "N/A"
+        avg_s = f"{ds['avg_ms'] / 1000:.1f}s" if ds.get("avg_ms") else "N/A"
+        p95_s = f"{ds['p95_ms'] / 1000:.1f}s" if ds.get("p95_ms") else "N/A"
+        lines += [
+            "",
+            "【Issue Diagnosis】",
+            f"总对话：{total} | 成功：{success}（{success_rate}）| 错误：{error} | 超时：{timeout}",
+            f"响应：均值 {avg_s} | P95 {p95_s}",
+        ]
+        if llm_summary:
+            summary_excerpt = llm_summary[:200] + "…（详见报告）" if len(llm_summary) > 200 else llm_summary
+            lines += ["", "【AI 总结】", summary_excerpt]
+
+    # 智能客服摘要
+    m = cs_metrics
+    if m.get("total_sessions", 0) > 0:
+        def ms(v): return f"{v / 1000:.2f}s"
+        lines += [
+            "",
+            f"【智能客服】{m['total_sessions']}个会话 / {m['total_turns']}轮",
+            f"解决率：{m['resolution_rate']}% | 回答完成率：{m['answer_rate']}% | 直接转人工：{m['immediate_transfer_rate']}%",
+            f"P50：{ms(m['p50_ms'])} | P95：{ms(m['p95_ms'])} | 超时：{m['timeout_count']}次",
+        ]
+
+    lines += [
+        "",
+        "📄 详细报告：",
+        f"· Issue Diagnosis：{diagnosis_url}",
+        f"· 智能客服：{cs_url}",
+    ]
+
+    report_text = "\n".join(lines)
+
+    # 兜底截断（理论上摘要模式不会超）
     if len(report_text) > MAX_CHARS:
         report_text = report_text[:MAX_CHARS - 20] + "\n\n（内容已截断）"
 
     if dry_run:
         print(report_text)
-        return {"date": date_str, "total": stats.get("total", 0), "sent": False, "dry_run": True}
+        return {"date": date_str, "total": total, "sent": False, "dry_run": True}
 
     sent = await send_to_yunzhijia(report_text)
-    return {"date": date_str, "total": stats.get("total", 0), "sent": sent, "dry_run": False}
+    return {"date": date_str, "total": total, "sent": sent, "dry_run": False}
 
 
 def main():
