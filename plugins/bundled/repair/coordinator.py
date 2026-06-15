@@ -11,6 +11,7 @@ from typing import Callable, Optional
 from plugins.bundled.repair import prompts
 from plugins.bundled.repair.jenkins_client import JenkinsClient
 from plugins.bundled.repair.store import RepairRun, RepairStore, Stage
+from plugins.bundled.linear.linear_client import LinearAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +352,20 @@ class RepairCoordinator:
                 await self._handle_root_cause_error(run, parsed["raw"])
             elif verdict == "missing_dependency":
                 await self._handle_missing_dependency(run, parsed["raw"])
+        except LinearAPIError as exc:
+            if "not found" in str(exc).lower() or "entity not found" in str(exc).lower():
+                logger.error(
+                    "[Repair] Linear issue not found, aborting run: %s", linear_issue_id, exc_info=True,
+                )
+                self.store.update(linear_issue_id, stage=Stage.REJECTED)
+                self.store.release_repos(linear_issue_id)
+            else:
+                logger.error(
+                    "[Repair] verdict handler failed (%s), rolling back to BUILDING: %s",
+                    verdict, linear_issue_id, exc_info=True,
+                )
+                self.store.update(linear_issue_id, stage=Stage.BUILDING)
+            return
         except Exception:
             logger.error(
                 "[Repair] verdict handler failed (%s), rolling back to BUILDING: %s",

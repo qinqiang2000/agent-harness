@@ -234,6 +234,8 @@ class LinearClient:
             {"id": issue_id},
         )
         issue = data["issue"]
+        if issue is None:
+            raise LinearAPIError(f"Issue not found: {issue_id}")
         if issue.get("assignee"):
             issue["assigneeId"] = issue["assignee"]["id"]
         if issue.get("delegate"):
