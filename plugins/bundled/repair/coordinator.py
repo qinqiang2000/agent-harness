@@ -191,7 +191,7 @@ class RepairCoordinator:
         # 把 Linear issue 状态推到第一个 started 状态，防止重复触发
         await self._set_issue_linear_state(client, linear_issue_id, "started")
 
-        branch = run.branch or f"fix/{run.linear_identifier}"
+        branch = run.branch or f"fix_{run.linear_identifier}"
 
         prompt = prompts.build_developer_prompt(
             issue_id=run.linear_issue_id,
@@ -275,6 +275,7 @@ class RepairCoordinator:
 
         resolved_repos = parsed["repos"] or ([resolved_repo] if resolved_repo else [])
         build_id = await self.jenkins.trigger_build(repos=resolved_repos, branch=new_branch)
+        await self.jenkins.start_driver(build_id)
 
         self.store.update(
             linear_issue_id,
@@ -419,6 +420,7 @@ class RepairCoordinator:
             return
         repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
         build_id = await self.jenkins.trigger_build(repos=repos, branch=run.branch)
+        await self.jenkins.start_driver(build_id)
         self.store.update(
             run.linear_issue_id,
             stage=Stage.BUILDING,
@@ -484,6 +486,7 @@ class RepairCoordinator:
                     exc_info=True,
                 )
         self._reconcile_locks()
+        await self.jenkins.resume_pending_drivers()
 
     _ACTIVE_STAGES = (Stage.DEVELOPING, Stage.BUILDING, Stage.ANALYZING)
 

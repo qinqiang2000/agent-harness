@@ -169,7 +169,7 @@ class JenkinsClient:
                     build_token, row["repo"], build_no=executable["number"]
                 )
         rows = self._store.list_cicd_builds(build_token)
-        if all(r["build_no"] > 0 for r in rows):
+        if all(r["build_no"] > 0 or r["result"] in ("FAILURE", "ABORTED") for r in rows):
             self._store.update_build(build_token, phase="cicd_building")
 
     async def _advance_cicd_building(self, build_token: str) -> None:
@@ -212,23 +212,36 @@ class JenkinsClient:
             "RUN_MODE": self._run_mode,
             "THREADS": str(self._threads),
         }
-        resp = await self._http.post(url, params=params)
-        if resp.status_code != 201:
-            raise RuntimeError(f"autotest trigger failed: {resp.status_code}")
-        location = resp.headers.get("Location", "")
-        m = re.search(r"/queue/item/(\d+)/", location)
-        if not m:
-            raise RuntimeError(f"cannot parse autotest queue id: {location}")
-        self._store.update_build(
-            build_token,
-            phase="autotest_queued",
-            autotest_queue_id=m.group(1),
-        )
+        try:
+            resp = await self._http.post(url, params=params)
+            if resp.status_code != 201:
+                raise RuntimeError(f"autotest trigger failed: {resp.status_code}")
+            location = resp.headers.get("Location", "")
+            m = re.search(r"/queue/item/(\d+)/", location)
+            if not m:
+                raise RuntimeError(f"cannot parse autotest queue id: {location}")
+            self._store.update_build(
+                build_token,
+                phase="autotest_queued",
+                autotest_queue_id=m.group(1),
+            )
+        except Exception as exc:
+            logger.error("[Jenkins] trigger autotest failed token=%s: %s", build_token, exc)
+            self._store.update_build(
+                build_token,
+                phase="done_test_aborted",
+                report_json=f"autotest 触发失败: {exc}",
+            )
 
     async def _advance_autotest_queued(self, build_token: str) -> None:
         build = self._store.get_build(build_token)
         queue_id = build.get("autotest_queue_id", "")
         if not queue_id:
+            self._store.update_build(
+                build_token,
+                phase="done_test_aborted",
+                report_json="autotest_queue_id 丢失，无法继续",
+            )
             return
         url = f"{self._base}/queue/item/{queue_id}/api/json"
         resp = await self._http.get(url)
@@ -299,6 +312,9 @@ class JenkinsClient:
         while True:
             build = self._store.get_build(build_token)
             if not build or build["phase"].startswith("done_"):
+                break
+            if build.get("driver_owner") != self._owner:
+                logger.info("[Jenkins] driver preempted, exiting: %s", build_token)
                 break
             await self._advance(build_token)
             build = self._store.get_build(build_token)

@@ -32,7 +32,9 @@ $AGENTS_ROOT/.venv/bin/python plugins/bundled/repair/cli.py list-teams
 
 ## ③ 写 payload 文件
 
-用 Write 写 `/tmp/repair/payload.json`（避开多行 shell 转义）：
+生成唯一文件名（避免并发冲突）：`PAYLOAD_FILE=/tmp/repair/payload-$(date +%s%3N)-$RANDOM.json`
+
+用 Write 写该路径（避开多行 shell 转义）：
 
 ```json
 {
@@ -53,7 +55,7 @@ $AGENTS_ROOT/.venv/bin/python plugins/bundled/repair/cli.py list-teams
 ## ④ 执行提单
 
 ```bash
-$AGENTS_ROOT/.venv/bin/python plugins/bundled/repair/cli.py create-issue --input /tmp/repair/payload.json
+$AGENTS_ROOT/.venv/bin/python plugins/bundled/repair/cli.py create-issue --input $PAYLOAD_FILE
 ```
 
 ---
@@ -63,7 +65,7 @@ $AGENTS_ROOT/.venv/bin/python plugins/bundled/repair/cli.py create-issue --input
 解析 stdout 单行 JSON：
 
 - `{"ok": true, ...}` → 回复：
-  > 已创建 Linear bug 单 {identifier}，归属团队 {team_key}。请在 Linear 中审核，确认无误后将单子拖到「开发中」状态即可启动自动修复。
+  > 已创建 Linear bug 单 {identifier}，归属团队 {team_key}。请在 Linear 确认，没有问题后可以@agent ,即可启动自动修复。
 
 - `{"ok": false, ...}` → 如实告知提单失败原因，不影响 Step 6 已输出的诊断结论。
 

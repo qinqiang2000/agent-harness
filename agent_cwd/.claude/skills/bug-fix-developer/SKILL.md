@@ -14,7 +14,7 @@ description: >-
 ## ⚠️ 硬约束（违反即终止）
 
 - 只在 `/tmp/repair/<identifier>/` 目录内操作，clone、改码、commit、push 都在此目录
-- 修复分支名必须用 coordinator 传入的分支名（形如 `fix/<identifier>`）
+- 修复分支名必须用 coordinator 传入的分支名（形如 `fix_<identifier>`）
 - **禁止** push 到 main/master，**禁止** `git merge`，**禁止** 任何自动合并 MR 的 push option（如 `merge_request.merge_when_pipeline_succeeds`），**禁止** force push（`--force` / `-f` / `--force-with-lease`）
 - 所有 git 写命令必须以 `cd /tmp/repair/<identifier> &&` 开头或用 `git -C /tmp/repair/<identifier>`（hook 据此放行）
 - clone/pull 用只读 `GITLAB_TOKEN`；push + 建 MR 用写权限 `GITLAB_PUSH_TOKEN`
@@ -40,7 +40,7 @@ description: >-
 ```bash
 ID="<identifier>"          # coordinator 传入
 REPO="<project_id>"        # 上面解析出的完整 project_id，形如 piaozone/elc-integration/api-elc-invoice-imputation
-BRANCH="<branch>"          # coordinator 传入，形如 fix/<identifier>
+BRANCH="<branch>"          # coordinator 传入，形如 fix_<identifier>
 WORK="/tmp/repair/$ID"
 GITLAB_BASE="${GITLAB_BASE_URL:-http://123.207.158.7:5000/ai-agent/git}"
 

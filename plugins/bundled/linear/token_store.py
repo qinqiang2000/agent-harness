@@ -57,6 +57,13 @@ class TokenStore:
                     updated_at     INTEGER NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS linear_session_map (
+                    issue_id         TEXT PRIMARY KEY,
+                    claude_session_id TEXT NOT NULL,
+                    updated_at       INTEGER NOT NULL
+                )
+            """)
 
     def save_installation(
         self,
@@ -174,6 +181,30 @@ class TokenStore:
         """
         row = self.get_installation(workspace_id)
         return row["app_user_id"] if row else None
+
+    def save_session(self, issue_id: str, claude_session_id: str) -> None:
+        """持久化 issue_id -> claude_session_id 映射。"""
+        now = int(time.time())
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO linear_session_map (issue_id, claude_session_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(issue_id) DO UPDATE SET
+                    claude_session_id = excluded.claude_session_id,
+                    updated_at = excluded.updated_at
+                """,
+                (issue_id, claude_session_id, now),
+            )
+
+    def get_session(self, issue_id: str) -> Optional[str]:
+        """按 issue_id 查询 claude_session_id，不存在返回 None。"""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT claude_session_id FROM linear_session_map WHERE issue_id = ?",
+                (issue_id,),
+            ).fetchone()
+            return row["claude_session_id"] if row else None
 
     def get_first_workspace_id(self) -> Optional[str]:
         """单 workspace 场景：返回唯一安装的 workspace_id。

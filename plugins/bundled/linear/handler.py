@@ -36,8 +36,6 @@ class LinearSessionHandler:
         self.config = config
         # 正在处理中的 session 集合（幂等保护）
         self._active_sessions: set = set()
-        # linear_session_id -> claude_session_id 映射，支持多轮续接
-        self._session_map: Dict[str, str] = {}
 
     # ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -292,10 +290,9 @@ class LinearSessionHandler:
 
         issue_id = agent_session.get("issueId")
         trace_id = _new_trace_id()
-        claude_session_id = self._session_map.get(session_id)
-        # Linear 每次 prompted 会生成新的 agentSession.id，用 issue_id 作为兜底查找
-        if not claude_session_id and issue_id:
-            claude_session_id = self._session_map.get(f"issue:{issue_id}")
+        # Linear 每次 prompted 都会生成新的 agentSession.id，只有 issue_id 稳定，
+        # 用持久化存储按 issue_id 查找上次的 claude_session_id。
+        claude_session_id = self.token_store.get_session(issue_id) if issue_id else None
         logger.info(
             f"[{trace_id}][Linear] prompted: linear_session={session_id}, issue={issue_id}, claude_session={claude_session_id}"
         )
@@ -365,10 +362,8 @@ class LinearSessionHandler:
                 elif event_type == "error":
                     error_text = data.get("error", "") or str(data)
 
-            if new_claude_session_id:
-                self._session_map[session_id] = new_claude_session_id
-                if issue_id:
-                    self._session_map[f"issue:{issue_id}"] = new_claude_session_id
+            if new_claude_session_id and issue_id:
+                self.token_store.save_session(issue_id, new_claude_session_id)
 
         except Exception as e:
             error_text = str(e)
@@ -530,9 +525,12 @@ class LinearSessionHandler:
         try:
             from api.models.requests import QueryRequest
 
+            # 先查持久化，有则续接已有 Claude session（多轮对话）
+            existing_claude_session_id = self.token_store.get_session(issue_id) if issue_id else None
             request = QueryRequest(
                 prompt=final_prompt,
                 language="中文",
+                session_id=existing_claude_session_id,
             )
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("type") or event.get("event", "")
@@ -545,12 +543,10 @@ class LinearSessionHandler:
                     except Exception:
                         data = {}
                 if event_type == "session_created":
-                    # 保存 linear_session_id -> claude_session_id 映射，供 prompted 续接
+                    # 持久化 issue_id -> claude_session_id 映射，供 prompted 续接
                     claude_session_id = data.get("session_id")
-                    if claude_session_id:
-                        self._session_map[session_id] = claude_session_id
-                        if issue_id:
-                            self._session_map[f"issue:{issue_id}"] = claude_session_id
+                    if claude_session_id and issue_id:
+                        self.token_store.save_session(issue_id, claude_session_id)
                         logger.info(
                             f"[{trace_id}][Linear] session mapped: {session_id} -> {claude_session_id}"
                         )

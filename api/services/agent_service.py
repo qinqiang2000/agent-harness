@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from dataclasses import replace as dc_replace
 from typing import Optional, AsyncGenerator
 from pathlib import Path
@@ -388,7 +389,7 @@ class AgentService:
                         t.mark("SDK_CONNECTED")
                     yield format_sse_message("heartbeat", {"status": "connected"})
 
-                    sdk_session_id = request.session_id or "default"
+                    sdk_session_id = request.session_id or uuid.uuid4().hex
                     if image_blocks:
                         content_blocks: list[dict] = [{"type": "text", "text": prompt}]
                         content_blocks.extend(image_blocks)
