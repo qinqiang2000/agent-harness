@@ -162,7 +162,30 @@ class JenkinsClient:
         for row in pending_rows:
             url = f"{self._base}/queue/item/{row['queue_id']}/api/json"
             resp = await self._http.get(url)
-            data = resp.json()
+            if resp.status_code == 404:
+                logger.warning(
+                    "[Jenkins] queue item %s not found (expired?), marking FAILURE",
+                    row["queue_id"],
+                )
+                self._store.update_cicd_build(
+                    build_token, row["repo"], result="FAILURE",
+                    console_snippet="queue item 已过期或不存在",
+                )
+                continue
+            if resp.status_code != 200:
+                logger.warning(
+                    "[Jenkins] queue item %s returned HTTP %s, skipping",
+                    row["queue_id"], resp.status_code,
+                )
+                continue
+            try:
+                data = resp.json()
+            except Exception as exc:
+                logger.warning(
+                    "[Jenkins] queue item %s non-JSON response (%s): %.200s",
+                    row["queue_id"], exc, resp.text,
+                )
+                continue
             executable = data.get("executable")
             if executable and executable.get("number"):
                 self._store.update_cicd_build(
