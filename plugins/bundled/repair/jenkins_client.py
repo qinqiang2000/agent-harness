@@ -37,9 +37,9 @@ class JenkinsClient:
         autotest_run_mode: str = "smoke",
         autotest_threads: int = 4,
         build_timeout_seconds: int = 86400,
-        cicd_poll_seconds: int = 15,
-        autotest_poll_seconds: int = 30,
-        queue_poll_seconds: int = 5,
+        cicd_poll_seconds: int = 60,
+        autotest_poll_seconds: int = 300,
+        queue_poll_seconds: int = 60,
     ):
         self._base = base_url.rstrip("/")
         self._auth = (user, api_token)
