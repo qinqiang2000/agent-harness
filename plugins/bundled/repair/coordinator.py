@@ -22,12 +22,15 @@ async def _run_agent(
     skill: str,
     session_id: Optional[str],
     on_message: Optional[Callable[[str], "object"]] = None,
+    on_session_created: Optional[Callable[[str], "object"]] = None,
 ) -> tuple[str, Optional[str]]:
     """调 AgentService.process_query，返回 (result_text, claude_session_id)。
 
     新会话靠 DEFAULT_SKILLS 加载 skill；resume 时传 session_id。
     on_message：每收到一条 assistant_message 中间过程文本就 await 调用一次
     （用于逐步转发到 Linear 会话）；回调异常被吞掉，不影响主流程。
+    on_session_created：收到 session_created 事件时立即回调，参数为 claude_session_id，
+    用于在会话开始时就持久化映射，无需等流水线结束。
     """
     from api.models.requests import QueryRequest
 
@@ -50,6 +53,11 @@ async def _run_agent(
                 data = {}
         if etype == "session_created":
             new_session_id = data.get("session_id", new_session_id)
+            if on_session_created and new_session_id:
+                try:
+                    await on_session_created(new_session_id)
+                except Exception:
+                    logger.warning("[Repair] on_session_created callback failed", exc_info=True)
         elif etype == "assistant_message":
             if on_message:
                 text = data.get("content", "") or data.get("text", "")
@@ -75,6 +83,7 @@ class RepairCoordinator:
         fix_retry_limit: int = 3,
         rediagnose_limit: int = 2,
         mr_builder=None,
+        session_saver: Optional[Callable[[str, str], "object"]] = None,
     ):
         self.agent_service = agent_service
         self.store = store
@@ -86,6 +95,7 @@ class RepairCoordinator:
             from plugins.bundled.repair.mr_builder import MRBuilder
             mr_builder = MRBuilder()
         self.mr_builder = mr_builder
+        self._session_saver = session_saver
 
     def _linear(self, workspace_id: str):
         return self._linear_factory(workspace_id)
@@ -210,6 +220,15 @@ class RepairCoordinator:
         # 有会话时，把 developer 每步中间输出转成会话 thought（逐步可见）。
         on_message = (lambda text: notify(text)) if session_id else None
 
+        # session_created 时立即持久化 issue -> claude_session_id 映射，
+        # 供后续 prompted 事件续接多轮对话，无需等流水线结束。
+        async def _on_session_created(claude_sid: str) -> None:
+            if self._session_saver:
+                try:
+                    await self._session_saver(linear_issue_id, claude_sid)
+                except Exception:
+                    logger.warning("[Repair] session_saver failed", exc_info=True)
+
         try:
             result_text, claude_session_id = await _run_agent(
                 self.agent_service,
@@ -217,6 +236,7 @@ class RepairCoordinator:
                 skill="bug-fix-developer",
                 session_id=None,
                 on_message=on_message,
+                on_session_created=_on_session_created,
             )
         except Exception:
             logger.error("[Repair] developer agent failed: %s", linear_issue_id, exc_info=True)

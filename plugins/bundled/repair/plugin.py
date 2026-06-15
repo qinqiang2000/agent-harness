@@ -75,6 +75,7 @@ class RepairChannelPlugin(ChannelPlugin):
             fix_retry_limit=int(self.config.get("fix_retry_limit", 3)),
             rediagnose_limit=int(self.config.get("rediagnose_limit", 2)),
             mr_builder=MRBuilder(),
+            session_saver=self._save_session,
         )
         self.store = store
         self.coordinator = coord
@@ -94,6 +95,15 @@ class RepairChannelPlugin(ChannelPlugin):
         if not token:
             raise RuntimeError(f"no Linear token for workspace={ws}")
         return LinearClient(token)
+
+    async def _save_session(self, issue_id: str, claude_session_id: str) -> None:
+        """持久化 issue_id -> claude_session_id 映射，供 prompted 事件续接多轮对话。"""
+        from plugins.bundled.linear.token_store import TokenStore
+
+        db_path = _resolve(os.getenv("LINEAR_TOKEN_DB", "data/linear/linear_tokens.db"))
+        ts = TokenStore(db_path)
+        ts.save_session(issue_id, claude_session_id)
+        logger.info("[Repair] session saved: issue=%s claude_session=%s", issue_id, claude_session_id)
 
     def get_meta(self) -> ChannelMeta:
         return ChannelMeta(
