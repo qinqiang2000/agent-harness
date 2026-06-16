@@ -216,7 +216,6 @@ async def retrigger_build_cmd(issue_id: str) -> None:
     jenkins = _make_jenkins_client()
     try:
         build_id = await jenkins.trigger_build(repos=repos, branch=run.branch)
-        await jenkins.start_driver(build_id)
         store.update(issue_id, stage=Stage.BUILDING, jenkins_build_id=build_id)
         print(json.dumps({"ok": True, "build_id": build_id, "branch": run.branch}, ensure_ascii=False))
     except Exception as e:
