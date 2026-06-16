@@ -100,6 +100,16 @@ class RepairCoordinator:
     def _linear(self, workspace_id: str):
         return self._linear_factory(workspace_id)
 
+    async def _notify_run(self, run: RepairRun, client, msg: str) -> None:
+        """有 linear_session_id 走会话 send_response，否则 fallback 到 issue 评论。"""
+        try:
+            if run.linear_session_id:
+                await client.send_response(run.linear_session_id, msg)
+            else:
+                await client.create_comment(run.linear_issue_id, msg)
+        except Exception:
+            logger.warning("[Repair] _notify_run failed (session=%s)", run.linear_session_id, exc_info=True)
+
     async def _set_issue_linear_state(self, client, linear_issue_id: str, state_type: str) -> None:
         """把 Linear issue 推到指定 workflow state type 的第一个状态，失败只打警告。"""
         try:
@@ -337,8 +347,8 @@ class RepairCoordinator:
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
             self.store.release_repos(linear_issue_id)
             await self._set_issue_linear_state(client, linear_issue_id, "canceled")
-            await client.create_comment(
-                linear_issue_id,
+            await self._notify_run(
+                run, client,
                 "⚠️ 构建+测试超时（超过配置时限未完成），已转人工。\n"
                 "请检查 Jenkins/部署环境后，在本单评论「重跑」重新触发。",
             )
@@ -349,8 +359,8 @@ class RepairCoordinator:
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
             self.store.release_repos(linear_issue_id)
             await self._set_issue_linear_state(client, linear_issue_id, "canceled")
-            await client.create_comment(
-                linear_issue_id,
+            await self._notify_run(
+                run, client,
                 f"⚠️ CI/CD 构建失败，已转人工。\n"
                 f"请检查 Jenkins 构建配置、账号权限或代码错误后，在本单评论「重跑」重新触发。\n\n"
                 f"{report.get('summary', '')}",
@@ -362,8 +372,8 @@ class RepairCoordinator:
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
             self.store.release_repos(linear_issue_id)
             await self._set_issue_linear_state(client, linear_issue_id, "canceled")
-            await client.create_comment(
-                linear_issue_id,
+            await self._notify_run(
+                run, client,
                 f"⚠️ 自动化测试任务未正常完成，已转人工。\n"
                 f"请检查 Jenkins autotest 配置后，在本单评论「重跑」重新触发。\n\n"
                 f"{report.get('summary', '')}",
@@ -457,8 +467,8 @@ class RepairCoordinator:
         done_id = await self._state_id_by_type(client, team_id, "completed") if team_id else None
         if done_id:
             await client.update_issue(run.linear_issue_id, state_id=done_id)
-        await client.create_comment(
-            run.linear_issue_id,
+        await self._notify_run(
+            run, client,
             f"✅ Bug 已修复并通过测试。\n分支：{run.branch}\n"
             f"MR（待人工合并到 test）：{mr_url or '(建 MR 失败，请人工检查工作目录)'}\n\n{raw}",
         )
@@ -559,8 +569,8 @@ class RepairCoordinator:
         if count >= self.M:
             await self._reject(run, f"根因错重诊断达上限 M={self.M}，转人工。\n{raw}")
             return
-        await client.create_comment(
-            run.linear_issue_id,
+        await self._notify_run(
+            run, client,
             f"⚠️ 原根因判错（第 {count} 次），需重新诊断。\n{raw}",
         )
         # 回退到 backlog，让用户重新触发诊断
@@ -577,8 +587,8 @@ class RepairCoordinator:
             title=f"[依赖] {run.linear_identifier} 修复牵出的外部依赖",
             description=raw,
         )
-        await client.create_comment(
-            run.linear_issue_id,
+        await self._notify_run(
+            run, client,
             f"🔗 修复牵出外部依赖，已建子单 {child.get('identifier')}，"
             f"父单 blockedBy 子单（本期记录，合并接力待人工）。\n{raw}",
         )
@@ -594,7 +604,7 @@ class RepairCoordinator:
         cancel_id = await self._state_id_by_type(client, team_id, "canceled") if team_id else None
         if cancel_id:
             await client.update_issue(run.linear_issue_id, state_id=cancel_id)
-        await client.create_comment(run.linear_issue_id, f"🚫 产研退回：{reason}")
+        await self._notify_run(run, client, f"🚫 产研退回：{reason}")
         self.store.update(run.linear_issue_id, stage=Stage.REJECTED)
         self.store.release_repos(run.linear_issue_id)
 
