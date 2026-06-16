@@ -247,6 +247,7 @@ class LinearSessionHandler:
                 repo=repo,
                 root_cause="（人工单未单列根因，按修复描述处理）",
                 repair_plan=description,
+                linear_session_id=session_id or "",
             )
         )
         logger.info(
@@ -290,9 +291,8 @@ class LinearSessionHandler:
 
         issue_id = agent_session.get("issueId")
         trace_id = _new_trace_id()
-        # Linear 每次 prompted 都会生成新的 agentSession.id，只有 issue_id 稳定，
-        # 用持久化存储按 issue_id 查找上次的 claude_session_id。
-        claude_session_id = self.token_store.get_session(issue_id) if issue_id else None
+        # 优先按 linear_session_id 查对应的 claude_session_id
+        claude_session_id = self.token_store.get_session(session_id) if session_id else None
         logger.info(
             f"[{trace_id}][Linear] prompted: linear_session={session_id}, issue={issue_id}, claude_session={claude_session_id}"
         )
@@ -318,6 +318,7 @@ class LinearSessionHandler:
 
             # 修复流水线中的 issue（BUILDING/REJECTED）→ 强制走 bug-fix-developer
             # 注入 issue_id，让 agent 能调 cli.py retrigger-build --issue <id>
+            # PENDING_RERUN → 用户确认重修，直接调 coordinator.confirm_rerun
             actual_prompt = prompt_context
             if issue_id:
                 try:
@@ -326,7 +327,18 @@ class LinearSessionHandler:
                     _coordinator = get_coordinator()
                     if _coordinator is not None:
                         _run = _coordinator.store.get(issue_id)
-                        if _run is not None and _run.stage in (Stage.BUILDING, Stage.REJECTED):
+                        if _run is not None and _run.stage == Stage.PENDING_RERUN:
+                            _confirm_keywords = ("确认重修", "确认", "继续", "重修", "yes", "确定")
+                            if any(kw in prompt_context for kw in _confirm_keywords):
+                                await _coordinator.confirm_rerun(issue_id, session_id)
+                                return
+                            else:
+                                await client.send_response(
+                                    session_id,
+                                    "等待您确认是否继续重修，请回复「确认重修」后继续，或回复其他内容取消。"
+                                )
+                                return
+                        elif _run is not None and _run.stage in (Stage.BUILDING, Stage.REJECTED):
                             actual_prompt = (
                                 f"严格按 skill: bug-fix-developer 执行任务。\n\n"
                                 f"Issue UUID: {issue_id}\n"
@@ -362,8 +374,16 @@ class LinearSessionHandler:
                 elif event_type == "error":
                     error_text = data.get("error", "") or str(data)
 
-            if new_claude_session_id and issue_id:
-                self.token_store.save_session(issue_id, new_claude_session_id)
+            if new_claude_session_id and session_id and issue_id:
+                self.token_store.save_session(session_id, issue_id, new_claude_session_id)
+                # 同步更新 repair_runs 最新 linear_session_id
+                try:
+                    from plugins.bundled.repair.coordinator import get_coordinator
+                    _coordinator = get_coordinator()
+                    if _coordinator is not None and _coordinator.store.get(issue_id):
+                        _coordinator.store.update(issue_id, linear_session_id=session_id)
+                except Exception:
+                    pass
 
         except Exception as e:
             error_text = str(e)
@@ -526,7 +546,7 @@ class LinearSessionHandler:
             from api.models.requests import QueryRequest
 
             # 先查持久化，有则续接已有 Claude session（多轮对话）
-            existing_claude_session_id = self.token_store.get_session(issue_id) if issue_id else None
+            existing_claude_session_id = self.token_store.get_session(session_id) if session_id else None
             request = QueryRequest(
                 prompt=final_prompt,
                 language="中文",
@@ -543,10 +563,10 @@ class LinearSessionHandler:
                     except Exception:
                         data = {}
                 if event_type == "session_created":
-                    # 持久化 issue_id -> claude_session_id 映射，供 prompted 续接
+                    # 持久化 linear_session_id -> claude_session_id 映射，供 prompted 续接
                     claude_session_id = data.get("session_id")
-                    if claude_session_id and issue_id:
-                        self.token_store.save_session(issue_id, claude_session_id)
+                    if claude_session_id and session_id and issue_id:
+                        self.token_store.save_session(session_id, issue_id, claude_session_id)
                         logger.info(
                             f"[{trace_id}][Linear] session mapped: {session_id} -> {claude_session_id}"
                         )

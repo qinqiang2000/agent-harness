@@ -470,6 +470,35 @@ class RepairCoordinator:
         if count >= self.N:
             await self._reject(run, f"代码错重修达上限 N={self.N}，转人工。\n{raw}")
             return
+        self.store.update(run.linear_issue_id, stage=Stage.PENDING_RERUN, last_report=run.last_report)
+        client = self._linear(run.workspace_id)
+        msg = (
+            f"🔍 自动化测试报告分析完成，修复未通过（第 {count} 次）。\n\n"
+            f"{raw}\n\n"
+            f"请确认是否继续重修？在此对话回复「确认重修」后，将自动在原分支继续修复并重新触发构建。"
+        )
+        if run.linear_session_id:
+            try:
+                await client.send_response(run.linear_session_id, msg)
+            except Exception:
+                logger.warning("[Repair] send_response failed, fallback to comment: %s", run.linear_issue_id, exc_info=True)
+                await client.create_comment(run.linear_issue_id, msg)
+        else:
+            await client.create_comment(run.linear_issue_id, msg)
+
+    async def confirm_rerun(self, linear_issue_id: str, linear_session_id: str) -> None:
+        """用户在 Linear 会话确认重修后调用，执行重修并触发构建。"""
+        run = self.store.get(linear_issue_id)
+        if not run or run.stage != Stage.PENDING_RERUN:
+            return
+        # 更新 linear_session_id（本次对话的新 session）
+        self.store.update(linear_issue_id, linear_session_id=linear_session_id)
+        run = self.store.get(linear_issue_id)
+        client = self._linear(run.workspace_id)
+        try:
+            await client.send_thought(linear_session_id, "已收到确认，正在启动重修...")
+        except Exception:
+            pass
         prompt = prompts.build_developer_prompt(
             issue_id=run.linear_issue_id,
             identifier=run.linear_identifier,
@@ -482,6 +511,17 @@ class RepairCoordinator:
             last_report=run.last_report,
             repos=json.loads(run.repos) if run.repos else None,
         )
+
+        async def notify(body: str, final: bool = False) -> None:
+            try:
+                if final:
+                    await client.send_response(linear_session_id, body)
+                else:
+                    await client.send_thought(linear_session_id, body)
+            except Exception:
+                logger.warning("[Repair] notify failed session=%s", linear_session_id, exc_info=True)
+
+        self.store.update(linear_issue_id, stage=Stage.DEVELOPING)
         result_text, session_id = await _run_agent(
             self.agent_service,
             prompt,
@@ -489,27 +529,28 @@ class RepairCoordinator:
             session_id=run.develop_session_id or None,
         )
         parsed = prompts.parse_developer_output(result_text)
-        # 重修同样要求真正完成才触发构建；否则落 REJECTED 转人工。
         if parsed["status"] != "completed":
-            logger.info(
-                "[Repair] retry developer not completed (status=%s): %s, skip build, reject",
-                parsed["status"],
-                run.linear_issue_id,
-            )
             await self._reject(
                 run,
                 "重修未完成（开发阶段未产出有效修复），转人工。\n\n"
                 f"Agent 最后输出：\n{result_text}",
             )
+            await notify("重修未完成，已转人工处理。", final=True)
             return
         repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
-        build_id = await self.jenkins.trigger_build(repos=repos, branch=run.branch, linear_identifier=run.linear_identifier)
+        build_id = await self.jenkins.trigger_build(
+            repos=repos, branch=run.branch, linear_identifier=run.linear_identifier
+        )
         await self.jenkins.start_driver(build_id)
         self.store.update(
-            run.linear_issue_id,
+            linear_issue_id,
             stage=Stage.BUILDING,
             develop_session_id=session_id or run.develop_session_id,
             jenkins_build_id=build_id,
+        )
+        await notify(
+            f"重修代码已推送，构建+测试已触发，等待测试报告。",
+            final=True,
         )
 
     async def _handle_root_cause_error(self, run: RepairRun, raw: str) -> None:

@@ -24,6 +24,7 @@ class Stage:
     RESOLVED = "resolved"
     REJECTED = "rejected"  # 产研退回转人工
     BLOCKED = "blocked"  # 漏依赖：父单阻塞等子单，由人工接力
+    PENDING_RERUN = "pending_rerun"  # 等待人工确认后重修
 
 
 @dataclass
@@ -39,6 +40,7 @@ class RepairRun:
     mr_url: str = ""
     jenkins_build_id: str = ""
     develop_session_id: str = ""
+    linear_session_id: str = ""
     fix_retry_count: int = 0
     rediagnose_count: int = 0
     root_cause: str = ""
@@ -90,6 +92,7 @@ class RepairStore:
                     mr_url            TEXT DEFAULT '',
                     jenkins_build_id  TEXT DEFAULT '',
                     develop_session_id TEXT DEFAULT '',
+                    linear_session_id TEXT DEFAULT '',
                     fix_retry_count   INTEGER DEFAULT 0,
                     rediagnose_count  INTEGER DEFAULT 0,
                     root_cause        TEXT DEFAULT '',
@@ -112,6 +115,11 @@ class RepairStore:
                 )
                 """
             )
+            # 迁移：旧库补列
+            try:
+                conn.execute("ALTER TABLE repair_runs ADD COLUMN linear_session_id TEXT DEFAULT ''")
+            except Exception:
+                pass
 
     def upsert(self, run: RepairRun) -> None:
         """插入或更新整行（按 linear_issue_id 主键），幂等。不修改传入对象。"""

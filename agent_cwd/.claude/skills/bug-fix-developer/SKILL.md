@@ -19,6 +19,10 @@ description: >-
 - 所有 git 写命令必须以 `cd /tmp/repair/<identifier> &&` 开头或用 `git -C /tmp/repair/<identifier>`（hook 据此放行）
 - clone/pull 用只读 `GITLAB_TOKEN`；push + 建 MR 用写权限 `GITLAB_PUSH_TOKEN`
 - 不读取 `.env`、密钥、证书文件；不输出源码到回复
+- **禁止**直接调用 Jenkins API（`curl .../buildWithParameters` 或任何 Jenkins HTTP 调用）或直接读写 `jenkins_builds.db`；需要触发/重触发构建时，**必须**使用以下命令，触发后立即返回，不等待构建完成：
+  ```bash
+  python "$AGENTS_ROOT/plugins/bundled/repair/cli.py" retrigger-build --issue <issue_uuid>
+  ```
 
 ## 输入（由 coordinator 拼进 prompt）
 
