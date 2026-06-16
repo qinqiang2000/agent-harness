@@ -235,10 +235,12 @@ class JenkinsClient:
 
     async def _trigger_autotest(self, build_token: str) -> None:
         url = f"{self._base}/job/{self._autotest_job}/buildWithParameters"
+        build = self._store.get_build(build_token)
         params = {
             "token": self._autotest_token,
             "RUN_MODE": self._run_mode,
             "THREADS": str(self._threads),
+            "ISSUE_ID": (build or {}).get("linear_identifier", ""),
         }
         try:
             resp = await self._http.post(url, params=params)
