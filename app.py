@@ -46,7 +46,6 @@ from api.routers.plugins import router as plugins_router
 from api.routers.diagnosis import router as diagnosis_router
 from api.routers.alert_webhook import router as alert_webhook_router
 from api.routers.reports import router as reports_router
-from api.routers.tasks import router as tasks_router
 from api.constants import DATA_DIR, AGENT_CWD
 
 @asynccontextmanager
@@ -104,16 +103,6 @@ async def lifespan(app: FastAPI):
             logger.info("Apifox startup sync skipped (set APIFOX_SYNC_ON_STARTUP=true to enable)")
         scheduler.add_job(_run_sync, "interval", minutes=interval_minutes, id="apifox_sync")
         logger.info("Apifox sync scheduled every %d minutes for %d projects", interval_minutes, len(sync_services))
-
-    # 任务超时扫描（每 5 分钟），把跑了超过 30 分钟还在 running 的任务标记为超时
-    from api.services.task_store import scan_timeout_tasks
-    def _scan_timeouts():
-        try:
-            scan_timeout_tasks()
-        except Exception:
-            logger.exception("scan_timeout_tasks failed")
-    scheduler.add_job(_scan_timeouts, "interval", minutes=5, id="task_timeout_scan")
-    logger.info("Task timeout scan scheduled every 5 minutes")
 
     try:
         scheduler.start()
@@ -225,7 +214,6 @@ app.include_router(plugins_router)  # Plugin management API
 app.include_router(diagnosis_router)  # Diagnosis cases API
 app.include_router(alert_webhook_router)  # Alertmanager webhook
 app.include_router(reports_router)  # Diagnosis reports web view
-app.include_router(tasks_router)  # Task work orders
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
 
 

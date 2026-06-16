@@ -8,7 +8,6 @@ from typing import Optional
 
 from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
-from api.services import task_store
 from api.services.agent_service import AgentService
 from api.services.session_service import SessionService
 from api.services.sdk_pool import get_cache
@@ -85,12 +84,9 @@ class YunzhijiaHandler:
     async def process_message(self, msg: YZJRobotMsg, yzj_token: str, skill: Optional[str] = None):
         """处理云之家消息"""
         yzj_session_id = msg.sessionId
-        # skill 优先级：URL 参数 > 让 agent 自动选（None 时不指定 skill，由 LLM 根据 prompt 自己挑）
-        # default_skill 仅作为最终 fallback（极端兜底）
-        effective_skill = skill if skill else None
-        log_skill = effective_skill or "auto-select"
+        effective_skill = skill or self.default_skill
         logger.info(f"[YZJ] Received message: {msg.model_dump()}")
-        logger.info(f"[YZJ] Processing: session={yzj_session_id}, skill={log_skill}, content={msg.content[:50]}...")
+        logger.info(f"[YZJ] Processing: session={yzj_session_id}, skill={effective_skill}, content={msg.content[:50]}...")
 
         try:
             # 0. 清理过期会话
@@ -132,19 +128,9 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
-
-                # 创建任务工单
-                task = task_store.create_task(
-                    creator=msg.operatorName or "unknown",
-                    task_type=effective_skill or "auto",
-                    target=msg.content[:100] if msg.content else "",
-                    content=msg.content or "",
-                )
-                service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
-                task_url = f"{service_base_url}/api/tasks/{task['id']}"
                 await self.message_sender.send_text(
                     yzj_token, msg.operatorOpenid,
-                    f"收到，已为您创建任务单 #{task['id']}\n详情: {task_url}\n\n正在执行中，请耐心等待...",
+                    "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）",
                 )
 
             # 4. 获取机器人名称
@@ -170,12 +156,10 @@ class YunzhijiaHandler:
             )
 
             # 7. 处理消息流
-            task_obj = task if 'task' in locals() else None
             await self._process_agent_stream(
                 request, yzj_token, msg.operatorOpenid,
                 yzj_session_id, robot_name,
                 operator_name=msg.operatorName or "",
-                task=task_obj,
             )
 
         except Exception as e:
@@ -194,18 +178,12 @@ class YunzhijiaHandler:
         yzj_session_id: str,
         robot_name: str,
         operator_name: str = "",
-        task: dict = None,
     ):
         """处理 Agent 消息流"""
         message_count = 0
         agent_session_id = request.session_id
         perf = PerfTimer(request_id=yzj_session_id[:8] if yzj_session_id else None)
         perf.attach()
-
-        # 更新任务状态为 running
-        if task:
-            task_store.update_status(task["id"], task_store.STATUS_RUNNING)
-            task_store.add_stage(task["id"], "🚀 开始执行 Agent 查询")
 
         # Resume session 时也要更新 last_active
         if agent_session_id:
@@ -278,20 +256,8 @@ class YunzhijiaHandler:
                         t.done()
                     message_count += 1
                     logger.info(f"[YZJ] Sent final result")
-
-                    # 更新任务单为已完成
-                    if task:
-                        task_store.add_stage(task["id"], "✅ 执行完成，结果已推送")
-                        task_store.update_status(
-                            task["id"], task_store.STATUS_COMPLETED,
-                            result_summary=final_result[:500],
-                            full_report=final_result,
-                        )
                 else:
                     logger.error("[YZJ] No result content in ResultMessage")
-                    if task:
-                        task_store.add_stage(task["id"], "⚠️ Agent 返回空结果")
-                        task_store.update_status(task["id"], task_store.STATUS_FAILED, result_summary="Agent 返回空结果")
 
                 # 记录群内可继承会话，供其他用户追问时继承
                 if agent_session_id:
@@ -312,10 +278,6 @@ class YunzhijiaHandler:
                     yzj_token, operator_openid,
                     f"抱歉，处理时出现错误：{error_msg}",
                 )
-                # 更新任务单为失败
-                if task:
-                    task_store.add_stage(task["id"], f"❌ 执行失败: {error_msg[:100]}")
-                    task_store.update_status(task["id"], task_store.STATUS_FAILED, result_summary=error_msg[:500])
                 t = PerfTimer.current()
                 if t:
                     t.done()

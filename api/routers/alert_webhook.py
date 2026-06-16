@@ -145,45 +145,20 @@ def _build_diagnosis_prompt(alert_type: str, ip: str, alert_time: str, alertname
 
 async def _run_diagnosis(prompt: str, key: tuple[str, str]):
     """Run diagnosis in background with concurrency limit and inflight release."""
-    from api.services import task_store
-
     sem = _get_semaphore()
     alert_type, target_ip = key
 
-    # 创建任务单
-    task = task_store.create_task(
-        creator="alertmanager",
-        task_type="ops-diagnosis",
-        target=f"{alert_type} - {target_ip}",
-        content=prompt,
-    )
-    task_id = task["id"]
-    service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
-    task_url = f"{service_base_url}/api/tasks/{task_id}"
-
     # 全局并发限流：拿不到信号量就等
     async with sem:
-        task_store.update_status(task_id, task_store.STATUS_RUNNING)
-        task_store.add_stage(task_id, "🚀 开始执行 Agent 诊断")
-
         agent_service = get_agent_service()
-        # 把任务单链接注入 prompt，让 Agent 推送时使用任务单链接而非 report 链接
-        enhanced_prompt = (
-            prompt + f"\n\n"
-            f"⚠️ 本次诊断的任务单 ID 为: {task_id}\n"
-            f"⚠️ 本次诊断的任务单链接为: {task_url}\n"
-            f"在 Step 5.1 保存完整报告时，使用 PATCH http://127.0.0.1:9123/api/tasks/{task_id}\n"
-            f"在 Step 5.2 推送云之家时，「详情」链接必须使用: {task_url}"
-        )
         request = QueryRequest(
             tenant_id="alertmanager",
-            prompt=enhanced_prompt,
+            prompt=prompt,
             skill="ops-diagnosis",
             language="中文",
         )
 
         diagnosis_error = None
-        final_result = None
         try:
             async for message in agent_service.process_query(request):
                 event = message.get("event")
@@ -199,40 +174,23 @@ async def _run_diagnosis(prompt: str, key: tuple[str, str]):
                             result_obj = json.loads(data)
                             if result_obj.get("is_error"):
                                 diagnosis_error = result_obj.get("result", "unknown error")
-                            else:
-                                final_result = result_obj.get("result", "")
                         except (json.JSONDecodeError, TypeError):
-                            final_result = data
-                    else:
-                        final_result = data if isinstance(data, str) else str(data)
+                            pass
                     logger.info(f"Diagnosis completed [{key}]: {data}")
         except Exception as e:
             diagnosis_error = str(e)
             logger.error(f"Diagnosis failed [{key}]: {e}", exc_info=True)
         finally:
-            # 更新任务单状态
+            # 诊断失败时推送失败通知到云之家
             if diagnosis_error:
-                task_store.add_stage(task_id, f"❌ 执行失败: {str(diagnosis_error)[:100]}")
-                task_store.update_status(
-                    task_id, task_store.STATUS_FAILED,
-                    result_summary=str(diagnosis_error)[:500],
-                )
-                # 推送失败通知到云之家
                 err_short = str(diagnosis_error)[:150]
                 fail_msg = (
                     f"⚠️ 【诊断失败】\n"
                     f"{alert_type} - {target_ip}\n"
                     f"原因: {err_short}\n"
-                    f"任务单: {task_url}"
+                    f"请人工排查或检查 LLM 配额。"
                 )
                 await _push_text_to_yunzhijia(fail_msg)
-            elif final_result:
-                task_store.add_stage(task_id, "✅ 诊断完成")
-                task_store.update_status(
-                    task_id, task_store.STATUS_COMPLETED,
-                    result_summary=final_result[:500] if isinstance(final_result, str) else "",
-                    full_report=final_result if isinstance(final_result, str) else str(final_result),
-                )
 
             # 不管成功失败，都释放 inflight 并进入冷却期
             await _release_inflight(key)
@@ -267,7 +225,7 @@ async def _send_skip_summary_after_cooldown(key: tuple[str, str]):
         f"{alert_type} - {target}\n"
         f"过去 {minutes} 分钟内重复触发 {info['count']} 次\n"
         f"首次: {first}  末次: {last}\n"
-        f"（已自动诊断 1 次，详情见之前推送）"
+        f"（已自动诊断 1 次，结果见前序推送消息）"
     )
     logger.info(f"Sending skip summary [{key}]: count={info['count']}")
     await _push_text_to_yunzhijia(summary)
@@ -373,25 +331,10 @@ async def alert_webhook(request: Request, background_tasks: BackgroundTasks):
             except (ValueError, TypeError, AttributeError):
                 resolved_time = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
 
-            # 自动标记对应任务单为已恢复（所有匹配的未恢复任务一起标记）
-            from api.services import task_store
-            active_tasks = task_store.find_active_alert_tasks(alert_type, ip)
-            task_link = ""
-            if active_tasks:
-                for t in active_tasks:
-                    task_store.mark_alert_resolved(t["id"], resolved_by="alertmanager")
-                logger.info(f"Auto-resolved {len(active_tasks)} task(s) for {alert_type} on {ip}")
-                # 链接指向最新一条（list 已按时间倒序）
-                latest = active_tasks[0]
-                service_base_url = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:9123")
-                task_link = f"\n关联任务单: {len(active_tasks)} 条已自动恢复"
-                task_link += f"\n最新: {service_base_url}/api/tasks/{latest['id']}"
-
             recovery_msg = (
                 f"✅ 【告警已恢复】\n"
                 f"{alert_type} - {ip}\n"
                 f"恢复时间: {resolved_time}"
-                f"{task_link}"
             )
             background_tasks.add_task(_push_text_to_yunzhijia, recovery_msg)
             resolved_alerts.append({"ip": ip, "alert_type": alert_type, "alertname": alertname})
