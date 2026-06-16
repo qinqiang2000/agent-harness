@@ -217,7 +217,8 @@ class LinearSessionHandler:
         # 幂等门 2（本地 store，防状态尚未翻转时的并发重复 created）：
         # 已有 run 且 stage 已推进出 PENDING_REVIEW，说明流水线在跑，跳过。
         existing = coordinator.store.get(issue_id)
-        if existing is not None and existing.stage != Stage.PENDING_REVIEW:
+        _ACTIVE_STAGES = (Stage.DEVELOPING, Stage.BUILDING, Stage.ANALYZING)
+        if existing is not None and existing.stage in _ACTIVE_STAGES:
             logger.info(
                 f"[{trace_id}][Linear] {identifier} run exists stage={existing.stage}, skip"
             )
