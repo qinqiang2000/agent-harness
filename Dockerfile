@@ -17,7 +17,6 @@ WORKDIR /opt/agent-harness
 COPY requirements.txt .
 RUN pip install --no-cache-dir \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
     -r requirements.txt
 
 # 复制项目代码
