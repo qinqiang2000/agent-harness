@@ -60,7 +60,7 @@ class TokenStore:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS linear_session_map (
                     linear_session_id TEXT PRIMARY KEY,
-                    issue_id          TEXT NOT NULL,
+                    issue_id          TEXT NOT NULL DEFAULT '',
                     claude_session_id TEXT NOT NULL,
                     updated_at        INTEGER NOT NULL
                 )
@@ -69,24 +69,6 @@ class TokenStore:
                 CREATE INDEX IF NOT EXISTS idx_linear_session_map_issue_id
                 ON linear_session_map (issue_id, updated_at)
             """)
-            # 迁移：旧库 linear_session_map 以 issue_id 为主键，重建为以 linear_session_id 为主键
-            cols = [row[1] for row in conn.execute("PRAGMA table_info(linear_session_map)").fetchall()]
-            if "linear_session_id" not in cols:
-                conn.execute("ALTER TABLE linear_session_map RENAME TO linear_session_map_old")
-                conn.execute("""
-                    CREATE TABLE linear_session_map (
-                        linear_session_id TEXT PRIMARY KEY,
-                        issue_id          TEXT NOT NULL DEFAULT '',
-                        claude_session_id TEXT NOT NULL,
-                        updated_at        INTEGER NOT NULL
-                    )
-                """)
-                conn.execute("""
-                    INSERT INTO linear_session_map (linear_session_id, issue_id, claude_session_id, updated_at)
-                    SELECT claude_session_id, issue_id, claude_session_id, updated_at
-                    FROM linear_session_map_old
-                """)
-                conn.execute("DROP TABLE linear_session_map_old")
 
     def save_installation(
         self,

@@ -115,11 +115,6 @@ class RepairStore:
                 )
                 """
             )
-            # 迁移：旧库补列
-            try:
-                conn.execute("ALTER TABLE repair_runs ADD COLUMN linear_session_id TEXT DEFAULT ''")
-            except Exception:
-                pass
 
     def upsert(self, run: RepairRun) -> None:
         """插入或更新整行（按 linear_issue_id 主键），幂等。不修改传入对象。"""

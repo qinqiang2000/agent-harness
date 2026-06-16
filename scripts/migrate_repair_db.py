@@ -27,6 +27,7 @@ MIGRATIONS: dict[str, dict[str, list[tuple[str, str]]]] = {
     _resolve("REPAIR_DB_PATH", "data/repair/repair_runs.db"): {
         "repair_runs": [
             ("repos", "TEXT DEFAULT ''"),
+            ("linear_session_id", "TEXT DEFAULT ''"),
         ],
         "repo_locks": [
             # 以后在这里追加
@@ -74,6 +75,46 @@ def migrate_db(db_path: str, tables: dict[str, list[tuple[str, str]]]) -> None:
         conn.close()
 
 
+def migrate_linear_session_map(db_path: str) -> None:
+    """重建 linear_session_map：旧表以 issue_id 为主键，新表以 linear_session_id 为主键。"""
+    if not os.path.exists(db_path):
+        print(f"  [skip] 文件不存在：{db_path}")
+        return
+    conn = sqlite3.connect(db_path)
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(linear_session_map)")}
+        if not cols:
+            print(f"  [skip] 表不存在：linear_session_map")
+            return
+        if "linear_session_id" in cols:
+            print(f"  skip  linear_session_map（已是新结构）")
+            return
+        print(f"  migrate linear_session_map: issue_id PK → linear_session_id PK")
+        conn.execute("ALTER TABLE linear_session_map RENAME TO linear_session_map_old")
+        conn.execute("""
+            CREATE TABLE linear_session_map (
+                linear_session_id TEXT PRIMARY KEY,
+                issue_id          TEXT NOT NULL DEFAULT '',
+                claude_session_id TEXT NOT NULL,
+                updated_at        INTEGER NOT NULL
+            )
+        """)
+        conn.execute("""
+            INSERT INTO linear_session_map (linear_session_id, issue_id, claude_session_id, updated_at)
+            SELECT claude_session_id, issue_id, claude_session_id, updated_at
+            FROM linear_session_map_old
+        """)
+        conn.execute("DROP TABLE linear_session_map_old")
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_linear_session_map_issue_id
+            ON linear_session_map (issue_id, updated_at)
+        """)
+        conn.commit()
+        print(f"  done  linear_session_map rebuilt")
+    finally:
+        conn.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="统一数据库迁移脚本")
     parser.parse_args()
@@ -81,6 +122,11 @@ def main() -> None:
     for db_path, tables in MIGRATIONS.items():
         print(f"\n[{db_path}]")
         migrate_db(db_path, tables)
+
+    # linear_session_map 结构重建（主键变更，不能用 ALTER TABLE）
+    linear_db = _resolve("LINEAR_TOKEN_DB", "data/linear/linear_tokens.db")
+    print(f"\n[{linear_db}] linear_session_map 结构迁移")
+    migrate_linear_session_map(linear_db)
 
     print("\n全部完成。")
 
