@@ -295,7 +295,9 @@ class RepairCoordinator:
             return
 
         resolved_repos = parsed["repos"] or ([resolved_repo] if resolved_repo else [])
-        build_id = await self.jenkins.trigger_build(repos=resolved_repos, branch=new_branch)
+        build_id = await self.jenkins.trigger_build(
+            repos=resolved_repos, branch=new_branch, linear_identifier=run.linear_identifier
+        )
         await self.jenkins.start_driver(build_id)
 
         self.store.update(
@@ -328,8 +330,10 @@ class RepairCoordinator:
             logger.info("[Repair] report not ready: %s", linear_issue_id)
             return
 
+        phase = report.get("phase", "")
+        client = self._linear(run.workspace_id)
+
         if report.get("status") == "timeout":
-            client = self._linear(run.workspace_id)
             self.store.update(linear_issue_id, stage=Stage.REJECTED)
             self.store.release_repos(linear_issue_id)
             await self._set_issue_linear_state(client, linear_issue_id, "canceled")
@@ -341,15 +345,53 @@ class RepairCoordinator:
             logger.warning("[Repair] build timeout, rejected: %s", linear_issue_id)
             return
 
+        if phase == "done_cicd_failure":
+            self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            self.store.release_repos(linear_issue_id)
+            await self._set_issue_linear_state(client, linear_issue_id, "canceled")
+            await client.create_comment(
+                linear_issue_id,
+                f"⚠️ CI/CD 构建失败，已转人工。\n"
+                f"请检查 Jenkins 构建配置、账号权限或代码错误后，在本单评论「重跑」重新触发。\n\n"
+                f"{report.get('summary', '')}",
+            )
+            logger.warning("[Repair] cicd failure, rejected: %s", linear_issue_id)
+            return
+
+        if phase == "done_test_aborted":
+            self.store.update(linear_issue_id, stage=Stage.REJECTED)
+            self.store.release_repos(linear_issue_id)
+            await self._set_issue_linear_state(client, linear_issue_id, "canceled")
+            await client.create_comment(
+                linear_issue_id,
+                f"⚠️ 自动化测试任务未正常完成，已转人工。\n"
+                f"请检查 Jenkins autotest 配置后，在本单评论「重跑」重新触发。\n\n"
+                f"{report.get('summary', '')}",
+            )
+            logger.warning("[Repair] test aborted, rejected: %s", linear_issue_id)
+            return
+
         self.store.update(linear_issue_id, stage=Stage.ANALYZING)
-        report_summary = report.get("summary", "") + "\n" + str(report.get("failures", ""))
-        self.store.update(linear_issue_id, last_report=report_summary)
+
+        # 优先读本地报告文件（详细内容），无则降级到摘要计数
+        report_path = report.get("report_path", "")
+        if report_path:
+            try:
+                from pathlib import Path
+                report_content = Path(report_path).read_text(encoding="utf-8")
+            except Exception:
+                logger.warning("[Repair] failed to read report file %s, fallback to summary", report_path, exc_info=True)
+                report_content = report.get("summary", "")
+        else:
+            report_content = report.get("summary", "") + "\n" + str(report.get("failures", ""))
+
+        self.store.update(linear_issue_id, last_report=report.get("summary", ""))
 
         prompt = prompts.build_analyzer_prompt(
             identifier=run.linear_identifier,
             root_cause=run.root_cause,
             repair_plan=run.repair_plan,
-            report=report_summary,
+            report=report_content,
         )
         try:
             result_text, _ = await _run_agent(
@@ -359,6 +401,13 @@ class RepairCoordinator:
             logger.error("[Repair] analyzer agent failed: %s, rolling back to BUILDING", linear_issue_id, exc_info=True)
             self.store.update(linear_issue_id, stage=Stage.BUILDING)
             return
+        finally:
+            if report_path:
+                try:
+                    from pathlib import Path
+                    Path(report_path).unlink(missing_ok=True)
+                except Exception:
+                    logger.warning("[Repair] failed to delete report file %s", report_path, exc_info=True)
         parsed = prompts.parse_analyzer_output(result_text)
         verdict = parsed["verdict"]
         run = self.store.get(linear_issue_id)  # 重新读最新
@@ -454,7 +503,7 @@ class RepairCoordinator:
             )
             return
         repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
-        build_id = await self.jenkins.trigger_build(repos=repos, branch=run.branch)
+        build_id = await self.jenkins.trigger_build(repos=repos, branch=run.branch, linear_identifier=run.linear_identifier)
         await self.jenkins.start_driver(build_id)
         self.store.update(
             run.linear_issue_id,

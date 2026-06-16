@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 from plugins.bundled.repair import coordinator as coord_mod
 from plugins.bundled.repair.coordinator import RepairCoordinator
+from plugins.bundled.repair.github_artifacts_client import GitHubArtifactsClient
 from plugins.bundled.repair.jenkins_build_store import JenkinsBuildStore
 from plugins.bundled.repair.jenkins_client import JenkinsClient
 from plugins.bundled.repair.mr_builder import MRBuilder
@@ -48,6 +49,11 @@ class RepairChannelPlugin(ChannelPlugin):
         )
         build_store = JenkinsBuildStore(jenkins_builds_db)
 
+        github_artifacts = GitHubArtifactsClient(
+            repo=os.getenv("GITHUB_ARTIFACTS_REPO", ""),
+            token=os.getenv("GITHUB_TOKEN", ""),
+        )
+
         jenkins = JenkinsClient(
             base_url=os.getenv("JENKINS_BASE_URL", ""),
             user=os.getenv("JENKINS_USER", ""),
@@ -64,6 +70,7 @@ class RepairChannelPlugin(ChannelPlugin):
             cicd_poll_seconds=int(self.config.get("cicd_poll_seconds", 15)),
             autotest_poll_seconds=int(self.config.get("autotest_poll_seconds", 30)),
             queue_poll_seconds=int(self.config.get("queue_poll_seconds", 5)),
+            github_artifacts_client=github_artifacts,
         )
         self.jenkins = jenkins
 

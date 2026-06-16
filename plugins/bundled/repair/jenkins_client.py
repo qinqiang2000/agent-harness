@@ -40,6 +40,7 @@ class JenkinsClient:
         cicd_poll_seconds: int = 60,
         autotest_poll_seconds: int = 300,
         queue_poll_seconds: int = 60,
+        github_artifacts_client=None,
     ):
         self._base = base_url.rstrip("/")
         self._auth = (user, api_token)
@@ -57,10 +58,11 @@ class JenkinsClient:
         self._queue_poll = queue_poll_seconds
         self._http = httpx.AsyncClient(auth=self._auth, timeout=30)
         self._owner = f"pid-{os.getpid()}"
+        self._github_artifacts = github_artifacts_client
 
-    async def trigger_build(self, repos: List[str], branch: str) -> str:
+    async def trigger_build(self, repos: List[str], branch: str, linear_identifier: str = "") -> str:
         """并行触发各 repo 的 cicd 构建，落库，返回 build_token。不启动驱动。"""
-        token = self._store.create_build(repos=repos, branch=branch)
+        token = self._store.create_build(repos=repos, branch=branch, linear_identifier=linear_identifier)
         tasks = [self._trigger_cicd_one(token, repo, branch) for repo in repos]
         await asyncio.gather(*tasks, return_exceptions=True)
         return token
@@ -106,25 +108,28 @@ class JenkinsClient:
         if not phase.startswith("done_"):
             return None
         report_json = build.get("report_json", "")
+        report_path = build.get("report_path", "")
         if phase == "done_success":
-            return {"status": "success", "summary": report_json, "failures": []}
+            return {"phase": phase, "status": "success", "summary": report_json, "report_path": report_path, "failures": []}
         elif phase == "done_cicd_failure":
             summary = (
                 report_json if report_json.startswith("[构建失败]")
                 else f"[构建失败] {report_json}"
             )
-            return {"status": "failure", "summary": summary, "failures": []}
+            return {"phase": phase, "status": "failure", "summary": summary, "report_path": "", "failures": []}
         elif phase == "done_test_failure":
-            return {"status": "failure", "summary": report_json, "failures": []}
+            return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
         elif phase == "done_test_aborted":
-            return {"status": "failure", "summary": f"[测试任务未正常完成] {report_json}", "failures": []}
+            return {"phase": phase, "status": "failure", "summary": f"[测试任务未正常完成] {report_json}", "report_path": "", "failures": []}
         elif phase == "done_timeout":
             return {
+                "phase": phase,
                 "status": "timeout",
                 "summary": report_json or "构建+测试超过配置时限未完成，判定超时",
+                "report_path": "",
                 "failures": [],
             }
-        return {"status": "failure", "summary": report_json, "failures": []}
+        return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
 
     async def _advance(self, build_token: str) -> None:
         """非阻塞单步推进。整轮包 try/except，单次失败不改 phase。"""
@@ -293,18 +298,22 @@ class JenkinsClient:
             test_report = data.get("testReport") or {}
             pass_count = test_report.get("passCount", 0)
             fail_count = test_report.get("failCount", 0)
+            report_path = await self._download_artifacts_report(build_token)
             self._store.update_build(
                 build_token,
                 phase="done_success",
                 report_json=f"{pass_count} passed, {fail_count} failed",
+                report_path=report_path,
             )
         elif result == "FAILURE":
             test_report = data.get("testReport") or {}
             fail_count = test_report.get("failCount", 0)
+            report_path = await self._download_artifacts_report(build_token)
             self._store.update_build(
                 build_token,
                 phase="done_test_failure",
                 report_json=f"测试失败：{fail_count} 个用例未通过",
+                report_path=report_path,
             )
         else:
             self._store.update_build(
@@ -312,6 +321,18 @@ class JenkinsClient:
                 phase="done_test_aborted",
                 report_json=f"autotest 未正常完成，Jenkins result={result}",
             )
+
+    async def _download_artifacts_report(self, build_token: str) -> str:
+        """从 GitHub artifacts 仓库下载 autotest 报告到本地临时文件，返回路径；失败返回空串。"""
+        if not self._github_artifacts:
+            return ""
+        build = self._store.get_build(build_token)
+        identifier = (build or {}).get("linear_identifier", "")
+        if not identifier:
+            return ""
+        dest = f"/tmp/repair/reports/{build_token}-run.md"
+        ok = await self._github_artifacts.download_latest_autotest_report(identifier, dest)
+        return dest if ok else ""
 
     async def _get_console_snippet(self, job: str, build_no: int, max_lines: int = 20) -> str:
         """拉构建日志末尾片段。失败静默返回空串。"""

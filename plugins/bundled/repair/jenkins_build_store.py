@@ -24,6 +24,11 @@ class JenkinsBuildStore:
         "done_timeout",
     }
 
+    _SCHEMA_COLS = {
+        "linear_identifier": "TEXT DEFAULT ''",
+        "report_path": "TEXT DEFAULT ''",
+    }
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -56,6 +61,8 @@ class JenkinsBuildStore:
                     autotest_build_no INTEGER DEFAULT 0,
                     jenkins_result  TEXT DEFAULT '',
                     report_json     TEXT DEFAULT '',
+                    report_path     TEXT DEFAULT '',
+                    linear_identifier TEXT DEFAULT '',
                     started_at      INTEGER NOT NULL,
                     driver_owner    TEXT DEFAULT '',
                     driver_heartbeat INTEGER DEFAULT 0,
@@ -63,6 +70,12 @@ class JenkinsBuildStore:
                     updated_at      INTEGER NOT NULL
                 )
             """)
+            # 迁移：给已有表补列
+            for col, typedef in self._SCHEMA_COLS.items():
+                try:
+                    conn.execute(f"ALTER TABLE jenkins_builds ADD COLUMN {col} {typedef}")
+                except Exception:
+                    pass  # 列已存在，忽略
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jenkins_cicd_builds (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +94,7 @@ class JenkinsBuildStore:
                 "CREATE INDEX IF NOT EXISTS idx_cicd_token ON jenkins_cicd_builds(build_token)"
             )
 
-    def create_build(self, repos: List[str], branch: str) -> str:
+    def create_build(self, repos: List[str], branch: str, linear_identifier: str = "") -> str:
         """插入主表记录 + 每个 repo 一条 cicd_builds 记录，返回 build_token。"""
         token = uuid.uuid4().hex
         now = int(time.time())
@@ -89,9 +102,9 @@ class JenkinsBuildStore:
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO jenkins_builds "
-                "(build_token, repos_json, branch, phase, started_at, created_at, updated_at) "
-                "VALUES (?, ?, ?, 'cicd_queued', ?, ?, ?)",
-                (token, repos_json, branch, now, now, now),
+                "(build_token, repos_json, branch, phase, linear_identifier, started_at, created_at, updated_at) "
+                "VALUES (?, ?, ?, 'cicd_queued', ?, ?, ?, ?)",
+                (token, repos_json, branch, linear_identifier, now, now, now),
             )
             for repo in repos:
                 service = repo.split("/")[-1]

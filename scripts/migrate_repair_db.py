@@ -34,7 +34,8 @@ MIGRATIONS: dict[str, dict[str, list[tuple[str, str]]]] = {
     },
     _resolve("JENKINS_BUILDS_DB_PATH", "data/repair/jenkins_builds.db"): {
         "jenkins_builds": [
-            # 以后在这里追加
+            ("linear_identifier", "TEXT DEFAULT ''"),
+            ("report_path", "TEXT DEFAULT ''"),
         ],
         "jenkins_cicd_builds": [
             # 以后在这里追加

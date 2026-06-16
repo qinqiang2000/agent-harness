@@ -69,7 +69,7 @@ class FakeJenkins:
         self.timeout = timeout
         self.triggered = []  # list of (repos, branch)
 
-    def trigger_build(self, repos, branch):
+    async def trigger_build(self, repos, branch, linear_identifier=""):
         self.triggered.append((repos, branch))
         return "build-xyz"
 
@@ -77,8 +77,8 @@ class FakeJenkins:
         if not self.ready:
             return None
         if self.timeout:
-            return {"status": "timeout", "summary": "构建+测试超过配置时限未完成，判定超时", "failures": []}
-        return {"status": "success", "summary": "3 passed", "failures": []}
+            return {"phase": "done_timeout", "status": "timeout", "summary": "构建+测试超过配置时限未完成，判定超时", "report_path": "", "failures": []}
+        return {"phase": "done_success", "status": "success", "summary": "3 passed", "report_path": "", "failures": []}
 
 
 class FakeAgentService:
