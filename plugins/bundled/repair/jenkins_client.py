@@ -78,7 +78,7 @@ class JenkinsClient:
         }
         try:
             resp = await self._http.post(url, params=params)
-            if resp.status_code != 201:
+            if resp.status_code not in (201, 303):
                 raise RuntimeError(f"cicd trigger failed: {resp.status_code}")
             location = resp.headers.get("Location", "")
             m = re.search(r"/queue/item/(\d+)/", location)
@@ -244,7 +244,7 @@ class JenkinsClient:
         }
         try:
             resp = await self._http.post(url, params=params)
-            if resp.status_code != 201:
+            if resp.status_code not in (201, 303):
                 raise RuntimeError(f"autotest trigger failed: {resp.status_code}")
             location = resp.headers.get("Location", "")
             m = re.search(r"/queue/item/(\d+)/", location)
