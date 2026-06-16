@@ -196,6 +196,15 @@ class LinearSessionHandler:
                 f"[{trace_id}][Linear] {identifier} state={state_name} "
                 f"(type={state_type or '空'}) not repairable, skip"
             )
+            # 把新的 linear_session_id 绑定到已有 claude_session_id，供后续 prompted 续接
+            prev_linear_session_id = self.token_store.get_latest_session_by_issue(issue_id)
+            if prev_linear_session_id and session_id and session_id != prev_linear_session_id:
+                prev_claude_session_id = self.token_store.get_session(prev_linear_session_id)
+                if prev_claude_session_id:
+                    self.token_store.save_session(session_id, issue_id, prev_claude_session_id)
+                    logger.info(
+                        f"[{trace_id}][Linear] re-mapped session: {session_id} -> {prev_claude_session_id}"
+                    )
             try:
                 await client.send_response(
                     session_id,
@@ -212,6 +221,15 @@ class LinearSessionHandler:
             logger.info(
                 f"[{trace_id}][Linear] {identifier} run exists stage={existing.stage}, skip"
             )
+            # 把新的 linear_session_id 绑定到已有 claude_session_id，供后续 prompted 续接
+            prev_linear_session_id = self.token_store.get_latest_session_by_issue(issue_id)
+            if prev_linear_session_id and session_id and session_id != prev_linear_session_id:
+                prev_claude_session_id = self.token_store.get_session(prev_linear_session_id)
+                if prev_claude_session_id:
+                    self.token_store.save_session(session_id, issue_id, prev_claude_session_id)
+                    logger.info(
+                        f"[{trace_id}][Linear] re-mapped session: {session_id} -> {prev_claude_session_id}"
+                    )
             try:
                 await client.send_response(
                     session_id, "该单已在修复流程中，跳过重复触发。"
