@@ -334,25 +334,24 @@ class JenkinsClient:
                 return
             result = data.get("result", "ABORTED")
             self._store.update_build(build_token, jenkins_result=result)
-            if result == "SUCCESS":
-                test_report = data.get("testReport") or {}
-                pass_count = test_report.get("passCount", 0)
-                fail_count = test_report.get("failCount", 0)
-                report_path = await self._download_artifacts_report(build_token)
+
+            build_url = data.get("url", f"{self._base}/job/{self._autotest_job}/{build_no}/")
+            display_name = data.get("displayName", f"#{build_no}")
+            duration_ms = data.get("duration", 0)
+            duration_str = f"{duration_ms // 60000}min {(duration_ms % 60000) // 1000}s"
+            report_json = (
+                f"autotest {display_name} 结果：{result}\n"
+                f"耗时：{duration_str}\n"
+                f"构建地址：{build_url}"
+            )
+
+            if result in ("SUCCESS", "FAILURE"):
+                report_path = await self._download_artifacts_report(build_token, data)
+                phase = "done_success" if result == "SUCCESS" else "done_test_failure"
                 self._store.update_build(
                     build_token,
-                    phase="done_success",
-                    report_json=f"{pass_count} passed, {fail_count} failed",
-                    report_path=report_path,
-                )
-            elif result == "FAILURE":
-                test_report = data.get("testReport") or {}
-                fail_count = test_report.get("failCount", 0)
-                report_path = await self._download_artifacts_report(build_token)
-                self._store.update_build(
-                    build_token,
-                    phase="done_test_failure",
-                    report_json=f"测试失败：{fail_count} 个用例未通过",
+                    phase=phase,
+                    report_json=report_json,
                     report_path=report_path,
                 )
             else:
@@ -366,17 +365,44 @@ class JenkinsClient:
 
     # ── 工具方法 ─────────────────────────────────────────────────────────
 
-    async def _download_artifacts_report(self, build_token: str) -> str:
-        """从 GitHub artifacts 仓库下载 autotest 报告到本地临时文件，返回路径；失败返回空串。"""
-        if not self._github_artifacts:
-            return ""
+    async def _download_artifacts_report(self, build_token: str, job_data: dict = None) -> str:
+        """下载测试报告到本地临时文件，返回路径；失败返回空串。
+
+        优先从 GitHub artifacts 仓库拉 *-run.md；不可用时 fallback 到
+        Jenkins artifacts 里的 logs.log。
+        """
         build = self._store.get_build(build_token)
         identifier = (build or {}).get("linear_identifier", "")
-        if not identifier:
-            return ""
         dest = f"/tmp/repair/reports/{build_token}-run.md"
-        ok = await self._github_artifacts.download_latest_autotest_report(identifier, dest)
-        return dest if ok else ""
+
+        # 1. GitHub artifacts（主路径）
+        if self._github_artifacts and identifier:
+            ok = await self._github_artifacts.download_latest_autotest_report(identifier, dest)
+            if ok:
+                return dest
+
+        # 2. fallback：Jenkins artifacts 里的 logs.log
+        if job_data:
+            artifacts = job_data.get("artifacts") or []
+            log_artifact = next(
+                (a for a in artifacts if a.get("fileName", "").endswith(".log")),
+                None,
+            )
+            if log_artifact:
+                build_url = job_data.get("url", "")
+                rel_path = log_artifact.get("relativePath", log_artifact["fileName"])
+                log_url = f"{build_url}artifact/{rel_path}"
+                try:
+                    resp = await self._http.get(log_url)
+                    if resp.status_code == 200:
+                        from pathlib import Path as _Path
+                        _Path(dest).parent.mkdir(parents=True, exist_ok=True)
+                        _Path(dest).write_text(resp.text, encoding="utf-8")
+                        return dest
+                except Exception as exc:
+                    logger.warning("[Jenkins] download logs.log failed token=%s: %s", build_token, exc)
+
+        return ""
 
     async def _get_console_snippet(self, job: str, build_no: int, max_lines: int = 20) -> str:
         """拉构建日志末尾片段。失败静默返回空串。"""
