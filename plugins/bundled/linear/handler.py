@@ -347,7 +347,7 @@ class LinearSessionHandler:
                     if _coordinator is not None:
                         _run = _coordinator.store.get(issue_id)
                         if _run is not None and _run.stage == Stage.PENDING_RERUN:
-                            _confirm_keywords = ("确认重修", "确认", "继续", "重修", "yes", "确定")
+                            _confirm_keywords = ("确认重修", "重新修复")
                             if any(kw in prompt_context for kw in _confirm_keywords):
                                 await _coordinator.confirm_rerun(issue_id, session_id)
                                 return
@@ -356,6 +356,15 @@ class LinearSessionHandler:
                                     session_id,
                                     "等待您确认是否继续重修，请回复「确认重修」后继续，或回复其他内容取消。"
                                 )
+                                return
+                        # 重新分析报告：BUILDING/RESOLVED/REJECTED/ANALYZING 均支持
+                        _REANALYZE_KEYWORDS = ("重新分析", "分析报告", "看报告", "重跑分析", "测试结果", "分析结果")
+                        if _run is not None and any(kw in prompt_context for kw in _REANALYZE_KEYWORDS):
+                            _reanalyzable = (Stage.BUILDING, Stage.RESOLVED, Stage.REJECTED, Stage.ANALYZING)
+                            if _run.stage in _reanalyzable:
+                                await client.send_thought(session_id, "正在重新获取并分析测试报告...")
+                                _coordinator.store.update(issue_id, stage=Stage.BUILDING)
+                                await _coordinator.analyze_report(issue_id)
                                 return
                         elif _run is not None and _run.stage in (Stage.BUILDING, Stage.REJECTED):
                             actual_prompt = (
