@@ -308,7 +308,6 @@ class RepairCoordinator:
         build_id = await self.jenkins.trigger_build(
             repos=resolved_repos, branch=new_branch, linear_identifier=run.linear_identifier
         )
-        await self.jenkins.start_driver(build_id)
 
         self.store.update(
             linear_issue_id,
@@ -335,7 +334,7 @@ class RepairCoordinator:
         if not run or run.stage != Stage.BUILDING:
             return
 
-        report = self.jenkins.get_report(run.jenkins_build_id)
+        report = await self.jenkins.get_report_async(run.jenkins_build_id)
         if report is None:
             logger.info("[Repair] report not ready: %s", linear_issue_id)
             return
@@ -551,7 +550,6 @@ class RepairCoordinator:
         build_id = await self.jenkins.trigger_build(
             repos=repos, branch=run.branch, linear_identifier=run.linear_identifier
         )
-        await self.jenkins.start_driver(build_id)
         self.store.update(
             linear_issue_id,
             stage=Stage.BUILDING,
@@ -621,7 +619,6 @@ class RepairCoordinator:
                     exc_info=True,
                 )
         self._reconcile_locks()
-        await self.jenkins.resume_pending_drivers()
 
     _ACTIVE_STAGES = (Stage.DEVELOPING, Stage.BUILDING, Stage.ANALYZING)
 

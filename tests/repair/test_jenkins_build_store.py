@@ -1,6 +1,5 @@
+import json
 import sys
-import time
-import threading
 from pathlib import Path
 import pytest
 
@@ -25,7 +24,6 @@ def test_create_build(store):
     assert build is not None
     assert build["phase"] == "cicd_queued"
     assert build["branch"] == "fix/ENG-1"
-    import json
     assert json.loads(build["repos_json"]) == ["piaozone/base/api-auth", "piaozone/base/api-company"]
 
 
@@ -40,9 +38,9 @@ def test_create_cicd_build_rows(store):
 
 def test_update_build_phase(store):
     token = store.create_build(repos=["piaozone/base/api-auth"], branch="fix/ENG-1")
-    store.update_build(token, phase="cicd_building")
+    store.update_build(token, phase="autotest_building")
     build = store.get_build(token)
-    assert build["phase"] == "cicd_building"
+    assert build["phase"] == "autotest_building"
 
 
 def test_update_cicd_build_row(store):
@@ -53,44 +51,25 @@ def test_update_cicd_build_row(store):
     assert rows[0]["result"] == "SUCCESS"
 
 
-def test_list_non_done_builds(store):
-    t1 = store.create_build(repos=["piaozone/base/api-auth"], branch="fix/ENG-1")
-    t2 = store.create_build(repos=["piaozone/base/api-company"], branch="fix/ENG-2")
-    store.update_build(t1, phase="done_success")
-    pending = store.list_non_done_builds()
-    tokens = [r["build_token"] for r in pending]
-    assert t2 in tokens
-    assert t1 not in tokens
-
-
-def test_driver_acquire_exclusive(store):
+def test_is_done_false_when_building(store):
     token = store.create_build(repos=["piaozone/base/api-auth"], branch="fix/ENG-1")
-    assert store.try_acquire_driver(token, owner="proc-A") is True
-    assert store.try_acquire_driver(token, owner="proc-B") is False
-    assert store.try_acquire_driver(token, owner="proc-A") is True
+    store.update_build(token, phase="autotest_building")
+    assert store.is_done(token) is False
 
 
-def test_driver_stale_heartbeat_reacquired(store):
+def test_is_done_true_when_success(store):
     token = store.create_build(repos=["piaozone/base/api-auth"], branch="fix/ENG-1")
-    store.try_acquire_driver(token, owner="proc-A")
-    store.update_build(token, driver_heartbeat=int(time.time()) - 400)
-    assert store.try_acquire_driver(token, owner="proc-B", stale_seconds=300) is True
+    store.update_build(token, phase="done_success")
+    assert store.is_done(token) is True
 
 
-def test_concurrent_acquire(store):
+def test_is_done_true_for_unknown_token(store):
+    assert store.is_done("nonexistent") is True
+
+
+def test_schema_has_no_driver_columns(store):
+    """driver_owner / driver_heartbeat 列不应存在于新建的 DB。"""
     token = store.create_build(repos=["piaozone/base/api-auth"], branch="fix/ENG-1")
-    results = []
-    barrier = threading.Barrier(2)
-
-    def try_acquire(name):
-        barrier.wait()
-        results.append(store.try_acquire_driver(token, owner=name))
-
-    threads = [threading.Thread(target=try_acquire, args=(f"proc-{i}",)) for i in range(2)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert results.count(True) == 1
-    assert results.count(False) == 1
+    build = store.get_build(token)
+    assert "driver_owner" not in build
+    assert "driver_heartbeat" not in build

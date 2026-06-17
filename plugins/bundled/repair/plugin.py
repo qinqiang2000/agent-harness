@@ -166,8 +166,6 @@ class RepairChannelPlugin(ChannelPlugin):
         )
         self._scheduler.start()
         logger.info("[Repair] poll scheduler started, interval=%ds", interval)
-        await self.jenkins.resume_pending_drivers()
-        logger.info("[Repair] resumed pending Jenkins drivers on start")
 
     async def on_stop(self) -> None:
         if self._scheduler:

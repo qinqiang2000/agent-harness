@@ -53,29 +53,27 @@ class JenkinsBuildStore:
         with self._conn() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jenkins_builds (
-                    build_token     TEXT PRIMARY KEY,
-                    repos_json      TEXT NOT NULL,
-                    branch          TEXT NOT NULL,
-                    phase           TEXT NOT NULL DEFAULT 'cicd_queued',
+                    build_token       TEXT PRIMARY KEY,
+                    repos_json        TEXT NOT NULL,
+                    branch            TEXT NOT NULL,
+                    phase             TEXT NOT NULL DEFAULT 'cicd_queued',
                     autotest_queue_id TEXT DEFAULT '',
                     autotest_build_no INTEGER DEFAULT 0,
-                    jenkins_result  TEXT DEFAULT '',
-                    report_json     TEXT DEFAULT '',
-                    report_path     TEXT DEFAULT '',
+                    jenkins_result    TEXT DEFAULT '',
+                    report_json       TEXT DEFAULT '',
+                    report_path       TEXT DEFAULT '',
                     linear_identifier TEXT DEFAULT '',
-                    started_at      INTEGER NOT NULL,
-                    driver_owner    TEXT DEFAULT '',
-                    driver_heartbeat INTEGER DEFAULT 0,
-                    created_at      INTEGER NOT NULL,
-                    updated_at      INTEGER NOT NULL
+                    started_at        INTEGER NOT NULL,
+                    created_at        INTEGER NOT NULL,
+                    updated_at        INTEGER NOT NULL
                 )
             """)
-            # 迁移：给已有表补列
+            # 迁移：给已有表补列（存量表可能有 driver_owner/driver_heartbeat，忽略即可）
             for col, typedef in self._SCHEMA_COLS.items():
                 try:
                     conn.execute(f"ALTER TABLE jenkins_builds ADD COLUMN {col} {typedef}")
                 except Exception:
-                    pass  # 列已存在，忽略
+                    pass
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jenkins_cicd_builds (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,45 +168,6 @@ class JenkinsBuildStore:
                 f"UPDATE jenkins_cicd_builds SET {set_clause} "
                 f"WHERE build_token = ? AND repo = ?",
                 values,
-            )
-
-    def list_non_done_builds(self) -> List[Dict]:
-        """列出所有未完成的构建记录（phase 不以 done_ 开头）。"""
-        with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM jenkins_builds WHERE phase NOT LIKE 'done_%'"
-            ).fetchall()
-        return [dict(r) for r in rows]
-
-    def try_acquire_driver(self, build_token: str, owner: str, stale_seconds: int = 300) -> bool:
-        """尝试抢占 driver_owner。已有新鲜 owner 则返回 False，否则抢占成功返回 True。"""
-        now = int(time.time())
-        with self._conn() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                "SELECT driver_owner, driver_heartbeat FROM jenkins_builds WHERE build_token = ?",
-                (build_token,),
-            ).fetchone()
-            if row is None:
-                return False
-            current_owner = row["driver_owner"] or ""
-            heartbeat = row["driver_heartbeat"] or 0
-            if current_owner and current_owner != owner and (now - heartbeat) < stale_seconds:
-                return False
-            conn.execute(
-                "UPDATE jenkins_builds SET driver_owner = ?, driver_heartbeat = ?, updated_at = ? "
-                "WHERE build_token = ?",
-                (owner, now, now, build_token),
-            )
-        return True
-
-    def refresh_heartbeat(self, build_token: str, owner: str) -> None:
-        now = int(time.time())
-        with self._conn() as conn:
-            conn.execute(
-                "UPDATE jenkins_builds SET driver_heartbeat = ?, updated_at = ? "
-                "WHERE build_token = ? AND driver_owner = ?",
-                (now, now, build_token, owner),
             )
 
     def is_done(self, build_token: str) -> bool:

@@ -1,11 +1,13 @@
-"""Jenkins 客户端 —— 真实 httpx 实现 + 自驱动两任务状态机。
+"""Jenkins 客户端 —— cicd inline poll + autotest 定时扫表。
 
-两个公共方法（coordinator 接口不变）：
-  trigger_build(repos, branch) -> build_token   异步，立即返回，只落库
-  get_report(build_token) -> dict|None          同步，只读库
+trigger_build(repos, branch) -> build_token
+    内部 inline poll cicd 直到全部完成（≤5min），
+    cicd 全部 SUCCESS 后触发 autotest 并等到拿到 autotest_build_no，
+    返回 build_token。phase 停在 autotest_building，由 coordinator 定时任务扫表。
 
-后台驱动由 start_driver(build_token) 拉起（asyncio.create_task），
-由 plugin.on_start / poller 扫表统一调用，不在 trigger_build 内直接启动。
+get_report(build_token) -> dict|None
+    只读库，autotest_building 时轮询 Jenkins 拿结果并更新 phase；
+    phase 以 done_ 开头则返回报告字典，否则返回 None。
 """
 
 import asyncio
@@ -37,9 +39,9 @@ class JenkinsClient:
         autotest_run_mode: str = "smoke",
         autotest_threads: int = 4,
         build_timeout_seconds: int = 86400,
-        cicd_poll_seconds: int = 60,
-        autotest_poll_seconds: int = 300,
-        queue_poll_seconds: int = 60,
+        cicd_poll_seconds: int = 10,
+        autotest_poll_seconds: int = 30,
+        queue_poll_seconds: int = 5,
         github_artifacts_client=None,
     ):
         self._base = base_url.rstrip("/")
@@ -57,15 +59,112 @@ class JenkinsClient:
         self._autotest_poll = autotest_poll_seconds
         self._queue_poll = queue_poll_seconds
         self._http = httpx.AsyncClient(auth=self._auth, timeout=30)
-        self._owner = f"pid-{os.getpid()}"
         self._github_artifacts = github_artifacts_client
 
+    # ── 公共入口 ─────────────────────────────────────────────────────────
+
     async def trigger_build(self, repos: List[str], branch: str, linear_identifier: str = "") -> str:
-        """并行触发各 repo 的 cicd 构建，落库，返回 build_token。不启动驱动。"""
+        """并行触发 cicd，inline poll 等完成，成功后触发 autotest 等到拿到 build_no，返回 build_token。"""
         token = self._store.create_build(repos=repos, branch=branch, linear_identifier=linear_identifier)
-        tasks = [self._trigger_cicd_one(token, repo, branch) for repo in repos]
-        await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 1. 并行触发所有 repo 的 cicd
+        await asyncio.gather(
+            *[self._trigger_cicd_one(token, repo, branch) for repo in repos],
+            return_exceptions=True,
+        )
+
+        # 2. inline poll cicd 直到全部完成
+        await self._poll_cicd_until_done(token)
+
+        # 3. 检查 cicd 结果，失败直接返回（phase 已是 done_cicd_failure）
+        build = self._store.get_build(token)
+        if not build or build["phase"] == "done_cicd_failure":
+            return token
+
+        # 4. cicd 全部 SUCCESS，触发 autotest
+        await self._trigger_autotest(token)
+
+        # 5. 等到拿到 autotest_build_no（queue → building），超时则标 aborted
+        await self._wait_autotest_build_no(token)
+
         return token
+
+    def get_report(self, build_token: str) -> Optional[Dict]:
+        """轮询 autotest 结果（若仍在运行），phase done_ 后返回报告字典，否则 None。"""
+        build = self._store.get_build(build_token)
+        if not build:
+            return None
+
+        phase = build["phase"]
+
+        # 超时检查
+        if not phase.startswith("done_") and int(time.time()) - build["started_at"] > self._timeout_s:
+            self._store.update_build(
+                build_token,
+                phase="done_timeout",
+                report_json="构建+测试超过配置时限未完成，判定超时",
+            )
+            phase = "done_timeout"
+
+        # autotest 仍在跑，同步推进一步（coordinator 定时任务调用，非阻塞）
+        if phase == "autotest_building":
+            # 用 asyncio.get_event_loop().run_until_complete 不安全，
+            # get_report 由 coordinator 的 async 定时任务调用，直接返回 None 让下轮再查
+            return None
+
+        if not phase.startswith("done_"):
+            return None
+
+        return self._build_report(build)
+
+    async def get_report_async(self, build_token: str) -> Optional[Dict]:
+        """异步版 get_report，供 coordinator 定时任务调用。"""
+        build = self._store.get_build(build_token)
+        if not build:
+            return None
+
+        phase = build["phase"]
+
+        # 超时检查
+        if not phase.startswith("done_") and int(time.time()) - build["started_at"] > self._timeout_s:
+            self._store.update_build(
+                build_token,
+                phase="done_timeout",
+                report_json="构建+测试超过配置时限未完成，判定超时",
+            )
+            return self._build_report(self._store.get_build(build_token))
+
+        # autotest 仍在跑，推进一步
+        if phase == "autotest_building":
+            await self._advance_autotest_building(build_token)
+            build = self._store.get_build(build_token)
+            phase = build["phase"] if build else "done_timeout"
+
+        if not phase.startswith("done_"):
+            return None
+
+        return self._build_report(self._store.get_build(build_token))
+
+    def _build_report(self, build: Optional[Dict]) -> Optional[Dict]:
+        if not build:
+            return None
+        phase = build["phase"]
+        report_json = build.get("report_json", "")
+        report_path = build.get("report_path", "")
+        if phase == "done_success":
+            return {"phase": phase, "status": "success", "summary": report_json, "report_path": report_path, "failures": []}
+        elif phase == "done_cicd_failure":
+            summary = report_json if report_json.startswith("[构建失败]") else f"[构建失败] {report_json}"
+            return {"phase": phase, "status": "failure", "summary": summary, "report_path": "", "failures": []}
+        elif phase == "done_test_failure":
+            return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
+        elif phase == "done_test_aborted":
+            return {"phase": phase, "status": "failure", "summary": f"[测试任务未正常完成] {report_json}", "report_path": "", "failures": []}
+        elif phase == "done_timeout":
+            return {"phase": phase, "status": "timeout", "summary": report_json or "构建+测试超过配置时限未完成，判定超时", "report_path": "", "failures": []}
+        return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
+
+    # ── cicd inline poll ─────────────────────────────────────────────────
 
     async def _trigger_cicd_one(self, build_token: str, repo: str, branch: str) -> None:
         service = repo.split("/")[-1]
@@ -84,154 +183,87 @@ class JenkinsClient:
             m = re.search(r"/queue/item/(\d+)/", location)
             if not m:
                 raise RuntimeError(f"cannot parse queue id from: {location}")
-            queue_id = m.group(1)
-            self._store.update_cicd_build(build_token, repo, queue_id=queue_id)
+            self._store.update_cicd_build(build_token, repo, queue_id=m.group(1))
         except Exception as exc:
             logger.error("[Jenkins] trigger cicd failed repo=%s: %s", repo, exc)
-            self._store.update_cicd_build(
-                build_token, repo, result="FAILURE", console_snippet=str(exc)
-            )
+            self._store.update_cicd_build(build_token, repo, result="FAILURE", console_snippet=str(exc))
+
+    async def _poll_cicd_until_done(self, build_token: str) -> None:
+        """inline poll cicd：queue → build_no → 等结果，直到全部 repo 完成。"""
+        deadline = time.time() + 600  # cicd 最多等 10min
+        while time.time() < deadline:
             rows = self._store.list_cicd_builds(build_token)
-            if all(r["result"] in ("FAILURE", "ABORTED") or not r["queue_id"] for r in rows):
+
+            # 等 queue → build_no
+            for row in rows:
+                if row["build_no"] == 0 and row["queue_id"] and row["result"] == "PENDING":
+                    await self._resolve_queue_to_build_no(build_token, row)
+
+            rows = self._store.list_cicd_builds(build_token)
+
+            # 等构建结果
+            for row in rows:
+                if row["result"] == "PENDING" and row["build_no"] > 0:
+                    await self._poll_cicd_build_result(build_token, row)
+
+            rows = self._store.list_cicd_builds(build_token)
+            pending = [r for r in rows if r["result"] == "PENDING"]
+            failed = [r for r in rows if r["result"] in ("FAILURE", "ABORTED")]
+
+            if failed:
+                summaries = [f"{r['repo']}: {r['console_snippet'] or r['result']}" for r in failed]
                 self._store.update_build(
                     build_token,
                     phase="done_cicd_failure",
-                    report_json=f"[构建失败] 触发 cicd 失败: {exc}",
+                    report_json="[构建失败]\n" + "\n".join(summaries),
                 )
+                return
 
-    def get_report(self, build_token: str) -> Optional[Dict]:
-        """只读库，phase 以 done_ 开头则按 phase 组装报告字典，否则返回 None。"""
-        build = self._store.get_build(build_token)
-        if not build:
-            return None
-        phase = build["phase"]
-        if not phase.startswith("done_"):
-            return None
-        report_json = build.get("report_json", "")
-        report_path = build.get("report_path", "")
-        if phase == "done_success":
-            return {"phase": phase, "status": "success", "summary": report_json, "report_path": report_path, "failures": []}
-        elif phase == "done_cicd_failure":
-            summary = (
-                report_json if report_json.startswith("[构建失败]")
-                else f"[构建失败] {report_json}"
-            )
-            return {"phase": phase, "status": "failure", "summary": summary, "report_path": "", "failures": []}
-        elif phase == "done_test_failure":
-            return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
-        elif phase == "done_test_aborted":
-            return {"phase": phase, "status": "failure", "summary": f"[测试任务未正常完成] {report_json}", "report_path": "", "failures": []}
-        elif phase == "done_timeout":
-            return {
-                "phase": phase,
-                "status": "timeout",
-                "summary": report_json or "构建+测试超过配置时限未完成，判定超时",
-                "report_path": "",
-                "failures": [],
-            }
-        return {"phase": phase, "status": "failure", "summary": report_json, "report_path": report_path, "failures": []}
+            if not pending:
+                # 全部 SUCCESS
+                return
 
-    async def _advance(self, build_token: str) -> None:
-        """非阻塞单步推进。整轮包 try/except，单次失败不改 phase。"""
-        build = self._store.get_build(build_token)
-        if not build or build["phase"].startswith("done_"):
-            return
+            await asyncio.sleep(self._cicd_poll)
 
-        if int(time.time()) - build["started_at"] > self._timeout_s:
-            self._store.update_build(
-                build_token,
-                phase="done_timeout",
-                report_json="构建+测试超过配置时限未完成，判定超时",
-            )
-            logger.warning("[Jenkins] build timeout: %s", build_token)
-            return
+        # 超时
+        self._store.update_build(
+            build_token,
+            phase="done_cicd_failure",
+            report_json="[构建失败] cicd 构建超时（10min）",
+        )
 
-        phase = build["phase"]
+    async def _resolve_queue_to_build_no(self, build_token: str, row: Dict) -> None:
+        url = f"{self._base}/queue/item/{row['queue_id']}/api/json"
         try:
-            if phase == "cicd_queued":
-                await self._advance_cicd_queued(build_token)
-            elif phase == "cicd_building":
-                await self._advance_cicd_building(build_token)
-            elif phase == "autotest_queued":
-                await self._advance_autotest_queued(build_token)
-            elif phase == "autotest_building":
-                await self._advance_autotest_building(build_token)
-        except Exception as exc:
-            logger.warning(
-                "[Jenkins] _advance error phase=%s token=%s: %s", phase, build_token, exc
-            )
-
-    async def _advance_cicd_queued(self, build_token: str) -> None:
-        rows = self._store.list_cicd_builds(build_token)
-        pending_rows = [r for r in rows if r["build_no"] == 0 and r["queue_id"]]
-        for row in pending_rows:
-            url = f"{self._base}/queue/item/{row['queue_id']}/api/json"
             resp = await self._http.get(url)
             if resp.status_code == 404:
-                logger.warning(
-                    "[Jenkins] queue item %s not found (expired?), marking FAILURE",
-                    row["queue_id"],
-                )
-                self._store.update_cicd_build(
-                    build_token, row["repo"], result="FAILURE",
-                    console_snippet="queue item 已过期或不存在",
-                )
-                continue
+                self._store.update_cicd_build(build_token, row["repo"], result="FAILURE", console_snippet="queue item 已过期")
+                return
             if resp.status_code != 200:
-                logger.warning(
-                    "[Jenkins] queue item %s returned HTTP %s, skipping",
-                    row["queue_id"], resp.status_code,
-                )
-                continue
-            try:
-                data = resp.json()
-            except Exception as exc:
-                logger.warning(
-                    "[Jenkins] queue item %s non-JSON response (%s): %.200s",
-                    row["queue_id"], exc, resp.text,
-                )
-                continue
+                return
+            data = resp.json()
             executable = data.get("executable")
             if executable and executable.get("number"):
-                self._store.update_cicd_build(
-                    build_token, row["repo"], build_no=executable["number"]
-                )
-        rows = self._store.list_cicd_builds(build_token)
-        if all(r["build_no"] > 0 or r["result"] in ("FAILURE", "ABORTED") for r in rows):
-            self._store.update_build(build_token, phase="cicd_building")
+                self._store.update_cicd_build(build_token, row["repo"], build_no=executable["number"])
+        except Exception as exc:
+            logger.warning("[Jenkins] resolve queue failed repo=%s: %s", row["repo"], exc)
 
-    async def _advance_cicd_building(self, build_token: str) -> None:
-        rows = self._store.list_cicd_builds(build_token)
-        for row in rows:
-            if row["result"] != "PENDING":
-                continue
-            url = f"{self._base}/job/{self._cicd_job}/{row['build_no']}/api/json"
+    async def _poll_cicd_build_result(self, build_token: str, row: Dict) -> None:
+        url = f"{self._base}/job/{self._cicd_job}/{row['build_no']}/api/json"
+        try:
             resp = await self._http.get(url)
             data = resp.json()
             if data.get("building"):
-                continue
+                return
             result = data.get("result", "ABORTED")
             self._store.update_cicd_build(build_token, row["repo"], result=result)
             if result in ("FAILURE", "ABORTED"):
                 snippet = await self._get_console_snippet(self._cicd_job, row["build_no"])
-                self._store.update_cicd_build(
-                    build_token, row["repo"], console_snippet=snippet
-                )
+                self._store.update_cicd_build(build_token, row["repo"], console_snippet=snippet)
+        except Exception as exc:
+            logger.warning("[Jenkins] poll cicd build failed repo=%s build_no=%s: %s", row["repo"], row["build_no"], exc)
 
-        rows = self._store.list_cicd_builds(build_token)
-        failed = [r for r in rows if r["result"] in ("FAILURE", "ABORTED")]
-        if failed:
-            summaries = [
-                f"{r['repo']}: {r['console_snippet'] or r['result']}" for r in failed
-            ]
-            self._store.update_build(
-                build_token,
-                phase="done_cicd_failure",
-                report_json="[构建失败]\n" + "\n".join(summaries),
-            )
-            return
-        if all(r["result"] == "SUCCESS" for r in rows):
-            await self._trigger_autotest(build_token)
+    # ── autotest ─────────────────────────────────────────────────────────
 
     async def _trigger_autotest(self, build_token: str) -> None:
         url = f"{self._base}/job/{self._autotest_job}/buildWithParameters"
@@ -250,79 +282,89 @@ class JenkinsClient:
             m = re.search(r"/queue/item/(\d+)/", location)
             if not m:
                 raise RuntimeError(f"cannot parse autotest queue id: {location}")
-            self._store.update_build(
-                build_token,
-                phase="autotest_queued",
-                autotest_queue_id=m.group(1),
-            )
+            self._store.update_build(build_token, phase="autotest_queued", autotest_queue_id=m.group(1))
         except Exception as exc:
             logger.error("[Jenkins] trigger autotest failed token=%s: %s", build_token, exc)
-            self._store.update_build(
-                build_token,
-                phase="done_test_aborted",
-                report_json=f"autotest 触发失败: {exc}",
-            )
+            self._store.update_build(build_token, phase="done_test_aborted", report_json=f"autotest 触发失败: {exc}")
 
-    async def _advance_autotest_queued(self, build_token: str) -> None:
-        build = self._store.get_build(build_token)
-        queue_id = build.get("autotest_queue_id", "")
-        if not queue_id:
-            self._store.update_build(
-                build_token,
-                phase="done_test_aborted",
-                report_json="autotest_queue_id 丢失，无法继续",
-            )
-            return
-        url = f"{self._base}/queue/item/{queue_id}/api/json"
-        resp = await self._http.get(url)
-        data = resp.json()
-        executable = data.get("executable")
-        if executable and executable.get("number"):
-            self._store.update_build(
-                build_token,
-                phase="autotest_building",
-                autotest_build_no=executable["number"],
-            )
+    async def _wait_autotest_build_no(self, build_token: str) -> None:
+        """等 autotest queue → build_no，拿到即推进到 autotest_building 并返回。"""
+        deadline = time.time() + 120  # queue 等待最多 2min
+        while time.time() < deadline:
+            build = self._store.get_build(build_token)
+            if not build or build["phase"].startswith("done_"):
+                return
+            if build["phase"] != "autotest_queued":
+                return
+            queue_id = build.get("autotest_queue_id", "")
+            if not queue_id:
+                self._store.update_build(build_token, phase="done_test_aborted", report_json="autotest_queue_id 丢失")
+                return
+            url = f"{self._base}/queue/item/{queue_id}/api/json"
+            try:
+                resp = await self._http.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    executable = data.get("executable")
+                    if executable and executable.get("number"):
+                        self._store.update_build(
+                            build_token,
+                            phase="autotest_building",
+                            autotest_build_no=executable["number"],
+                        )
+                        return
+            except Exception as exc:
+                logger.warning("[Jenkins] wait autotest build_no failed: %s", exc)
+            await asyncio.sleep(self._queue_poll)
+
+        # 2min 内没拿到 build_no，标 aborted
+        self._store.update_build(build_token, phase="done_test_aborted", report_json="autotest 排队超时2min）")
 
     async def _advance_autotest_building(self, build_token: str) -> None:
+        """推进 autotest_building：轮询结果，完成后更新 phase。"""
         build = self._store.get_build(build_token)
-        build_no = build.get("autotest_build_no", 0)
+        build_no = build.get("autotest_build_no", 0) if build else 0
         if not build_no:
             return
         url = f"{self._base}/job/{self._autotest_job}/{build_no}/api/json"
-        resp = await self._http.get(url)
-        data = resp.json()
-        if data.get("building"):
-            return
-        result = data.get("result", "ABORTED")
-        self._store.update_build(build_token, jenkins_result=result)
-        if result == "SUCCESS":
-            test_report = data.get("testReport") or {}
-            pass_count = test_report.get("passCount", 0)
-            fail_count = test_report.get("failCount", 0)
-            report_path = await self._download_artifacts_report(build_token)
-            self._store.update_build(
-                build_token,
-                phase="done_success",
-                report_json=f"{pass_count} passed, {fail_count} failed",
-                report_path=report_path,
-            )
-        elif result == "FAILURE":
-            test_report = data.get("testReport") or {}
-            fail_count = test_report.get("failCount", 0)
-            report_path = await self._download_artifacts_report(build_token)
-            self._store.update_build(
-                build_token,
-                phase="done_test_failure",
-                report_json=f"测试失败：{fail_count} 个用例未通过",
-                report_path=report_path,
-            )
-        else:
-            self._store.update_build(
-                build_token,
-                phase="done_test_aborted",
-                report_json=f"autotest 未正常完成，Jenkins result={result}",
-            )
+        try:
+            resp = await self._http.get(url)
+            data = resp.json()
+            if data.get("building"):
+                return
+            result = data.get("result", "ABORTED")
+            self._store.update_build(build_token, jenkins_result=result)
+            if result == "SUCCESS":
+                test_report = data.get("testReport") or {}
+                pass_count = test_report.get("passCount", 0)
+                fail_count = test_report.get("failCount", 0)
+                report_path = await self._download_artifacts_report(build_token)
+                self._store.update_build(
+                    build_token,
+                    phase="done_success",
+                    report_json=f"{pass_count} passed, {fail_count} failed",
+                    report_path=report_path,
+                )
+            elif result == "FAILURE":
+                test_report = data.get("testReport") or {}
+                fail_count = test_report.get("failCount", 0)
+                report_path = await self._download_artifacts_report(build_token)
+                self._store.update_build(
+                    build_token,
+                    phase="done_test_failure",
+                    report_json=f"测试失败：{fail_count} 个用例未通过",
+                    report_path=report_path,
+                )
+            else:
+                self._store.update_build(
+                    build_token,
+                    phase="done_test_aborted",
+                    report_json=f"autotest 未正常完成，Jenkins result={result}",
+                )
+        except Exception as exc:
+            logger.warning("[Jenkins] advance autotest building failed token=%s: %s", build_token, exc)
+
+    # ── 工具方法 ─────────────────────────────────────────────────────────
 
     async def _download_artifacts_report(self, build_token: str) -> str:
         """从 GitHub artifacts 仓库下载 autotest 报告到本地临时文件，返回路径；失败返回空串。"""
@@ -345,42 +387,6 @@ class JenkinsClient:
             return "\n".join(lines[-max_lines:])
         except Exception:
             return ""
-
-    async def start_driver(self, build_token: str) -> None:
-        """启动 per-build 后台驱动。已有新鲜驱动则跳过。"""
-        if not self._store.try_acquire_driver(build_token, self._owner):
-            return
-        asyncio.create_task(self._run_driver(build_token))
-
-    async def _run_driver(self, build_token: str) -> None:
-        """驱动主循环：推进 phase 直到 done，按 phase 选轮询间隔。"""
-        logger.info("[Jenkins] driver started: %s", build_token)
-        while True:
-            build = self._store.get_build(build_token)
-            if not build or build["phase"].startswith("done_"):
-                break
-            if build.get("driver_owner") != self._owner:
-                logger.info("[Jenkins] driver preempted, exiting: %s", build_token)
-                break
-            await self._advance(build_token)
-            build = self._store.get_build(build_token)
-            if not build or build["phase"].startswith("done_"):
-                break
-            phase = build["phase"]
-            if "queued" in phase:
-                interval = self._queue_poll
-            elif "autotest" in phase:
-                interval = self._autotest_poll
-            else:
-                interval = self._cicd_poll
-            self._store.refresh_heartbeat(build_token, self._owner)
-            await asyncio.sleep(interval)
-        logger.info("[Jenkins] driver done: %s", build_token)
-
-    async def resume_pending_drivers(self) -> None:
-        """扫表，对无驱动或驱动陈旧的非 done 记录拉起驱动。on_start / poller 调用。"""
-        for build in self._store.list_non_done_builds():
-            await self.start_driver(build["build_token"])
 
     async def aclose(self) -> None:
         await self._http.aclose()
