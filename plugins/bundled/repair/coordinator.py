@@ -404,7 +404,7 @@ class RepairCoordinator:
         )
         try:
             result_text, _ = await _run_agent(
-                self.agent_service, prompt, skill="repair-report-analyzer", session_id=None
+                self.agent_service, prompt, skill="repair-report-analyzer", session_id=run.develop_session_id or None
             )
         except Exception:
             logger.error("[Repair] analyzer agent failed: %s, rolling back to BUILDING", linear_issue_id, exc_info=True)
@@ -528,7 +528,11 @@ class RepairCoordinator:
                 else:
                     await client.send_thought(linear_session_id, body)
             except Exception:
-                logger.warning("[Repair] notify failed session=%s", linear_session_id, exc_info=True)
+                logger.warning("[Repair] notify failed session=%s, fallback to comment", linear_session_id, exc_info=True)
+                try:
+                    await client.create_comment(linear_issue_id, body)
+                except Exception:
+                    logger.warning("[Repair] notify fallback comment also failed: %s", linear_issue_id, exc_info=True)
 
         self.store.update(linear_issue_id, stage=Stage.DEVELOPING)
         result_text, session_id = await _run_agent(
@@ -544,7 +548,6 @@ class RepairCoordinator:
                 "重修未完成（开发阶段未产出有效修复），转人工。\n\n"
                 f"Agent 最后输出：\n{result_text}",
             )
-            await notify("重修未完成，已转人工处理。", final=True)
             return
         repos = json.loads(run.repos) if run.repos else ([run.repo] if run.repo else [])
         build_id = await self.jenkins.trigger_build(

@@ -136,7 +136,7 @@ async def test_analyze_resolved_writes_done_and_comment(store, fake_linear):
 @pytest.mark.unit
 async def test_analyze_code_error_resumes_and_increments(store, fake_linear):
     _seed_pending(store, stage=Stage.BUILDING)
-    store.update("issue-1", develop_session_id="claude-sess-1", branch="fix/ENG-1")
+    store.update("issue-1", develop_session_id="claude-sess-1", branch="fix/ENG-1", linear_session_id="lin-sess-1")
     coord, agent, jenkins = _make_coordinator(
         store,
         fake_linear,
@@ -150,7 +150,15 @@ async def test_analyze_code_error_resumes_and_increments(store, fake_linear):
 
     run = store.get("issue-1")
     assert run.fix_retry_count == 1
+    # code_error 落 PENDING_RERUN，等用户确认
+    assert run.stage == Stage.PENDING_RERUN
+
+    # 模拟用户确认重修
+    await coord.confirm_rerun("issue-1", "lin-sess-2")
+
+    run = store.get("issue-1")
     assert run.stage == Stage.BUILDING
+    # confirm_rerun 续接原 claude session
     dev_call = agent.calls[-1]
     assert dev_call.session_id == "claude-sess-1"
 

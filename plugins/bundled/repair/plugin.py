@@ -104,13 +104,19 @@ class RepairChannelPlugin(ChannelPlugin):
         return LinearClient(token)
 
     async def _save_session(self, issue_id: str, claude_session_id: str) -> None:
-        """持久化 issue_id -> claude_session_id 映射，供 prompted 事件续接多轮对话。"""
+        """持久化 linear_session_id -> claude_session_id 映射，供 prompted 事件续接多轮对话。"""
         from plugins.bundled.linear.token_store import TokenStore
 
         db_path = _resolve(os.getenv("LINEAR_TOKEN_DB", "data/linear/linear_tokens.db"))
         ts = TokenStore(db_path)
-        ts.save_session(issue_id, claude_session_id)
-        logger.info("[Repair] session saved: issue=%s claude_session=%s", issue_id, claude_session_id)
+        # 从 repair_runs 里直接取 linear_session_id，比从 token_store 反查更可靠
+        run = self.store.get(issue_id)
+        linear_session_id = run.linear_session_id if run else ""
+        if not linear_session_id:
+            logger.warning("[Repair] session_saver: no linear_session_id for issue=%s, skip", issue_id)
+            return
+        ts.save_session(linear_session_id, issue_id, claude_session_id)
+        logger.info("[Repair] session saved: issue=%s linear_session=%s claude_session=%s", issue_id, linear_session_id, claude_session_id)
 
     def get_meta(self) -> ChannelMeta:
         return ChannelMeta(

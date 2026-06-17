@@ -73,7 +73,7 @@ class FakeJenkins:
         self.triggered.append((repos, branch))
         return "build-xyz"
 
-    def get_report(self, build_id):
+    async def get_report_async(self, build_id):
         if not self.ready:
             return None
         if self.timeout:

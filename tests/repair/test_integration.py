@@ -105,9 +105,14 @@ async def test_code_error_retry_then_resolve(tmp_path):
     )
 
     await coord.start_development("issue-1")  # → building
-    await coord.poll_building_runs()  # analyzer 代码错 → resume 重修 → building
+    await coord.poll_building_runs()  # analyzer 代码错 → PENDING_RERUN
     assert store.get("issue-1").fix_retry_count == 1
+    assert store.get("issue-1").stage == Stage.PENDING_RERUN
+
+    # 模拟用户确认重修
+    await coord.confirm_rerun("issue-1", "lin-sess-rerun")
     assert store.get("issue-1").stage == Stage.BUILDING
+
     await coord.poll_building_runs()  # analyzer 已解决 → resolved
 
     run = store.get("issue-1")
