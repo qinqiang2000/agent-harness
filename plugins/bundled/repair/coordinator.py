@@ -400,7 +400,8 @@ class RepairCoordinator:
             identifier=run.linear_identifier,
             root_cause=run.root_cause,
             repair_plan=run.repair_plan,
-            report=report_content,
+            report=report.get("summary", "") if not report_path else "",
+            report_path=report_path,
         )
         try:
             result_text, _ = await _run_agent(

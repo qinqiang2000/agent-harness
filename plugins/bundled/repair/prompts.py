@@ -145,16 +145,21 @@ def build_analyzer_prompt(
     identifier: str,
     root_cause: str,
     repair_plan: str,
-    report: str,
+    report: str = "",
+    report_path: str = "",
 ) -> str:
     """拼出调用 repair-report-analyzer skill 的 prompt。"""
+    if report_path:
+        report_section = f"\n## 测试报告\n报告文件路径：{report_path}\n（请用 Read 工具读取该文件内容后再做分析）"
+    else:
+        report_section = f"\n## 测试报告\n{report}"
     return "\n".join(
         [
             "严格按 skill: repair-report-analyzer 执行三类归因分析。",
             f"\n# 待分析的修复 {identifier}",
             f"\n## 原根因\n{root_cause}",
             f"\n## 修复计划\n{repair_plan}",
-            f"\n## 测试报告\n{report}",
+            report_section,
             "\n请按 skill 要求输出【判定】【依据】【后续动作】结构化结果。",
         ]
     )
