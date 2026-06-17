@@ -102,11 +102,18 @@ class GitHubArtifactsClient:
                 return None
             latest = max(run_files, key=lambda e: e["name"])
 
-            # 3. 拉文件内容（contents API 返回 base64）
+            # 3. 拉文件内容：超过 1MB 时 contents API 返回空 content，改用 blob API
             file_resp = await http.get(latest["url"])
             file_resp.raise_for_status()
             file_data = file_resp.json()
-            raw = base64.b64decode(file_data["content"]).decode("utf-8", errors="replace")
+            if file_data.get("content"):
+                raw = base64.b64decode(file_data["content"]).decode("utf-8", errors="replace")
+            else:
+                # 大文件走 git blob API，Accept raw 直接返回文本
+                blob_url = f"{_GITHUB_API}/repos/{self._repo}/git/blobs/{latest['sha']}"
+                blob_resp = await http.get(blob_url, headers={**self._headers(), "Accept": "application/vnd.github.raw+json"})
+                blob_resp.raise_for_status()
+                raw = blob_resp.text
 
             # 超大文件截断，保留头部（汇总行在文件前段）
             if len(raw.encode("utf-8")) > _MAX_REPORT_BYTES:
