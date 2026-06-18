@@ -2,9 +2,9 @@
 name: code-fix
 description: >-
   代码自动修复 skill。接收诊断结论（含根因描述和服务名）后，自动完成源码定位、分支创建、代码修复和 push。
-  触发方式：1）issue-diagnosis 诊断为代码问题后自动调用；2）用户说"帮我修复"、"fix"、"修代码"、"提PR"等。
-  输入格式："{服务名}:{根因一句话摘要}" 或直接传入 issue-diagnosis 的完整诊断结论文本。
-  禁止触发的场景：用户只提供 traceId 或报错信息但尚未经过诊断——这些场景应由 issue-diagnosis 处理。
+  触发方式：1）issue-diagnosis-billing 诊断为代码问题后自动调用；2）用户说"帮我修复"、"fix"、"修代码"、"提PR"等。
+  输入格式："{服务名}:{根因一句话摘要}" 或直接传入 issue-diagnosis-billing 的完整诊断结论文本。
+  禁止触发的场景：用户只提供 traceId 或报错信息但尚未经过诊断——这些场景应由 issue-diagnosis-billing 处理。
 ---
 
 # 代码自动修复
@@ -17,7 +17,7 @@ description: >-
 
 从以下两个来源之一提取根因信息（优先级从高到低）：
 
-**来源A：直接传入的诊断摘要**（由 issue-diagnosis 或 handler 层直接传入）
+**来源A：直接传入的诊断摘要**（由 issue-diagnosis-billing 或 handler 层直接传入）
 - 格式为 `{服务名}:{根因描述}` 或完整的诊断结论文本
 - 直接从中提取 `repoName`、`rootCause`、`fixSuggestion`
 
@@ -189,9 +189,9 @@ cat > "$TMP_FIX" << 'FIXEOF'
 {Step 7 输出的完整修复结论文本，包含「仓库：」和「分支：」行}
 FIXEOF
 
-python3 "$SCRIPT" --file "$TMP_FIX"
-EXIT_CODE=$?
-rm -f "$TMP_FIX"
+nohup python3 "$SCRIPT" --file "$TMP_FIX" > /tmp/cicd_run_$(date +%Y%m%d%H%M%S).log 2>&1 &
+CICD_PID=$!
+echo "✅ CICD 已在后台启动 (PID=$CICD_PID)，日志: /tmp/cicd_run_$(date +%Y%m%d%H%M%S).log"
 ```
 
 脚本会依次：
@@ -200,7 +200,5 @@ rm -f "$TMP_FIX"
 3. 全部构建成功后，触发一次 `at-automated-test` 全量测试（约 30 分钟以上）
 4. 将每步进度打印到 stdout
 
-根据 `EXIT_CODE` 在对话中追加结论：
-- `0`（全部成功）：输出"✅ CICD 构建完成，自动化测试已通过"
-- `1` 且有构建失败：输出"❌ 以下服务构建失败，已跳过自动化测试：{服务列表}"
-- `1` 且构建成功但测试失败：输出"❌ 自动化测试未通过，请查看日志"
+后台启动后在对话中输出：
+"✅ 代码已推送，CICD 构建和自动化测试已在后台启动，完成后结果将写入日志文件 /tmp/cicd_run_*.log"

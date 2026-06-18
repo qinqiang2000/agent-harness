@@ -23,7 +23,7 @@ python manage_plugins.py list|info|enable|disable|install|doctor
   - `.claude/skills/` — Skill 定义（`SKILL.md`）
   - `data/kb/` — 知识库文件
   - `data/tenants/` — 租户数据
-- `plugins/bundled/` — 内置插件（yunzhijia、zhichi、audit）
+- `plugins/bundled/` — 内置插件（yunzhijia、zhichi、audit、linear）
 - `plugins/installed/` — 用户安装的插件
 - `plugins/config.json` — 插件启用列表与配置
 - `log/` — 日志目录
@@ -40,9 +40,41 @@ Agent allowed_tools 在 `api/services/agent_service.py` 中配置，包含基础
 
 插件系统（`api/plugins/`）：`PluginManager` 协调 Discovery → Load → Register → Lifecycle。插件通过 `ChannelPlugin` 基类实现，详见 `channel.py`。
 
+## code-fix skill
+
+`agent_cwd/.claude/skills/code-fix/` — 代码自动修复 skill，与 issue-diagnosis-billing 联动。
+
+**触发流程（两条固化路径）**：
+1. issue-diagnosis-billing Step 5 输出结论后，若根因为代码问题，skill 内部直接调用 `Skill("code-fix", ...)`
+2. Linear handler（`plugins/bundled/linear/handler.py`）收到诊断结论后，`_is_code_issue` 检测关键词，强制调用 `_trigger_code_fix`（orchestration 层，不依赖 LLM 判断）
+
+**目录隔离**：code-fix 使用 `/tmp/gitlab/fix/{repoName}_{时间戳}`，与 issue-diagnosis 的 `/tmp/gitlab/src/` 完全隔离，避免并发冲突。
+
+**权限配置**：`agent_service.py` 中 `permission_mode="acceptEdits"`，`add_dirs=["/tmp/gitlab"]`，允许修改 `/tmp/gitlab/` 下文件。
+
+## CICD + autotest 自动化链路
+
+code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个入口（Linear / Chat UI）行为一致：
+
+- 脚本：`agent_cwd/.claude/skills/code-fix/scripts/run_cicd.py`
+- **必须用 `nohup` 后台运行**，否则会触发 API 流超时（600s 限制）
+- 脚本自己读完临时文件后删除，SKILL.md 里**不能** `rm -f $TMP_FIX`（竞争条件）
+- 流程：解析「仓库：xxx / 分支：xxx」→ 并行触发所有服务 cicd-pipeline → 全成功后触发 at-automated-test
+- 日志：`/tmp/cicd_run_<时间戳>.log`
+- 依赖 `requests` 库，服务器需确认已安装
+
+## issue-diagnosis-billing 知识库
+
+- skill 只读 `.claude/skills/issue-diagnosis-billing/references/` 下的固定 FAQ 文件
+- `data/kb/` 下的文件**不会被自动检索**，需手动整理成 FAQ 条目追加到对应 `kb/*.md`
+
 ## 注意事项
 
 - `claude_agent_sdk` 不一定可用（如 CLI 上下文）。CLI 工具链用到的模块不能在顶层 import 它，需用 lazy import 或 `TYPE_CHECKING` guard
 - `.custom-settings.json` 由 `AgentService` 初始化时写入，包含安全配置（拒绝读取 `.env`、密钥文件等）
 - 环境变量参考 `.env.example`，模型供应商通过 `DEFAULT_MODEL_CONFIG` 切换
 - Claude Router 指 [claude-code-router](https://github.com/musistudio/claude-code-router)（ccr），使用前需 `eval "$(ccr activate)"`
+- 服务器部署在 `/root/panda_li/agent-harness`，端口 9125，详见 CLAUDE.local.md
+- 服务器使用 Python 3.12，`claude-agent-sdk` 从 `/root/jinfan/linear-cc/agent-harness/.venv` 复制安装
+- 服务器 MCP elastic URL：内网地址，详见 CLAUDE.local.md
+- `run.sh` Linux 环境不带 `--reload`，macOS 保留热重载

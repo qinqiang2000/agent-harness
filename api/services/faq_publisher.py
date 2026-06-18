@@ -1,4 +1,5 @@
 """Generate FAQ markdown content from approved DB entries."""
+
 import logging
 from pathlib import Path
 
@@ -7,10 +8,16 @@ from api.db import get_faq_pool
 
 logger = logging.getLogger(__name__)
 
-KB_DIR = AGENT_CWD / ".claude" / "skills" / "issue-diagnosis" / "kb"
+KB_DIR = AGENT_CWD / ".claude" / "skills" / "issue-diagnosis-billing" / "references"
 
 FAQ_CATEGORIES = [
-    "开票", "收票", "鉴权登录", "接口参数", "进项发票采集", "性能超时", "faq-newtimeai-invoice"
+    "开票",
+    "收票",
+    "鉴权登录",
+    "接口参数",
+    "进项发票采集",
+    "性能超时",
+    "faq-newtimeai-invoice",
 ]
 
 CATEGORY_HEADERS = {
@@ -38,7 +45,7 @@ async def generate_category_content(category: str) -> str:
             """SELECT * FROM faq_items
                WHERE category=$1 AND status='approved'
                ORDER BY sort_order ASC, id ASC""",
-            category
+            category,
         )
 
     header = CATEGORY_HEADERS.get(category, f"# {category} FAQ")
@@ -50,7 +57,9 @@ async def generate_category_content(category: str) -> str:
             lines.append(f"\n## {row['question']}\n\n{row['answer']}\n\n---\n")
         else:
             qa_counter += 1
-            lines.append(f"\n## Q{qa_counter}: {row['question']}\n\n{row['answer']}\n\n---\n")
+            lines.append(
+                f"\n## Q{qa_counter}: {row['question']}\n\n{row['answer']}\n\n---\n"
+            )
 
     # 保留原文件末尾的固定 section（如"新时代通道日志分析"）
     faq_file = KB_DIR / _faq_filename(category)
@@ -58,7 +67,7 @@ async def generate_category_content(category: str) -> str:
         original = faq_file.read_text(encoding="utf-8")
         marker = "\n## 新时代通道日志分析"
         if marker in original:
-            lines.append(original[original.index(marker):])
+            lines.append(original[original.index(marker) :])
 
     return "".join(lines)
 

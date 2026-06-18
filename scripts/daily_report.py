@@ -58,9 +58,11 @@ def load_interactions(date_str: str) -> list[dict]:
                 continue
             try:
                 r = json.loads(line)
-                if r.get("skill") != "issue-diagnosis":
+                if r.get("skill") != "issue-diagnosis-billing":
                     continue
-                if filter_by_date and not (r.get("timestamp") or "").startswith(target_date):
+                if filter_by_date and not (r.get("timestamp") or "").startswith(
+                    target_date
+                ):
                     continue
                 records.append(r)
             except json.JSONDecodeError:
@@ -76,9 +78,9 @@ def aggregate(records: list[dict]) -> dict:
 
     status_counts: dict[str, int] = {"success": 0, "error": 0, "timeout": 0}
     duration_list: list[int] = []
-    unresolved: list[dict] = []   # asked_user_question=True 且 status=success
-    high_turns: list[dict] = []   # num_turns > 10
-    errors: list[dict] = []       # status != success
+    unresolved: list[dict] = []  # asked_user_question=True 且 status=success
+    high_turns: list[dict] = []  # num_turns > 10
+    errors: list[dict] = []  # status != success
 
     for r in records:
         status = r.get("status", "success")
@@ -89,28 +91,34 @@ def aggregate(records: list[dict]) -> dict:
             duration_list.append(ms)
 
         if status != "success":
-            errors.append({
-                "question": (r.get("question") or "")[:80],
-                "status": status,
-                "session_id": r.get("session_id"),
-                "timestamp": r.get("timestamp"),
-            })
+            errors.append(
+                {
+                    "question": (r.get("question") or "")[:80],
+                    "status": status,
+                    "session_id": r.get("session_id"),
+                    "timestamp": r.get("timestamp"),
+                }
+            )
 
         if r.get("asked_user_question") and status == "success":
-            unresolved.append({
-                "question": (r.get("question") or "")[:80],
-                "answer_excerpt": (r.get("answer") or "")[:120],
-                "session_id": r.get("session_id"),
-                "timestamp": r.get("timestamp"),
-            })
+            unresolved.append(
+                {
+                    "question": (r.get("question") or "")[:80],
+                    "answer_excerpt": (r.get("answer") or "")[:120],
+                    "session_id": r.get("session_id"),
+                    "timestamp": r.get("timestamp"),
+                }
+            )
 
         turns = r.get("num_turns", 0) or 0
         if turns > 10:
-            high_turns.append({
-                "question": (r.get("question") or "")[:80],
-                "num_turns": turns,
-                "session_id": r.get("session_id"),
-            })
+            high_turns.append(
+                {
+                    "question": (r.get("question") or "")[:80],
+                    "num_turns": turns,
+                    "session_id": r.get("session_id"),
+                }
+            )
 
     # 高频问题 Top5：按完整 question 聚类，保留代表性记录（问题+回复）
     question_counter = Counter(
@@ -119,12 +127,14 @@ def aggregate(records: list[dict]) -> dict:
     top_questions_detail: list[dict] = []
     for q_text, cnt in question_counter.most_common(5):
         rep = next((r for r in records if r.get("question") == q_text), {})
-        top_questions_detail.append({
-            "question": q_text,
-            "count": cnt,
-            "answer": (rep.get("answer") or "")[:300],
-            "status": rep.get("status", "success"),
-        })
+        top_questions_detail.append(
+            {
+                "question": q_text,
+                "count": cnt,
+                "answer": (rep.get("answer") or "")[:300],
+                "status": rep.get("status", "success"),
+            }
+        )
     top_questions = top_questions_detail
 
     # 耗时统计
@@ -232,7 +242,9 @@ def format_report(stats: dict, date_str: str, llm_summary: str) -> str:
     date_label = dt.strftime("%Y-%m-%d")
 
     if stats.get("total", 0) == 0:
-        return f"{AT_MENTION}\n\n📊 Issue Diagnosis 日报 · {date_label}\n\n暂无对话记录。"
+        return (
+            f"{AT_MENTION}\n\n📊 Issue Diagnosis 日报 · {date_label}\n\n暂无对话记录。"
+        )
 
     sc = stats.get("status_counts", {})
     total = stats["total"]
@@ -293,7 +305,7 @@ def format_report(stats: dict, date_str: str, llm_summary: str) -> str:
     text = "\n".join(lines)
 
     if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS - 20] + "\n\n（内容已截断）"
+        text = text[: MAX_CHARS - 20] + "\n\n（内容已截断）"
 
     return text
 
@@ -301,6 +313,7 @@ def format_report(stats: dict, date_str: str, llm_summary: str) -> str:
 async def send_to_yunzhijia(text: str) -> bool:
     """POST 到云之家 webhook，返回是否成功。"""
     import aiohttp
+
     payload = {"content": text}
     try:
         async with aiohttp.ClientSession() as session:
@@ -321,15 +334,29 @@ async def generate_and_send(date_str: str, dry_run: bool = False) -> dict:
     """完整流程：读日志 → 聚合 → LLM → 格式化 → 发送。返回结果摘要。"""
     records = load_interactions(date_str)
     stats = aggregate(records)
-    llm_summary = await llm_summarize(stats, records, date_str) if stats.get("total", 0) > 0 else ""
+    llm_summary = (
+        await llm_summarize(stats, records, date_str)
+        if stats.get("total", 0) > 0
+        else ""
+    )
     report_text = format_report(stats, date_str, llm_summary)
 
     if dry_run:
         print(report_text)
-        return {"date": date_str, "total": stats.get("total", 0), "sent": False, "dry_run": True}
+        return {
+            "date": date_str,
+            "total": stats.get("total", 0),
+            "sent": False,
+            "dry_run": True,
+        }
 
     sent = await send_to_yunzhijia(report_text)
-    return {"date": date_str, "total": stats.get("total", 0), "sent": sent, "dry_run": False}
+    return {
+        "date": date_str,
+        "total": stats.get("total", 0),
+        "sent": sent,
+        "dry_run": False,
+    }
 
 
 def main():

@@ -6,13 +6,13 @@ PostToolUse hook: ELK 查询完成后自动将大结果转为 JSONL。
 2. 结果被 persisted-output 截断 → 直接读 tool-results 文件转换
 转换后通过 updatedToolOutput 替换 Agent 收到的内容，输出 JSONL 与原始文件同目录。
 """
+
 import json
 import logging
 import os
 import subprocess
 import sys
 import uuid
-
 
 LOG_FILE = "/tmp/auto-parse-elk-result.log"
 logging.basicConfig(
@@ -28,7 +28,9 @@ MCP_RESULT_PREFIX = "mcp-elastic-searchTraceOrKeyWordsLog-"
 
 def find_elk_result_file(transcript_path: str, session_id: str) -> str | None:
     """从 tool-results 目录找 ELK 结果文件，优先按文件名前缀匹配，退路用 mtime 最新。"""
-    tool_results_dir = os.path.join(os.path.dirname(transcript_path), session_id, "tool-results")
+    tool_results_dir = os.path.join(
+        os.path.dirname(transcript_path), session_id, "tool-results"
+    )
     if not os.path.isdir(tool_results_dir):
         return None
     named = [
@@ -46,7 +48,9 @@ def find_elk_result_file(transcript_path: str, session_id: str) -> str | None:
     return max(all_files, key=os.path.getmtime) if all_files else None
 
 
-def convert_to_jsonl(input_path: str, output_path: str, script: str, session_id: str) -> int | str:
+def convert_to_jsonl(
+    input_path: str, output_path: str, script: str, session_id: str
+) -> int | str:
     """调用 parse_logs.py 转换，返回行数或 '未知'。"""
     try:
         subprocess.run(
@@ -90,27 +94,42 @@ def main() -> None:
 
     is_truncated = not text or "persisted-output" in text or "Output too large" in text
 
-    script = os.path.normpath(os.path.join(
-        os.path.dirname(__file__),
-        "../skills/issue-diagnosis/scripts/parse_logs.py",
-    ))
+    script = os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "../skills/issue-diagnosis-billing/scripts/parse_logs.py",
+        )
+    )
 
     if is_truncated:
         # 结果被截断：从 tool-results 找原始文件直接转换
         input_path = find_elk_result_file(transcript_path, session_id)
         if not input_path:
-            logging.warning("persisted-output detected but tool-results file not found, session=%s", session_id)
+            logging.warning(
+                "persisted-output detected but tool-results file not found, session=%s",
+                session_id,
+            )
             return
-        output_path = os.path.join(os.path.dirname(input_path), f"{uuid.uuid4().hex}.jsonl")
-        logging.info("persisted-output detected, input=%s, session=%s", input_path, session_id)
+        output_path = os.path.join(
+            os.path.dirname(input_path), f"{uuid.uuid4().hex}.jsonl"
+        )
+        logging.info(
+            "persisted-output detected, input=%s, session=%s", input_path, session_id
+        )
         line_count = convert_to_jsonl(input_path, output_path, script, session_id)
     else:
         # 结果直接返回：按长度判断是否需要转换
         if len(text) < SIZE_THRESHOLD:
-            logging.info("result size=%d below threshold, skip. session=%s", len(text), session_id)
+            logging.info(
+                "result size=%d below threshold, skip. session=%s",
+                len(text),
+                session_id,
+            )
             return
         # 写临时输入文件，输出放到 tool-results 目录
-        tool_results_dir = os.path.join(os.path.dirname(transcript_path), session_id, "tool-results")
+        tool_results_dir = os.path.join(
+            os.path.dirname(transcript_path), session_id, "tool-results"
+        )
         os.makedirs(tool_results_dir, exist_ok=True)
         input_path = os.path.join(tool_results_dir, f"elk_raw_{uuid.uuid4().hex}.json")
         output_path = os.path.join(tool_results_dir, f"{uuid.uuid4().hex}.jsonl")
@@ -123,22 +142,32 @@ def main() -> None:
     if not line_count:
         return
 
-    logging.info("converted to JSONL: lines=%s, output=%s, session=%s", line_count, output_path, session_id)
+    logging.info(
+        "converted to JSONL: lines=%s, output=%s, session=%s",
+        line_count,
+        output_path,
+        session_id,
+    )
 
-    sys.stdout.write(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "updatedToolOutput": [
-                {
-                    "type": "text",
-                    "text": (
-                        f"[系统已自动将 ELK 查询结果转为 JSONL，无需再次运行 parse_logs.py] 共 {line_count} 条日志，路径：{output_path}\n"
-                        f"请直接按 .claude/skills/issue-diagnosis/references/log-analysis.md 中的「日志读取规则」规则分析日志文件，日志条数少时直接读取即可,多的时候用 Bash grep 对上述 JSONL 文件进行分析。"
-                    ),
+    sys.stdout.write(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "updatedToolOutput": [
+                        {
+                            "type": "text",
+                            "text": (
+                                f"[系统已自动将 ELK 查询结果转为 JSONL，无需再次运行 parse_logs.py] 共 {line_count} 条日志，路径：{output_path}\n"
+                                f"请直接按 .claude/skills/issue-diagnosis-billing/references/log-analysis.md 中的「日志读取规则」规则分析日志文件，日志条数少时直接读取即可,多的时候用 Bash grep 对上述 JSONL 文件进行分析。"
+                            ),
+                        }
+                    ],
                 }
-            ],
-        }
-    }, ensure_ascii=False))
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":

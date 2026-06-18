@@ -42,11 +42,17 @@ async def build_initial_prompt(
         parts.append(
             f"根据用户请求，从以下 skill 中选择最合适的一个并严格按该 skill 执行任务: {skills_list}"
         )
-        if "issue-diagnosis" in default_skills and "code-fix" in default_skills:
+        if (
+            any(
+                s in default_skills
+                for s in ["issue-diagnosis-billing", "issue-diagnosis"]
+            )
+            and "code-fix" in default_skills
+        ):
             parts.append(
                 "\n## 强制执行规则：诊断后自动修复\n"
                 "这是一个两阶段任务，必须完整执行两个阶段才算完成：\n"
-                "阶段1：调用 issue-diagnosis skill 完成诊断，输出【根因分析】。\n"
+                "阶段1：调用诊断 skill 完成诊断，输出【根因分析】。\n"
                 "阶段2：诊断完成后，立即判断根因是否为代码问题。"
                 '判断标准：【根因分析】中含"Feign"、"未传"、"参数缺失"、"逻辑"、"NPE"、"空指针"、"堆栈"、"异常类"、"代码"等字样。'
                 "是代码问题 → 必须立即调用 code-fix skill 执行修复，禁止跳过，禁止等待用户指令，禁止提前结束对话。"
