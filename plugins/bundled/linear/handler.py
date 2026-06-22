@@ -345,8 +345,8 @@ class LinearSessionHandler:
                 exc_info=True,
             )
 
-        # 诊断完成后无条件触发 code-fix，由 code-fix skill 自行判断是否需要修复
-        if not error_text and result_text:
+        # skill 内部已完成修复时跳过，否则由 handler 层兜底触发 code-fix
+        if not error_text and result_text and "修复完成" not in result_text:
             await self._trigger_code_fix(
                 session_id=session_id,
                 result_text=result_text,

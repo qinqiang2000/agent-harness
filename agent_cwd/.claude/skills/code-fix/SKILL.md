@@ -38,6 +38,22 @@ description: >-
 - `rootCause`：根因描述
 - `fixSuggestion`：解决建议
 
+**二次修改检测（提取变量后立即执行）**：
+
+检查对话历史中是否已有【修复完成】记录，若存在则为二次修改场景：
+
+1. 从历史【修复完成】中提取 `prevLocalDir`（已有隔离目录）和 `prevBranchName`（已有分支名）
+2. 检查 `prevLocalDir` 是否还存在：
+   ```bash
+   ls {prevLocalDir}/.git 2>/dev/null && echo "EXISTS" || echo "NOT_EXISTS"
+   ```
+3. **EXISTS**（目录还在）→ 复用：`localDir = prevLocalDir`，跳过 Step 1.5 的 clone，直接进入 Step 3 并 checkout 原分支（`git -C {localDir} checkout {prevBranchName}`）
+4. **NOT_EXISTS**（目录已清理）→ 重新 clone 到新 `localDir`，然后在 Step 3 中基于原分支 checkout：
+   ```bash
+   git -C {localDir} checkout -b {prevBranchName} origin/{prevBranchName}
+   ```
+   若 origin 上原分支不存在，则新建 `fixbug_yyyyMMddhhmmss` 分支
+
 **禁止重新查询 ELK 日志或重走诊断流程**。
 
 ---
@@ -84,12 +100,18 @@ grep -r "class {ClassName}" {localDir} --include="*.java" -l
 
 ## Step 3：检出修复分支
 
-在本地 clone 目录创建新分支，分支名格式 `fixbug_yyyyMMddhhmmss`（使用当前时间）：
+**首次修改**（对话历史中无【修复完成】记录）：
+
+创建新分支，分支名格式 `fixbug_yyyyMMddhhmmss`（使用当前时间）：
 
 ```bash
 BRANCH_NAME="fixbug_$(date +%Y%m%d%H%M%S)" && \
 git -C {localDir} checkout -b "$BRANCH_NAME"
 ```
+
+**二次修改**（已在 Step 1 检测到【修复完成】记录）：
+
+直接复用原分支（Step 1 已完成 checkout），`BRANCH_NAME = prevBranchName`，无需新建分支。
 
 记录 `BRANCH_NAME` 供后续步骤使用。
 
