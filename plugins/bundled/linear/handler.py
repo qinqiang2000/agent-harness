@@ -160,6 +160,15 @@ class LinearSessionHandler:
                     new_claude_session_id = data.get(
                         "session_id", new_claude_session_id
                     )
+                elif event_type == "assistant_message":
+                    text = data.get("content", "")
+                    if text:
+                        try:
+                            await client.send_thought(
+                                session_id, text[:300], ephemeral=True
+                            )
+                        except Exception:
+                            pass
                 elif event_type == "result":
                     result_text = data.get("result", "") or data.get("content", "")
                 elif event_type == "error":
@@ -303,6 +312,15 @@ class LinearSessionHandler:
                         logger.info(
                             f"[{trace_id}][Linear] session mapped: {session_id} -> {claude_session_id}"
                         )
+                elif event_type == "assistant_message":
+                    text = data.get("content", "")
+                    if text:
+                        try:
+                            await client.send_thought(
+                                session_id, text[:300], ephemeral=True
+                            )
+                        except Exception:
+                            pass
                 elif event_type == "result":
                     result_text = data.get("result", "") or data.get("content", "")
                 elif event_type == "error":
@@ -451,6 +469,15 @@ class LinearSessionHandler:
                         data = {}
                 if event_type == "result":
                     fix_result = data.get("result", "") or data.get("content", "")
+                elif event_type == "assistant_message":
+                    text = data.get("content", "")
+                    if text:
+                        try:
+                            await client.send_thought(
+                                session_id, text[:300], ephemeral=True
+                            )
+                        except Exception:
+                            pass
                 elif event_type == "error":
                     fix_error = data.get("error", "") or str(data)
         except Exception as e:
