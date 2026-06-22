@@ -103,6 +103,15 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Session reset by user: {yzj_session_id}")
                 return
 
+            # 2.8 检测并发：同一 session 有请求正在处理中，直接提示等待
+            if self.session_mapper.is_processing(yzj_session_id):
+                await self.message_sender.send_text(
+                    yzj_token, msg.operatorOpenid,
+                    "⏳ 上一条消息还在处理中，请稍候再提问。",
+                )
+                logger.info(f"[YZJ] Rejected concurrent request for session: {yzj_session_id}")
+                return
+
             # 3. 获取或创建 agent session
             agent_session_id = self.session_mapper.get_or_create(yzj_session_id)
 
@@ -120,6 +129,8 @@ class YunzhijiaHandler:
                 logger.info(f"[YZJ] Resuming agent session: {agent_session_id}")
             else:
                 logger.info(f"[YZJ] Creating new agent session for: {yzj_session_id}")
+                # 提前占位，让 set_processing 能找到这条记录
+                self.session_mapper.update_activity(yzj_session_id, "pending")
                 await self.message_sender.send_text(
                     yzj_token, msg.operatorOpenid,
                     "收到，我马上探索最佳答案（受限于云之家，过程信息不输出，请耐心等待...）",
@@ -148,11 +159,15 @@ class YunzhijiaHandler:
             )
 
             # 7. 处理消息流
-            await self._process_agent_stream(
-                request, yzj_token, msg.operatorOpenid,
-                yzj_session_id, robot_name,
-                operator_name=msg.operatorName or "",
-            )
+            self.session_mapper.set_processing(yzj_session_id, True)
+            try:
+                await self._process_agent_stream(
+                    request, yzj_token, msg.operatorOpenid,
+                    yzj_session_id, robot_name,
+                    operator_name=msg.operatorName or "",
+                )
+            finally:
+                self.session_mapper.set_processing(yzj_session_id, False)
 
         except BaseException as e:
             logger.error(f"[YZJ] Error processing message: {e}", exc_info=True)

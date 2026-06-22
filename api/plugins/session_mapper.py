@@ -19,6 +19,7 @@ class SessionInfo:
     agent_session_id: str
     last_active: float
     pending_questions: Optional[list] = None  # AskUserQuestion awaiting reply
+    is_processing: bool = False  # 是否有请求正在处理中
 
 
 @dataclass
@@ -82,9 +83,11 @@ class PluginSessionMapper:
             external_session_id: External platform session ID
             agent_session_id: Agent session ID
         """
+        existing = self.session_map.get(external_session_id)
         self.session_map[external_session_id] = SessionInfo(
             agent_session_id=agent_session_id,
             last_active=time.time(),
+            is_processing=existing.is_processing if existing else False,
         )
 
     def remove(self, external_session_id: str) -> None:
@@ -96,6 +99,16 @@ class PluginSessionMapper:
         if external_session_id in self.session_map:
             info = self.session_map.pop(external_session_id)
             logger.info(f"[{self.channel_id}] Session removed: external={external_session_id}, agent={info.agent_session_id}")
+
+    def set_processing(self, external_session_id: str, processing: bool) -> None:
+        """标记某个 session 是否正在处理中."""
+        if external_session_id in self.session_map:
+            self.session_map[external_session_id].is_processing = processing
+
+    def is_processing(self, external_session_id: str) -> bool:
+        """返回某个 session 是否正在处理中."""
+        info = self.session_map.get(external_session_id)
+        return info.is_processing if info else False
 
     def set_pending_questions(self, external_session_id: str, questions: list) -> None:
         """Store pending AskUserQuestion questions for a session.
