@@ -40,19 +40,27 @@ description: >-
 
 **二次修改检测（提取变量后立即执行）**：
 
-检查对话历史中是否已有【修复完成】记录，若存在则为二次修改场景：
+从传入的上下文中提取 `issueId`（格式如 `CNPRD-866`、`LIN-123`），然后查询 SQLite：
 
-1. 从历史【修复完成】中提取 `prevLocalDir`（已有隔离目录）和 `prevBranchName`（已有分支名）
-2. 检查 `prevLocalDir` 是否还存在：
-   ```bash
-   ls {prevLocalDir}/.git 2>/dev/null && echo "EXISTS" || echo "NOT_EXISTS"
-   ```
-3. **EXISTS**（目录还在）→ 复用：`localDir = prevLocalDir`，跳过 Step 1.5 的 clone，直接进入 Step 3 并 checkout 原分支（`git -C {localDir} checkout {prevBranchName}`）
-4. **NOT_EXISTS**（目录已清理）→ 重新 clone 到新 `localDir`，然后在 Step 3 中基于原分支 checkout：
-   ```bash
-   git -C {localDir} checkout -b {prevBranchName} origin/{prevBranchName}
-   ```
-   若 origin 上原分支不存在，则新建 `fixbug_yyyyMMddhhmmss` 分支
+```bash
+python3 {skill_dir}/scripts/session_store.py get {issueId}
+```
+
+- 输出 `NOT_FOUND` → 首次修改，继续用新 `localDir` 和新分支
+- 输出 `local_dir=xxx` 等字段 → 二次修改，执行以下逻辑：
+  1. 检查 `local_dir` 是否还存在：`ls {local_dir}/.git 2>/dev/null && echo EXISTS || echo NOT_EXISTS`
+  2. **EXISTS** → 复用：`localDir = local_dir`，跳过 clone，直接 `git -C {localDir} checkout {branch_name}`
+  3. **NOT_EXISTS** → 目录已清理，重新 clone 到原 `local_dir` 路径，然后 `git -C {localDir} checkout -b {branch_name} origin/{branch_name}`（若 origin 上分支不存在则新建）
+
+其中 `{skill_dir}` 为当前 skill 目录，通过以下方式获取：
+```bash
+find /root /Users -path "*/skills/code-fix/scripts/session_store.py" 2>/dev/null | head -1 | xargs dirname
+```
+
+**修复完成后写入 SQLite**（Step 8 推送成功后执行）：
+```bash
+python3 {skill_dir}/scripts/session_store.py set {issueId} {repoName} {localDir} {BRANCH_NAME}
+```
 
 **禁止重新查询 ELK 日志或重走诊断流程**。
 
@@ -215,6 +223,20 @@ nohup python3 "$SCRIPT" --file "$TMP_FIX" > /tmp/cicd_run_$(date +%Y%m%d%H%M%S).
 CICD_PID=$!
 echo "✅ CICD 已在后台启动 (PID=$CICD_PID)，日志: /tmp/cicd_run_$(date +%Y%m%d%H%M%S).log"
 ```
+
+**写入 session 映射**（push 成功后，CICD 启动后执行）：
+
+若成功提取到 `issueId`，将本次修复信息持久化到 SQLite：
+
+```bash
+SESSION_STORE="$(find /root -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
+if [ -z "$SESSION_STORE" ]; then
+  SESSION_STORE="$(find . -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
+fi
+python3 "$SESSION_STORE" set "{issueId}" "{repoName}" "{localDir}" "{BRANCH_NAME}"
+```
+
+未能提取 `issueId` 时跳过此步骤。
 
 脚本会依次：
 1. 从文本中解析所有「仓库：xxx」+「分支：xxx」对（支持一个 issue 涉及多个服务）
