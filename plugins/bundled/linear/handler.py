@@ -326,8 +326,8 @@ class LinearSessionHandler:
                 exc_info=True,
             )
 
-        # 诊断结论为代码问题时自动触发 code-fix（orchestration 层强制调用，不依赖 LLM 判断）
-        if not error_text and result_text and self._is_code_issue(result_text):
+        # 诊断完成后无条件触发 code-fix，由 code-fix skill 自行判断是否需要修复
+        if not error_text and result_text:
             await self._trigger_code_fix(
                 session_id=session_id,
                 result_text=result_text,
@@ -404,39 +404,6 @@ class LinearSessionHandler:
             return self.token_store.get_token(workspace_id)
         ws_id = self.token_store.get_first_workspace_id()
         return self.token_store.get_token(ws_id) if ws_id else None
-
-    def _is_code_issue(self, result_text: str) -> bool:
-        """判断诊断结论是否为代码问题，用于决定是否自动触发 code-fix。
-
-        Args:
-            result_text: issue-diagnosis 输出的诊断结论文本
-
-        Returns:
-            True 表示是代码问题，需触发修复
-        """
-        if "【根因分析】" not in result_text:
-            return False
-        code_keywords = [
-            "Feign",
-            "未传",
-            "参数缺失",
-            "逻辑",
-            "NPE",
-            "空指针",
-            "堆栈",
-            "异常类",
-            "代码",
-            "MissingServlet",
-            "NullPointer",
-            "ClassCast",
-            "IndexOutOf",
-            "StackOverflow",
-            "字段赋值",
-            "枚举",
-            "注入",
-            "源码",
-        ]
-        return any(kw in result_text for kw in code_keywords)
 
     async def _trigger_code_fix(
         self,

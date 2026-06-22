@@ -46,7 +46,7 @@ Agent allowed_tools 在 `api/services/agent_service.py` 中配置，包含基础
 
 **触发流程（两条固化路径）**：
 1. issue-diagnosis-billing Step 5 输出结论后，若根因为代码问题，skill 内部直接调用 `Skill("code-fix", ...)`
-2. Linear handler（`plugins/bundled/linear/handler.py`）收到诊断结论后，`_is_code_issue` 检测关键词，强制调用 `_trigger_code_fix`（orchestration 层，不依赖 LLM 判断）
+2. Linear handler（`plugins/bundled/linear/handler.py`）收到诊断结论后，**无条件触发 `_trigger_code_fix`**，由 code-fix skill 自行判断是否需要修复（不再依赖 handler 层关键词匹配）
 
 **目录隔离**：code-fix 使用 `/tmp/gitlab/fix/{repoName}_{时间戳}`，与 issue-diagnosis 的 `/tmp/gitlab/src/` 完全隔离，避免并发冲突。
 
