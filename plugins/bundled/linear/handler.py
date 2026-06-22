@@ -292,6 +292,7 @@ class LinearSessionHandler:
 
             request = QueryRequest(
                 prompt=final_prompt,
+                skill="issue-diagnosis-billing",
                 language="中文",
             )
             async for event in self.agent_service.process_query(request):
