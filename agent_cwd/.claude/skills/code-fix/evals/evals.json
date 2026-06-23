@@ -1,0 +1,101 @@
+{
+  "skill_name": "code-fix",
+  "evals": [
+    {
+      "id": 1,
+      "description": "首次修复：克隆到隔离目录，新建 fixbug 分支，修复后推送",
+      "prompt": "api-invoice-recognition:GatewayFormatController 第47行从 requestParam 取 clientId 后未做空值校验，第71行直接将可能为 null 的 clientId 传入 Feign 调用 queryVerifyConfigByClientId，导致 api-expense 抛出 MissingServletRequestParameterException",
+      "expected_output": "查询 SQLite 未命中 → clone 到 /tmp/gitlab/fix/api-invoice-recognition_{时间戳} → 新建 fixbug_* 分支 → 读取目标文件 → 修复空值校验 → 提交推送 → 写入 SQLite → 触发 CICD → 输出【修复完成】",
+      "assertions": [
+        {
+          "id": "check-sqlite-first",
+          "text": "执行前先查询 session_store.py，确认是否有历史记录"
+        },
+        {
+          "id": "isolated-dir",
+          "text": "clone 目录在 /tmp/gitlab/fix/ 下，不使用 BILLING_CODE_BASE_DIR"
+        },
+        {
+          "id": "new-branch",
+          "text": "SQLite 未命中时新建 fixbug_yyyyMMddHHmmss 分支"
+        },
+        {
+          "id": "write-sqlite-after-push",
+          "text": "push 成功后调用 session_store.py set 写入 SQLite"
+        },
+        {
+          "id": "output-fix-complete",
+          "text": "输出包含【修复完成】字样"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "description": "二次修改：SQLite 命中，复用原隔离目录和分支",
+      "prompt": "CNPRD-866 api-expense:LlmMapServiceImpl 需调整修复方案，改为硬编码而非配置文件",
+      "expected_output": "查询 SQLite 命中 CNPRD-866 → 检查原 localDir 存在 → checkout 原 fixbug 分支 → 在原分支上继续修改 → 提交推送 → 更新 SQLite → 触发 CICD → 输出【修复完成】",
+      "assertions": [
+        {
+          "id": "reuse-existing-dir",
+          "text": "SQLite 命中时复用原 localDir，不重新 clone"
+        },
+        {
+          "id": "reuse-existing-branch",
+          "text": "checkout 原 fixbug 分支，不新建分支"
+        },
+        {
+          "id": "update-sqlite",
+          "text": "push 成功后更新 SQLite 记录"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "description": "二次修改：SQLite 命中但目录已被清理，重新 clone 并基于原分支继续",
+      "prompt": "CNPRD-855 api-invoice-check:CheckResultService 需补充一个边界条件处理",
+      "expected_output": "查询 SQLite 命中 → 检查 localDir 不存在（/tmp 已清理）→ 重新 clone 到原 localDir → checkout origin/fixbug_原分支名 → 修改 → 推送 → 更新 SQLite",
+      "assertions": [
+        {
+          "id": "re-clone-to-original-path",
+          "text": "目录不存在时重新 clone 到原 localDir 路径"
+        },
+        {
+          "id": "checkout-original-branch",
+          "text": "基于 origin/原分支名 checkout，不新建分支"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "description": "非代码 bug 场景：收到配置变更结论，正确识别并执行",
+      "prompt": "api-expense:获取省市区的LLM模型切换到deepseek-v4-flash，需在application.properties新增llm_api_url、llm_api_key、llm_model三项配置",
+      "expected_output": "定位 application.properties → 在隔离目录修改配置文件 → 提交推送 → 触发 CICD → 输出【修复完成】",
+      "assertions": [
+        {
+          "id": "modify-config-file",
+          "text": "修改配置文件而非 Java 源码"
+        },
+        {
+          "id": "isolated-dir",
+          "text": "操作在 /tmp/gitlab/fix/ 隔离目录进行"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "description": "收到已完成的修复结论，正确识别不重复执行",
+      "prompt": "【修复完成】\n仓库：piaozone/input/api-expense\n分支：fixbug_20260622175718\n文件：src/main/resources/application.properties",
+      "expected_output": "识别到已包含【修复完成】，判断无需重复修复，触发 CICD 后直接结束",
+      "assertions": [
+        {
+          "id": "no-duplicate-fix",
+          "text": "收到【修复完成】结论时不重新执行修复流程"
+        },
+        {
+          "id": "trigger-cicd",
+          "text": "仍触发 CICD 构建（Step 8）"
+        }
+      ]
+    }
+  ]
+}

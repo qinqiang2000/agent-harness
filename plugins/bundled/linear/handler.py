@@ -345,8 +345,13 @@ class LinearSessionHandler:
                 exc_info=True,
             )
 
-        # skill 内部已完成修复时跳过，否则由 handler 层兜底触发 code-fix
-        if not error_text and result_text and "修复完成" not in result_text:
+        # 仅结论类型为 CODE_BUG 且 skill 内部未完成修复时，由 handler 层兜底触发 code-fix
+        if (
+            not error_text
+            and result_text
+            and "【结论类型】CODE_BUG" in result_text
+            and "修复完成" not in result_text
+        ):
             await self._trigger_code_fix(
                 session_id=session_id,
                 result_text=result_text,

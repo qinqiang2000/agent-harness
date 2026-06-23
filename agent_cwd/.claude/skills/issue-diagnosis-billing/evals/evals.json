@@ -1,0 +1,125 @@
+{
+  "skill_name": "issue-diagnosis-billing",
+  "evals": [
+    {
+      "id": 1,
+      "description": "路径A：有 traceId，代码级 bug，应输出 CODE_BUG 并自动触发 code-fix",
+      "prompt": "ef608b7c2248dd82，6月9日生产环境报错",
+      "expected_output": "查询 ELK 日志 → 定位源码 → 输出【结论类型】CODE_BUG，自动触发 code-fix",
+      "assertions": [
+        {
+          "id": "path-a",
+          "text": "识别出 traceId，走路径 A 直接查 ELK 日志"
+        },
+        {
+          "id": "conclusion-type-code-bug",
+          "text": "输出格式中包含【结论类型】CODE_BUG"
+        },
+        {
+          "id": "auto-trigger-code-fix",
+          "text": "结论类型为 CODE_BUG 时，自动调用 code-fix skill"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "description": "路径A：有 traceId，纯外部系统问题，应输出 EXTERNAL_ISSUE，不触发 code-fix",
+      "prompt": "traceId: abc123456，生产环境开票失败，税局返回错误码 9900",
+      "expected_output": "查询 ELK 日志 → 发现税局返回错误 → 输出【结论类型】EXTERNAL_ISSUE，不触发 code-fix",
+      "assertions": [
+        {
+          "id": "conclusion-type-external",
+          "text": "输出格式中包含【结论类型】EXTERNAL_ISSUE"
+        },
+        {
+          "id": "no-code-fix",
+          "text": "不调用 code-fix skill"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "description": "路径B+：有业务标识符（报销单号），先查 ELK，查不到再走知识库",
+      "prompt": "报销单 BX-2605-0478 上传两张连号发票，系统没有识别出连号",
+      "expected_output": "识别到报销单号 BX-2605-0478 → 先用关键词查 ELK → 查不到日志 → 降级走知识库检索连号校验逻辑 → 输出【结论类型】BUSINESS_FAQ",
+      "assertions": [
+        {
+          "id": "path-b-plus",
+          "text": "识别出 BX- 开头的报销单号，优先查询 ELK 日志"
+        },
+        {
+          "id": "fallback-to-kb",
+          "text": "ELK 查不到时降级到知识库检索，不直接结束"
+        },
+        {
+          "id": "conclusion-type-business-faq",
+          "text": "输出格式中包含【结论类型】BUSINESS_FAQ"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "description": "路径B：纯业务疑问，无任何线索，走知识库，输出 BUSINESS_FAQ",
+      "prompt": "发票查验缓存周期是多少？可以单独设置吗？",
+      "expected_output": "无 traceId、无报错、无业务标识符 → 走路径 B → 读知识库命中查验缓存条目 → 结合源码分析 → 输出【结论类型】BUSINESS_FAQ",
+      "assertions": [
+        {
+          "id": "path-b",
+          "text": "走路径 B，读取 knowledge-base.md"
+        },
+        {
+          "id": "conclusion-type-business-faq",
+          "text": "输出格式中包含【结论类型】BUSINESS_FAQ"
+        },
+        {
+          "id": "no-code-fix",
+          "text": "不调用 code-fix skill"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "description": "路径C：需求/变更类，输出 REQUIREMENT，不自动触发 code-fix",
+      "prompt": "[需求] 获取省市区功能的大模型切换到 deepseek-v4-flash，新模型 URL：https://tokenhub.tencentmaas.com，apiKey: sk-xxx，模型：deepseek-v4-flash",
+      "expected_output": "识别为需求/变更任务 → 走路径 C → 读知识库项目地图确定涉及服务 → 源码定位 → 输出【结论类型】REQUIREMENT，不触发 code-fix，等待用户确认",
+      "assertions": [
+        {
+          "id": "path-c",
+          "text": "识别出变更关键词（切换），走路径 C"
+        },
+        {
+          "id": "read-knowledge-base",
+          "text": "先读 knowledge-base.md 项目地图确定涉及服务"
+        },
+        {
+          "id": "conclusion-type-requirement",
+          "text": "输出格式中包含【结论类型】REQUIREMENT"
+        },
+        {
+          "id": "no-code-fix",
+          "text": "不自动调用 code-fix skill，等待用户确认"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "description": "路径A：有报错关键词，配置问题，输出 CONFIG_CHANGE",
+      "prompt": "开票失败，报错：未配置全电开票账号，测试环境",
+      "expected_output": "识别出报错关键词 → 走路径 A 查 ELK → 定位到未配置账号 → 输出【结论类型】CONFIG_CHANGE，给出配置建议",
+      "assertions": [
+        {
+          "id": "path-a-keywords",
+          "text": "识别出报错关键词，走路径 A"
+        },
+        {
+          "id": "conclusion-type-config",
+          "text": "输出格式中包含【结论类型】CONFIG_CHANGE"
+        },
+        {
+          "id": "no-code-fix",
+          "text": "不调用 code-fix skill"
+        }
+      ]
+    }
+  ]
+}

@@ -50,13 +50,11 @@ async def build_initial_prompt(
             and "code-fix" in default_skills
         ):
             parts.append(
-                "\n## 强制执行规则：诊断后自动修复\n"
-                "这是一个两阶段任务，必须完整执行两个阶段才算完成：\n"
-                "阶段1：调用诊断 skill 完成诊断，输出【根因分析】。\n"
-                "阶段2：诊断完成后，立即判断根因是否为代码问题。"
-                '判断标准：【根因分析】中含"Feign"、"未传"、"参数缺失"、"逻辑"、"NPE"、"空指针"、"堆栈"、"异常类"、"代码"等字样。'
-                "是代码问题 → 必须立即调用 code-fix skill 执行修复，禁止跳过，禁止等待用户指令，禁止提前结束对话。"
-                "非代码问题 → 直接结束。\n"
+                "\n## 执行规则：诊断后按结论类型决定后续动作\n"
+                "阶段1：调用诊断 skill 完成诊断，输出包含【结论类型】的结论。\n"
+                "阶段2：诊断完成后，读取【结论类型】字段：\n"
+                "- 【结论类型】为 CODE_BUG → 立即调用 code-fix skill 执行修复，禁止跳过，禁止等待用户指令。\n"
+                "- 【结论类型】为其他值（CONFIG_CHANGE / REQUIREMENT / BUSINESS_FAQ / EXTERNAL_ISSUE / NEED_MORE_INFO）→ 直接结束，等待用户确认后续操作。\n"
                 "⚠️ 阶段1完成不等于任务完成，必须完成阶段2的判断后才能结束。"
             )
     parts.append(f"用户请求: {user_prompt}")
