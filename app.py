@@ -7,10 +7,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env
-load_dotenv('.env')
+load_dotenv(".env")
 
 # ── 日志配置（必须在任何 getLogger 调用之前）──────────────────────────────────
-log_level = os.getenv('LOG_LEVEL', 'DEBUG')
+log_level = os.getenv("LOG_LEVEL", "DEBUG")
 
 _orig_factory = logging.getLogRecordFactory()
 
@@ -30,6 +30,7 @@ class _TraceFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             from api.utils.perf_timer import _current_timer, get_session_id
+
             timer = _current_timer.get()
             rid = timer.request_id if timer else "-"
             sid = get_session_id() or "-"
@@ -41,11 +42,13 @@ class _TraceFilter(logging.Filter):
 
 logging.basicConfig(
     level=getattr(logging, log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s",
 )
 _root = logging.getLogger()
 _root.setLevel(getattr(logging, log_level.upper()))
-_fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s')
+_fmt = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(trace)s %(message)s"
+)
 _trace_filter = _TraceFilter()
 if not _root.handlers:
     _root.addHandler(logging.StreamHandler())
@@ -61,6 +64,7 @@ logger = logging.getLogger(__name__)
 # (DeepSeek returns thinking blocks without this Anthropic-specific field)
 try:
     from claude_agent_sdk._internal import message_parser as _mp
+
     _orig_parse = _mp.parse_message
 
     def _patched_parse(data):
@@ -95,6 +99,7 @@ from api.routers.plugins import router as plugins_router
 from api.routers.diagnosis import router as diagnosis_router
 from api.constants import DATA_DIR, AGENT_CWD
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
@@ -126,12 +131,14 @@ async def lifespan(app: FastAPI):
 
     # 初始化 SDK 会话缓存
     from api.services.sdk_pool import init_cache
+
     cache = init_cache()
     await cache.start()
 
     # 初始化 FAQ 数据库表
     try:
         from api.db import init_faq_table, close_faq_pool
+
         await init_faq_table()
         logger.info("FAQ table initialized")
     except Exception:
@@ -162,20 +169,32 @@ async def lifespan(app: FastAPI):
             loop = asyncio.get_event_loop()
             loop.create_task(_run_sync())
         else:
-            logger.info("Apifox startup sync skipped (set APIFOX_SYNC_ON_STARTUP=true to enable)")
-        scheduler.add_job(_run_sync, "interval", minutes=interval_minutes, id="apifox_sync")
-        logger.info("Apifox sync scheduled every %d minutes for %d projects", interval_minutes, len(sync_services))
+            logger.info(
+                "Apifox startup sync skipped (set APIFOX_SYNC_ON_STARTUP=true to enable)"
+            )
+        scheduler.add_job(
+            _run_sync, "interval", minutes=interval_minutes, id="apifox_sync"
+        )
+        logger.info(
+            "Apifox sync scheduled every %d minutes for %d projects",
+            interval_minutes,
+            len(sync_services),
+        )
 
     if os.getenv("FAQ_AUTO_PUBLISH", "false").lower() in ("1", "true", "yes"):
         from api.services.faq_publisher import publish_all as _faq_publish_all
+
         async def _run_faq_publish():
             try:
                 results = await _faq_publish_all()
                 logger.info("FAQ auto-publish: %s", results)
             except Exception:
                 logger.exception("FAQ auto-publish failed")
+
         faq_interval = int(os.getenv("FAQ_PUBLISH_INTERVAL_HOURS", "24"))
-        scheduler.add_job(_run_faq_publish, "interval", hours=faq_interval, id="faq_publish")
+        scheduler.add_job(
+            _run_faq_publish, "interval", hours=faq_interval, id="faq_publish"
+        )
         logger.info("FAQ auto-publish scheduled every %d hours", faq_interval)
 
     # Daily report for issue-diagnosis
@@ -184,6 +203,7 @@ async def lifespan(app: FastAPI):
 
         async def _run_daily_report():
             from datetime import datetime, timedelta
+
             date_str = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
             try:
                 result = await _gen_report(date_str)
@@ -216,11 +236,13 @@ async def lifespan(app: FastAPI):
 
     try:
         from api.db import close_faq_pool
+
         await close_faq_pool()
     except Exception:
         pass
 
     from api.services.sdk_pool import get_cache
+
     cache = get_cache()
     if cache:
         await cache.stop()
@@ -238,6 +260,7 @@ class OpenApiLoggingMiddleware(BaseHTTPMiddleware):
         if body_bytes:
             try:
                 import json as _json
+
                 body_log = _json.loads(body_bytes)
             except Exception:
                 body_log = body_bytes.decode("utf-8", errors="replace")
@@ -272,6 +295,7 @@ class OpenApiLoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             import json as _json
+
             resp_log = _json.loads(resp_body)
         except Exception:
             resp_log = resp_body.decode("utf-8", errors="replace")[:500]
@@ -285,6 +309,7 @@ class OpenApiLoggingMiddleware(BaseHTTPMiddleware):
         )
 
         from starlette.responses import Response
+
         return Response(
             content=resp_body,
             status_code=response.status_code,
@@ -331,13 +356,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"errcode": "500000", "description": "服务内部错误，请稍后重试", "data": None},
+            content={
+                "errcode": "500000",
+                "description": "服务内部错误，请稍后重试",
+                "data": None,
+            },
         )
     raise exc
 
 
 @app.exception_handler(StarletteHTTPException)
-async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def starlette_http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+):
     if request.url.path.startswith("/open-api/"):
         errcode = "100003" if exc.status_code == 401 else str(exc.status_code)
         return JSONResponse(
@@ -356,9 +387,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
+
 # SPA fallback: /static/agent/* non-file requests return index.html for vue-router history mode
 # Must be registered before app.mount("/static") so FastAPI route takes priority
 from fastapi.responses import FileResponse as _FileResponse
+
 
 @app.get("/static/agent/{full_path:path}")
 async def agent_spa(full_path: str):
@@ -368,15 +401,20 @@ async def agent_spa(full_path: str):
         return _FileResponse(str(requested))
     return _FileResponse(str(agent_index))
 
+
 # Mount static files
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
-    app.mount("/static", StaticFiles(directory=str(static_path), html=True), name="static")
+    app.mount(
+        "/static", StaticFiles(directory=str(static_path), html=True), name="static"
+    )
 
 # Mount knowledge base assets for image access
 kb_assets_path = DATA_DIR / "kb" / "产品与交付知识" / "assets"
 if kb_assets_path.exists():
-    app.mount("/kb/assets", StaticFiles(directory=str(kb_assets_path)), name="kb_assets")
+    app.mount(
+        "/kb/assets", StaticFiles(directory=str(kb_assets_path)), name="kb_assets"
+    )
     logger.info(f"Mounted KB assets at /kb/assets -> {kb_assets_path}")
 
 # Include API routers
@@ -384,12 +422,21 @@ app.include_router(router)  # Generic /api endpoints
 app.include_router(plugins_router)  # Plugin management API
 app.include_router(diagnosis_router)  # Diagnosis cases API
 from api.routers.faq import router as faq_router
+
 app.include_router(faq_router)
 from api.routers.browser_action import router as browser_action_router
+
 app.include_router(browser_action_router)
 from api.routers.report import router as report_router
+
 app.include_router(report_router)
 # Note: Channel-specific routers (e.g. /yzj/*) are now registered by plugins at startup
+
+
+@app.get("/health")
+async def root_health_check():
+    """根路径健康检查，兼容 nginx/负载均衡等外部检查工具。"""
+    return {"status": "healthy", "service": "ai-agent-service"}
 
 
 @app.get("/")
@@ -402,13 +449,13 @@ async def root():
         "endpoints": {
             "docs": "/docs",
             "health": "/api/health",
-            "plugins": "/api/plugins/"
-        }
+            "plugins": "/api/plugins/",
+        },
     }
-
 
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("PORT", "9090"))
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
