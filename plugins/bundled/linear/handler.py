@@ -164,9 +164,7 @@ class LinearSessionHandler:
                     text = data.get("content", "")
                     if text:
                         try:
-                            await client.send_thought(
-                                session_id, text[:300], ephemeral=True
-                            )
+                            await client.send_thought(session_id, text[:300])
                         except Exception:
                             pass
                 elif event_type == "result":
@@ -317,9 +315,7 @@ class LinearSessionHandler:
                     text = data.get("content", "")
                     if text:
                         try:
-                            await client.send_thought(
-                                session_id, text[:300], ephemeral=True
-                            )
+                            await client.send_thought(session_id, text[:300])
                         except Exception:
                             pass
                 elif event_type == "result":
@@ -479,9 +475,7 @@ class LinearSessionHandler:
                     text = data.get("content", "")
                     if text:
                         try:
-                            await client.send_thought(
-                                session_id, text[:300], ephemeral=True
-                            )
+                            await client.send_thought(session_id, text[:300])
                         except Exception:
                             pass
                 elif event_type == "error":

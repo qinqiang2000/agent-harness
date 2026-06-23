@@ -32,7 +32,7 @@ description: >-
 
 - `repoName`：需修复的服务仓库名（从根因描述中的服务名推断，查 `references/service-repo-map.md` 映射）
 - `projectId`：GitLab 仓库路径（如 `piaozone/input/api-invoice-recognition`）
-- `sessionSuffix`：取当前时间戳 `$(date +%H%M%S)`
+- `sessionSuffix`：取当前时间戳 `$(date +%Y%m%d%H%M%S)`
 - `localDir`：`/tmp/gitlab/fix/{repoName}_{sessionSuffix}`（前缀 `/tmp/gitlab/fix/`，**禁止使用 `$BILLING_CODE_BASE_DIR` 或任何其他已有代码目录**，必须是独立的隔离目录）
 - `targetFile`：需修复的源码文件路径（若有 `源码: {ClassName}.java:{行号}` 则直接使用；否则进入 Step 1.5 定位）
 - `rootCause`：根因描述
