@@ -298,3 +298,29 @@ class LinearClient:
         if not started:
             return None
         return min(started, key=lambda s: s["position"])["id"]
+
+    async def get_state_id_by_name(
+        self, team_id: str, state_name: str
+    ) -> Optional[str]:
+        """按状态名精确查找状态 ID。
+
+        Args:
+            team_id: Linear team ID
+            state_name: 状态名称，如"编码&自测完成"
+
+        Returns:
+            state ID 或 None（未找到时返回 None，不 fallback）
+        """
+        data = await self._query(
+            """
+            query TeamStates($teamId: String!) {
+                team(id: $teamId) {
+                    states { nodes { id name type position } }
+                }
+            }
+            """,
+            {"teamId": team_id},
+        )
+        states = data["team"]["states"]["nodes"]
+        matched = [s for s in states if s["name"] == state_name]
+        return matched[0]["id"] if matched else None

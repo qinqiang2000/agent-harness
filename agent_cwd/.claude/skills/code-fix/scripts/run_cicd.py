@@ -313,6 +313,11 @@ if __name__ == "__main__":
     if args.file:
         with open(args.file, encoding="utf-8") as f:
             text = f.read()
+        # 读完立即删除临时文件，避免外部 rm 与进程启动产生竞争
+        try:
+            os.remove(args.file)
+        except OSError:
+            pass
     else:
         text = args.fix_result or ""
 

@@ -53,3 +53,4 @@ plugins/bundled/audit/tmp/*
 
 # Skill sensitive config
 agent_cwd/.claude/skills/issue-diagnosis/db/db_config.json
+CLAUDE.local.md
