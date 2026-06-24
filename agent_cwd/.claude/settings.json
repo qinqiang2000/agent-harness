@@ -16,6 +16,10 @@
       "Bash(git merge*)",
       "Bash(git tag*)",
       "Bash(git stash*)",
+      "Bash(pip install*)",
+      "Bash(pip3 install*)",
+      "Bash(python -m pip install*)",
+      "Bash(python3 -m pip install*)",
       "Edit(/tmp/gitlab/**)",
       "Write(/tmp/gitlab/**)"
     ]
