@@ -325,12 +325,13 @@ class TestRunner:
     """单个测试的运行器，用于保持状态以便超时时恢复"""
 
     def __init__(self, agent_service, question: str, default_product: str,
-                 max_rounds: int = 3, task_id: str = ""):
+                 max_rounds: int = 3, task_id: str = "", skill: str = "customer-service"):
         self.agent_service = agent_service
         self.question = question
         self.default_product = default_product
         self.max_rounds = max_rounds
         self.task_id = task_id  # 任务标识，如 "[1/10]"
+        self.skill = skill
 
         # 状态
         self.result = TestResult(question=question)
@@ -365,7 +366,16 @@ class TestRunner:
         self.result.has_fallback = FALLBACK_PHRASE in self.result.answer
         # asked_product 补充检测：agent 可能用文字追问而非 AskUserQuestion 工具
         if not self.result.asked_product:
-            ask_patterns = ["请问您使用的是哪款", "请确认.*产品", "您使用的是哪个版本", "哪款发票云产品"]
+            ask_patterns = [
+                r"您使用的是哪[款个种]产品",
+                r"请问您使用的是哪[款个种]",
+                r"请确认.*产品",
+                r"您使用的是哪个版本",
+                r"哪款发票云产品",
+                r"您使用的是.*产品.*[？?]",
+                r"请选择.*产品",
+                r"请告知您使用的产品",
+            ]
             import re
             for pat in ask_patterns:
                 if re.search(pat, self.result.answer):
@@ -404,7 +414,7 @@ class TestRunner:
                 request = QueryRequest(
                     tenant_id="batch-test",
                     prompt=prompt,
-                    skill="customer-service",
+                    skill=self.skill,
                     language="中文" if not self.session_id else None,
                     session_id=self.session_id,
                     metadata={"source": "batch-test"}
@@ -505,8 +515,6 @@ class TestRunner:
                 if needs_product:
                     if round_num < self.max_rounds and self.default_product:
                         reply_text = PRODUCT_REPLIES.get(self.default_product, f"我使用的是{self.default_product}")
-                        auto_reply_note = f"\n\n[批量测试] 检测到产品询问，自动回复: {reply_text}\n"
-                        self.full_answer.append(auto_reply_note)
                         self.log(f"检测到产品询问，自动回复: {reply_text}")
                         continue
                     else:
@@ -528,11 +536,12 @@ class TestRunner:
 class MultiTurnTestRunner:
     """多轮对话测试运行器，按 jsonl 用例的 turns 顺序执行"""
 
-    def __init__(self, agent_service, case: dict, default_product: str, task_id: str = ""):
+    def __init__(self, agent_service, case: dict, default_product: str, task_id: str = "", skill: str = "customer-service"):
         self.agent_service = agent_service
         self.case = case
         self.default_product = default_product
         self.task_id = task_id
+        self.skill = skill
         self.session_id = None
         self.start_time = datetime.now()
 
@@ -545,7 +554,7 @@ class MultiTurnTestRunner:
         request = QueryRequest(
             tenant_id="batch-test",
             prompt=prompt,
-            skill="customer-service",
+            skill=self.skill,
             language="中文" if not self.session_id else None,
             session_id=self.session_id,
             metadata={"source": "batch-test"},
@@ -711,6 +720,7 @@ async def run_batch_tests(
     jsonl_cases: list[dict] = None,
     url: str = None,
     path: str = "/api/query",
+    skill: str = "customer-service",
 ) -> list[TestResult]:
     """并发运行批量测试
 
@@ -748,7 +758,7 @@ async def run_batch_tests(
             async with semaphore:
                 first_prompt = case.get("turns", [{}])[0].get("prompt", "")
                 log_progress(f"{task_id} 开始(多轮{len(case.get('turns',[]))}轮): {first_prompt[:40]}...")
-                runner = MultiTurnTestRunner(agent_service, case, default_product, task_id=task_id)
+                runner = MultiTurnTestRunner(agent_service, case, default_product, task_id=task_id, skill=skill)
                 try:
                     result = await asyncio.wait_for(runner.run(), timeout=timeout)
                     flags = []
@@ -784,7 +794,7 @@ async def run_batch_tests(
             task_id = f"[{idx+1}/{total}]"
             async with semaphore:
                 log_progress(f"{task_id} 开始: {question[:40]}...")
-                runner = TestRunner(agent_service, question, default_product, task_id=task_id)
+                runner = TestRunner(agent_service, question, default_product, task_id=task_id, skill=skill)
                 try:
                     result = await asyncio.wait_for(runner.run(), timeout=timeout)
                     flags = []
@@ -948,6 +958,8 @@ async def main():
     parser.add_argument("--concurrency", "-c", type=int, default=1, help="并发数 (默认: 1)")
     parser.add_argument("--default-product", default="旗舰版发票云",
                         help="默认产品选择 (默认: 旗舰版发票云)")
+    parser.add_argument("--skill", default="customer-service",
+                        help="使用的 skill 名称 (默认: customer-service)")
     parser.add_argument("--url", default=None,
                         help="目标服务 URL，如 http://10.0.0.1:9090（不填则 in-process 模式）")
     parser.add_argument("--timeout", "-t", type=float, default=360.0, help="单个测试超时(秒)，默认360秒")
@@ -1006,6 +1018,7 @@ async def main():
         md_writer=md_writer,
         jsonl_cases=jsonl_cases if jsonl_cases else None,
         url=args.url,
+        skill=args.skill,
     )
 
     save_results(results, output_dir, file_stem, md_writer=md_writer)

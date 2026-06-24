@@ -57,7 +57,7 @@ AI回答:
   不适用(-1)：问题明确无产品歧义（如税务政策、通用API问题）
 
 [kb_grounded] 答案是否有知识库依据（无幻觉）？
-  3=包含具体文档链接(yuque等)；2=明显引用KB内容、有依据；1=模糊引用；0=无KB依据或编造内容
+  3=明确引用了知识库文件路径（如 data/feishu/.../.md）或文档章节标题；2=明显基于知识库内容作答、有依据；1=模糊引用；0=无文档依据或编造内容
 
 [accuracy] 事实内容是否正确？
   3=完全正确；2=基本正确有小错；1=部分正确；0=错误或误导
@@ -283,16 +283,27 @@ async def score_file(input_path: Path, concurrency: int = 3) -> Path:
 
     print(f"  题目数: {len(results)}")
 
-    # 加载 golden set（可选）
-    golden_path = input_path.parent.parent / "dataset" / "golden_set.jsonl"
+    # 加载 golden set（可选）：按结果文件名匹配对应的 golden set
+    dataset_dir = input_path.parent.parent / "dataset"
+    stem = input_path.stem  # e.g. test_set_faq_20260608_143434
+    # 取 stem 中第一个时间戳之前的部分作为数据集名，例如 test_set_faq
+    dataset_name = "_".join(p for p in stem.split("_") if not p.isdigit())
+    # 优先找同名 golden set，否则回退到默认
+    candidate = dataset_dir / f"golden_set_{dataset_name.replace('test_set_', '')}.json"
+    if not candidate.exists():
+        candidate = dataset_dir / "golden_set.jsonl"
+    golden_path = candidate
     golden = load_golden_set(golden_path)
     if golden:
         print(f"  Golden set: {len(golden)} 条（有标准答案的题目将更精准评分）")
 
-    client = anthropic.AsyncAnthropic(
-        api_key=os.environ.get("LITELLM_API_KEY"),
-        base_url=os.environ.get("LITELLM_BASE_URL"),
-    )
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    litellm_key = os.environ.get("LITELLM_API_KEY")
+    litellm_url = os.environ.get("LITELLM_BASE_URL")
+    if anthropic_key:
+        client = anthropic.AsyncAnthropic(api_key=anthropic_key)
+    else:
+        client = anthropic.AsyncAnthropic(api_key=litellm_key, base_url=litellm_url)
     semaphore = asyncio.Semaphore(concurrency)
 
     async def score_with_sem(idx: int, result: dict) -> dict:
