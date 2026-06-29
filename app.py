@@ -131,11 +131,20 @@ async def lifespan(app: FastAPI):
 
     # 初始化 FAQ 数据库表
     try:
-        from api.db import init_faq_table, close_faq_pool
+        from api.db import init_faq_table, init_interactions_table, init_skill_versions_table, close_faq_pool
         await init_faq_table()
-        logger.info("FAQ table initialized")
+        await init_interactions_table()
+        await init_skill_versions_table()
+        logger.info("FAQ, interactions and skill_versions tables initialized")
     except Exception:
         logger.warning("FAQ table init failed (PG may not be available)", exc_info=True)
+
+    # 将磁盘 skill 导入数据库（首次启动）
+    try:
+        from api.services.skill_service import import_skills_from_disk
+        await import_skills_from_disk()
+    except Exception:
+        logger.warning("Skill import from disk failed", exc_info=True)
 
     # APScheduler for Apifox sync
     scheduler = AsyncIOScheduler()

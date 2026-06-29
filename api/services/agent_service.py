@@ -360,6 +360,8 @@ class AgentService:
                     )
 
                     answer_parts = []
+                    skills_used: list[str] = []
+                    _url_pattern = __import__("re").compile(r"https?://\S+")
 
                     async for message in processor.process():
                         got_message = True
@@ -369,12 +371,22 @@ class AgentService:
                                 answer_parts.append(json.loads(message["data"]).get("content", ""))
                             except Exception:
                                 pass
+                        elif event == "tool_use":
+                            try:
+                                data = json.loads(message["data"])
+                                if data.get("name") == "Skill":
+                                    skill_name = (data.get("input") or {}).get("skill")
+                                    if skill_name and skill_name not in skills_used:
+                                        skills_used.append(skill_name)
+                            except Exception:
+                                pass
                         elif event == "ask_user_question":
                             asked_user_question = True
                         elif event == "result":
                             try:
                                 data = json.loads(message["data"])
                                 answer = "".join(answer_parts)
+                                cited_urls = list(dict.fromkeys(_url_pattern.findall(answer)))
                                 await interaction_logger.log({
                                     "question": request.prompt,
                                     "answer": answer,
@@ -388,6 +400,8 @@ class AgentService:
                                     "used_fallback_phrase": FALLBACK_PHRASE in answer,
                                     "asked_user_question": asked_user_question,
                                     "product_selected": (request.metadata or {}).get("product_selected"),
+                                    "skills_used": skills_used,
+                                    "cited_urls": cited_urls,
                                 })
                             except Exception as e:
                                 logger.warning(f"Failed to log interaction: {e}")

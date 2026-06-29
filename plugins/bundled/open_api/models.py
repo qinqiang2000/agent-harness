@@ -72,3 +72,40 @@ class AsyncTaskResult(BaseModel):
 
 class EndSessionReq(BaseModel):
     ai_agent_cid: str
+
+
+# ── Skill 版本管理请求模型 ─────────────────────────────────────────────────────
+
+class SkillFileIn(BaseModel):
+    filename: str
+    filepath: str
+    content: str
+
+
+class CreateDraftReq(BaseModel):
+    files: Optional[List[SkillFileIn]] = None
+    operator: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class UpdateDraftReq(BaseModel):
+    files: List[SkillFileIn]
+    operator: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class RollbackReq(BaseModel):
+    version: str           # 格式：{skill_name}:V{N}，如 customer-service:V1
+    operator: Optional[str] = None
+    reason: Optional[str] = None
+
+
+# ── Replay 请求模型 ───────────────────────────────────────────────────────────
+
+class ReplayReq(BaseModel):
+    session_id: Optional[str] = None
+    question: Optional[str] = None
+    skill: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    use_latest_knowledge: bool = True
+    skill_draft_version: Optional[str] = None  # 格式：{skill_name}:V{N}，如 customer-service:V2

@@ -36,12 +36,17 @@ class InteractionLogger:
     """交互日志记录器（单例使用）"""
 
     async def log(self, interaction: dict):
-        """记录一条交互，自动注入 timestamp。"""
+        """记录一条交互，自动注入 timestamp，并异步写入数据库。"""
         interaction.setdefault("timestamp", datetime.now().isoformat())
         try:
             _interactions_logger.info(json.dumps(interaction, ensure_ascii=False))
         except Exception as e:
             logging.getLogger(__name__).warning(f"InteractionLogger log failed: {e}")
+        try:
+            from api.db import insert_interaction
+            await insert_interaction(interaction)
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"InteractionLogger db write failed: {e}")
 
 
 # 单例

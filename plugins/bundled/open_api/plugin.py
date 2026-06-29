@@ -226,6 +226,183 @@ class OpenApiChannelPlugin(ChannelPlugin):
         async def stats(_token: str = Depends(self._require_token)):
             return handler.get_stats()
 
+        # ── Skill 版本管理 ────────────────────────────────────────────────────
+
+        from api.services.skill_service import (
+            get_managed_skills, format_version_key, parse_version_key,
+            create_draft as _create_draft,
+            update_draft as _update_draft,
+            publish_draft as _publish_draft,
+            rollback_to_version as _rollback_to_version,
+        )
+        from plugins.bundled.open_api.models import SkillFileIn, CreateDraftReq, UpdateDraftReq, RollbackReq
+
+        def _check_managed(skill_name: str):
+            if skill_name not in get_managed_skills():
+                return JSONResponse(content=BaseResp(
+                    errcode="100004", description=f"skill '{skill_name}' 不在受管理列表中"
+                ).model_dump())
+
+        def _fmt_version(row: dict) -> str:
+            return format_version_key(row["skill_name"], row["version"])
+
+        @router.get("/open-api/skills")
+        @_safe_route
+        async def list_skills(_token: str = Depends(self._require_token)):
+            from api.db import skill_get_published, skill_get_files
+            result = []
+            for name in get_managed_skills():
+                pub = await skill_get_published(name)
+                if pub:
+                    files = await skill_get_files(pub["id"])
+                    result.append({
+                        "skill_name": name,
+                        "published_version": _fmt_version(pub),
+                        "operator": pub["operator"],
+                        "updated_at": pub["created_at"].isoformat() if pub["created_at"] else None,
+                        "files": [{"filename": f["filename"], "filepath": f["filepath"]} for f in files],
+                    })
+                else:
+                    result.append({
+                        "skill_name": name,
+                        "published_version": None,
+                        "operator": None,
+                        "updated_at": None,
+                        "files": [],
+                    })
+            return BaseResp(data=result).model_dump()
+
+        @router.get("/open-api/skills/{name}")
+        @_safe_route
+        async def get_skill(name: str, _token: str = Depends(self._require_token)):
+            from api.db import skill_get_published, skill_get_files, skill_list_versions
+            err = _check_managed(name)
+            if err:
+                return err
+            pub = await skill_get_published(name)
+            if not pub:
+                return JSONResponse(content=BaseResp(
+                    errcode="100005", description=f"skill '{name}' 尚无 published 版本"
+                ).model_dump())
+            files = await skill_get_files(pub["id"])
+            versions = await skill_list_versions(name)
+            data = {
+                "skill_name": name,
+                "published": {
+                    "version": _fmt_version(pub),
+                    "operator": pub["operator"],
+                    "reason": pub["reason"],
+                    "created_at": pub["created_at"].isoformat() if pub["created_at"] else None,
+                    "files": [
+                        {"filename": f["filename"], "filepath": f["filepath"], "content": f["content"]}
+                        for f in files
+                    ],
+                },
+                "history": [
+                    {
+                        "version": _fmt_version(v),
+                        "status": v["status"],
+                        "operator": v["operator"],
+                        "reason": v["reason"],
+                        "created_at": v["created_at"].isoformat() if v["created_at"] else None,
+                    }
+                    for v in versions
+                ],
+            }
+            return BaseResp(data=data).model_dump()
+
+        @router.get("/open-api/skills/{name}/drafts")
+        @_safe_route
+        async def list_drafts(name: str, _token: str = Depends(self._require_token)):
+            from api.db import skill_list_drafts, skill_get_files
+            err = _check_managed(name)
+            if err:
+                return err
+            drafts = await skill_list_drafts(name)
+            result = []
+            for d in drafts:
+                files = await skill_get_files(d["id"])
+                result.append({
+                    "version": _fmt_version(d),
+                    "operator": d["operator"],
+                    "reason": d["reason"],
+                    "created_at": d["created_at"].isoformat() if d["created_at"] else None,
+                    "files": [{"filename": f["filename"], "filepath": f["filepath"]} for f in files],
+                })
+            return BaseResp(data=result).model_dump()
+
+        @router.post("/open-api/skills/{name}/drafts")
+        @_safe_route
+        async def create_draft_endpoint(name: str, body: CreateDraftReq, _token: str = Depends(self._require_token)):
+            err = _check_managed(name)
+            if err:
+                return err
+            files = [f.model_dump() for f in body.files] if body.files else None
+            try:
+                result = await _create_draft(skill_name=name, files=files, operator=body.operator, reason=body.reason)
+            except Exception as e:
+                return JSONResponse(content=BaseResp(errcode="400000", description=str(e)).model_dump())
+            return BaseResp(data=result).model_dump()
+
+        @router.put("/open-api/skills/{name}/drafts/{version}")
+        @_safe_route
+        async def update_draft_endpoint(name: str, version: str, body: UpdateDraftReq, _token: str = Depends(self._require_token)):
+            err = _check_managed(name)
+            if err:
+                return err
+            try:
+                skill_name, version_num = parse_version_key(version)
+                if skill_name != name:
+                    return JSONResponse(content=BaseResp(errcode="400000", description="版本号中的 skill 名与路径不一致").model_dump())
+                await _update_draft(skill_name=name, version_num=version_num, files=[f.model_dump() for f in body.files], operator=body.operator, reason=body.reason)
+            except ValueError as e:
+                return JSONResponse(content=BaseResp(errcode="400000", description=str(e)).model_dump())
+            return BaseResp(description="更新成功").model_dump()
+
+        @router.post("/open-api/skills/{name}/drafts/{version}/publish")
+        @_safe_route
+        async def publish_draft_endpoint(name: str, version: str, _token: str = Depends(self._require_token)):
+            err = _check_managed(name)
+            if err:
+                return err
+            try:
+                skill_name, version_num = parse_version_key(version)
+                if skill_name != name:
+                    return JSONResponse(content=BaseResp(errcode="400000", description="版本号中的 skill 名与路径不一致").model_dump())
+                await _publish_draft(skill_name=name, version_num=version_num)
+            except ValueError as e:
+                return JSONResponse(content=BaseResp(errcode="400000", description=str(e)).model_dump())
+            return BaseResp(description=f"skill '{name}' 发布成功").model_dump()
+
+        @router.post("/open-api/skills/{name}/rollback")
+        @_safe_route
+        async def rollback_endpoint(name: str, body: RollbackReq, _token: str = Depends(self._require_token)):
+            err = _check_managed(name)
+            if err:
+                return err
+            try:
+                skill_name, version_num = parse_version_key(body.version)
+                if skill_name != name:
+                    return JSONResponse(content=BaseResp(errcode="400000", description="版本号中的 skill 名与路径不一致").model_dump())
+                result = await _rollback_to_version(skill_name=name, target_version_num=version_num, operator=body.operator, reason=body.reason)
+            except ValueError as e:
+                return JSONResponse(content=BaseResp(errcode="400000", description=str(e)).model_dump())
+            return BaseResp(data=result).model_dump()
+
+        # ── Replay 回放重跑 ───────────────────────────────────────────────────
+
+        from plugins.bundled.open_api.models import ReplayReq
+        from plugins.bundled.open_api.replay import run_replay
+
+        @router.post("/open-api/replay")
+        @_safe_route
+        async def replay_endpoint(body: ReplayReq, _token: str = Depends(self._require_token)):
+            try:
+                result = await run_replay(body, agent_service=self.api.agent_service)
+            except ValueError as e:
+                return JSONResponse(content=BaseResp(errcode="400000", description=str(e)).model_dump())
+            return BaseResp(data=result).model_dump()
+
         return router
 
     async def send_text(self, recipient_id: str, text: str, context: Optional[Dict[str, Any]] = None) -> bool:

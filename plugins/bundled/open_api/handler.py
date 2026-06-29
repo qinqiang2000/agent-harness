@@ -1,10 +1,14 @@
 """Open API 消息处理器."""
 
+import asyncio
 import json
 import logging
+import os
 import re
 from collections import deque
-from typing import Deque, Dict, List, Tuple
+from typing import Deque, Dict, List, Optional, Tuple
+
+import httpx
 
 from api.models.requests import QueryRequest
 from api.plugins.session_mapper import PluginSessionMapper
@@ -57,6 +61,8 @@ class OpenApiHandler:
             channel_id="open_api",
         )
         self._history: Dict[str, Deque[Tuple[str, str]]] = {}
+        self._ticket_hub_url: Optional[str] = os.getenv("TICKET_HUB_WEBHOOK_URL")
+        self._ticket_hub_token: Optional[str] = os.getenv("TICKET_HUB_WEBHOOK_TOKEN")
 
     def _get_history(self, cid: str) -> Deque[Tuple[str, str]]:
         if cid not in self._history:
@@ -69,6 +75,75 @@ class OpenApiHandler:
         expired = [c for c in self._history if c not in active_cids]
         for c in expired:
             del self._history[c]
+
+    async def _send_escalation(self, cid: str, session_id: Optional[str], reason: str, current_question: Optional[str] = None) -> None:
+        """异步向 ticket-hub 发送 escalation 回调，不阻塞主流程。"""
+        if not self._ticket_hub_url:
+            return
+
+        rows = []
+        if session_id:
+            try:
+                from api.db import get_faq_pool
+                pool = await get_faq_pool()
+                rows = await pool.fetch(
+                    """
+                    SELECT question, answer, skills_used, cited_urls, created_at
+                    FROM cs_interactions
+                    WHERE session_id = $1
+                    ORDER BY created_at ASC
+                    """,
+                    session_id,
+                )
+            except Exception as e:
+                logger.warning(f"[OpenAPI] escalation: failed to query interactions: {e}")
+
+        conversation: List[dict] = []
+        all_cited_urls: List[str] = []
+        all_skills: List[str] = []
+        original_question: Optional[str] = None
+        last_answer: Optional[str] = None
+
+        for row in rows:
+            ts = row["created_at"].isoformat() if row["created_at"] else ""
+            if row["question"]:
+                if original_question is None:
+                    original_question = row["question"]
+                conversation.append({"role": "user", "text": row["question"], "ts": ts})
+            if row["answer"]:
+                last_answer = row["answer"]
+                conversation.append({"role": "assistant", "text": row["answer"], "ts": ts})
+            for url in (row["cited_urls"] or []):
+                if url not in all_cited_urls:
+                    all_cited_urls.append(url)
+            for skill in (row["skills_used"] or []):
+                if skill not in all_skills:
+                    all_skills.append(skill)
+
+        # 代码层转人工时当前轮问题未经 agent，DB 里没有这条记录，手动补入
+        if current_question:
+            if original_question is None:
+                original_question = current_question
+            conversation.append({"role": "user", "text": current_question, "ts": ""})
+
+        payload = {
+            "session_id": session_id or cid,
+            "original_question": original_question or "",
+            "ai_answer": last_answer or "",
+            "dissatisfaction": reason,
+            "conversation": conversation,
+            "cited_knowledge": [{"url": u} for u in all_cited_urls],
+            "skills_used": all_skills,
+        }
+        headers = {"Content-Type": "application/json"}
+        if self._ticket_hub_token:
+            headers["Authorization"] = f"Bearer {self._ticket_hub_token}"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(self._ticket_hub_url, json=payload, headers=headers)
+                logger.info(f"[OpenAPI] escalation sent: session={session_id} status={resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[OpenAPI] escalation POST failed: {e}")
 
     def _check_transfer(self, cid: str, question: str) -> bool:
         # 情绪触发：直接 TRANSFER，无需历史
@@ -100,6 +175,7 @@ class OpenApiHandler:
         # 代码层转人工判断，优先于 Agent
         if self._check_transfer(cid, req.question):
             self._get_history(cid).append((req.question, "[TRANSFER]"))
+            asyncio.create_task(self._send_escalation(cid, agent_session_id, req.question, current_question=req.question))
             return "正在为您转接人工客服，请稍候。", True
 
         prompt = req.question
@@ -132,6 +208,8 @@ class OpenApiHandler:
                 # Agent 的转人工信号忽略，由代码层统一控制
                 data = json.loads(event["data"])
                 answer = data.get("reason", "正在为您转接人工客服，请稍候。")
+                current_session_id = self.session_mapper.get_or_create(cid) or agent_session_id
+                asyncio.create_task(self._send_escalation(cid, current_session_id, answer))
                 break
 
             elif event_type == "ask_user_question":
