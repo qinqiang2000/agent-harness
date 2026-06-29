@@ -61,8 +61,6 @@ class OpenApiHandler:
             channel_id="open_api",
         )
         self._history: Dict[str, Deque[Tuple[str, str]]] = {}
-        self._ticket_hub_url: Optional[str] = os.getenv("TICKET_HUB_WEBHOOK_URL")
-        self._ticket_hub_token: Optional[str] = os.getenv("TICKET_HUB_WEBHOOK_TOKEN")
 
     def _get_history(self, cid: str) -> Deque[Tuple[str, str]]:
         if cid not in self._history:
@@ -78,7 +76,9 @@ class OpenApiHandler:
 
     async def _send_escalation(self, cid: str, session_id: Optional[str], reason: str, current_question: Optional[str] = None) -> None:
         """异步向 ticket-hub 发送 escalation 回调，不阻塞主流程。"""
-        if not self._ticket_hub_url:
+        ticket_hub_url = os.getenv("TICKET_HUB_WEBHOOK_URL", "").strip()
+        ticket_hub_token = os.getenv("TICKET_HUB_WEBHOOK_TOKEN", "").strip()
+        if not ticket_hub_url:
             return
 
         rows = []
@@ -135,10 +135,10 @@ class OpenApiHandler:
             "cited_knowledge": [{"url": u} for u in all_cited_urls],
             "skills_used": all_skills,
         }
-        url = self._ticket_hub_url
-        if self._ticket_hub_token:
+        url = ticket_hub_url
+        if ticket_hub_token:
             sep = "&" if "?" in url else "?"
-            url = f"{url}{sep}access_token={self._ticket_hub_token}"
+            url = f"{url}{sep}access_token={ticket_hub_token}"
         headers = {"Content-Type": "application/json"}
         try:
             async with httpx.AsyncClient(timeout=10) as client:
