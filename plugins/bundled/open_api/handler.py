@@ -135,12 +135,14 @@ class OpenApiHandler:
             "cited_knowledge": [{"url": u} for u in all_cited_urls],
             "skills_used": all_skills,
         }
-        headers = {"Content-Type": "application/json"}
+        url = self._ticket_hub_url
         if self._ticket_hub_token:
-            headers["Authorization"] = f"Bearer {self._ticket_hub_token}"
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}access_token={self._ticket_hub_token}"
+        headers = {"Content-Type": "application/json"}
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(self._ticket_hub_url, json=payload, headers=headers)
+                resp = await client.post(url, json=payload, headers=headers)
                 logger.info(f"[OpenAPI] escalation sent: session={session_id} status={resp.status_code}")
         except Exception as e:
             logger.warning(f"[OpenAPI] escalation POST failed: {e}")
