@@ -19,7 +19,6 @@ from api.utils import build_initial_prompt
 logger = logging.getLogger(__name__)
 
 _md_url = re.compile(r'\[([^\]]*)\]\((https?://[^)]+)\)')
-_bare_url = re.compile(r'(?<!\()https?://[^\s\)\"\'<>，。！？、）]+')
 
 
 def _build_tmp_cwd(skill_name: str, files: list[dict], trace_id: str) -> Path:
@@ -168,12 +167,9 @@ async def run_replay(body, agent_service) -> dict:
                     try:
                         content = json.loads(message["data"]).get("content", "")
                         answer_parts.append(content)
+                        # 只提取 markdown 链接格式的 URL，裸 URL 通常是代码示例里的业务地址
                         for _, url in _md_url.findall(content):
                             url = url.strip()
-                            if url not in cited_urls:
-                                cited_urls.append(url)
-                        for url in _bare_url.findall(content):
-                            url = url.rstrip(".")
                             if url not in cited_urls:
                                 cited_urls.append(url)
                     except Exception:
