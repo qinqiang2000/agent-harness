@@ -31,6 +31,7 @@ clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.
 | api-invoice-input-db | piaozone/input/api-invoice-input-db | 进项-发票数据库服务 |
 | api-invoice-input-query | piaozone/input/api-invoice-input-query | 进项-发票查询服务 |
 | api-invoice-input-query-v2 | piaozone/input/api-invoice-input-query-v2 | 进项-发票查询服务 v2 |
+| api-invoice-input-utils | piaozone/common/api-invoice-input-utils | 进项-公共工具包（RPC接口/DTO/枚举） |
 | api-fpzs | piaozone/input/api-fpzs | 进项-发票助手服务（日志服务名 fpzs） |
 | fpzs | piaozone/input/api-fpzs | 进项-发票助手服务（别名） |
 | api-expense | piaozone/input/api-expense | 进项-报销合规校验服务 |
@@ -66,5 +67,17 @@ clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.
 | base-file-center | piaozone/base/base-file-center | 基础层-文件中心服务 |
 | bill-organization | piaozone/base/bill-organization | 基础层-组织机构服务 |
 | bill-bm-ocr-invoice | piaozone/input/bill-bm-ocr-invoice | 进项-百望 OCR 发票识别服务 |
+| bill-wechat-mini-program | piaozone/input/bill-wechat-mini-program | 进项-微信小程序（移动端推送） |
+| bill-portal | piaozone/base/bill-portal | 进项-门户管理后台 |
+| base-iam | piaozone/base/base-iam | 基础层-认证授权服务（api-auth 替代） |
+| api-pdf-utils | piaozone/common/api-pdf-utils | 公共-PDF 文件处理工具 |
+| api-ofd-utils | piaozone/common/api-ofd-utils | 公共-OFD 文件处理工具 |
+| base-file-center-server | piaozone/base/base-file-center-server | 基础层-文档中心（识别分流：网关拦截→上传/快照/识别/验签） |
+| fpzs-pc | piaozone/frontend/fpzs-pc | 前端-发票助手 PC 端（React + dva，端口 9000） |
+| portal-web | piaozone/frontend/portal-web | 前端-商家平台前端（Vue） |
+| fpy-parent | piaozone-v2/fpy-parent | 重构版-父 POM（统一依赖管理） |
+| fpy-sdk-base | piaozone-v2/sdk/fpy-sdk-base | 重构版-基础 SDK（实体、工具、配置） |
+| fpy-base-query | piaozone-v2/base/fpy-base-query | 重构版-查询服务（响应式，规则引擎，虚拟线程） |
+| fpy-isv | piaozone-v2/app/fpy-isv | 重构版-ISV 发票查验服务（独立部署） |
 
 > 如需新增映射，按格式在表格中追加一行即可。

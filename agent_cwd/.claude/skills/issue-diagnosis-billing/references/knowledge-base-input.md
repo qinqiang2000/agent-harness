@@ -179,10 +179,66 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 - **核心表**: t_rpa_apply_log(任务主表), t_rpa_apply_log_detail(明细), t_invoice_extra(入账状态缓存)
 - **深入**: Read `api-invoice-collector/docs/RPA税局下票技术文档.md`
 
-### 旗舰版 / 星瀚 / api-invoice-frame / firmament
-- **统一入口**: POST /m3/bill/firmament/img/handle
-- **eventType**: recognize(识别) / verify(查验) / mailCollect(邮箱取票) / archive(归档) / query(查询)
-- **架构**: 旗舰版(低代码) → api-invoice-frame(参数转换) → 标准版核心服务
+### 旗舰版 / 星瀚 / 苍穹 / api-invoice-frame / firmament / 数据同步 / 收票同步
+- **统一入口**: POST /m3/bill/firmament/img/handle（eventType 数字路由，见下表）
+- **架构**: 旗舰版(星瀚低代码) → api-invoice-frame(FirmamentApiController#handle) → 标准版核心服务
+- **适用场景**: 凡是「标准版收票数据同步到星瀚」「星瀚发起的收票操作」「苍穹侧数据缺失/同步中断」等问题，入口均在此
+
+#### handle eventType 枚举（关键场景）
+
+| eventType | 方法 | 说明 |
+|---|---|---|
+| 1 | getTaxPeriod | 查询税款所属期 |
+| 2 | queryInvoices | **采集发票 / 数据同步**（公有云底账同步，按 clientId 全量，同步中断需重新触发） |
+| 3 | getTongjiStatus | 获取企业统计表 |
+| 4 | createTongji | 生成统计表 |
+| 5 | cancelTongji | 取消统计表 |
+| 6 | confirmTongji | 确认统计表 |
+| 7 | invoiceGx | 发票勾选 |
+| 8 | downloadApply | 进销项下载申请 |
+| 9 | downloadQuery | 进销项发票下载查询 |
+| 10 | invoiceRecognitionCheck | 发票识别查验 |
+| 11 | invoiceCheck | 发票查验 |
+| 12 | placeMapping | 省市区查询 |
+| 13 | blackListMapping | 销方黑名单列表 |
+| 14 | getLinkkey | 获取 LinkKey |
+| 15 | getUserKey | 获取 userKey |
+| 16 | getMiniProgramQrcode | 生成小程序二维码（GET） |
+| 17 | queryInputSync | **查询发票同步状态**（同步中断排查入口） |
+| 18 | blockChainCheck | 区块链发票查验 |
+| 19 | getYunpiaoValidatecode | 云票获取短信验证码 |
+| 20 | yunpiaoIdentifyAndAuthorization | 云票验证码授权 |
+| 21 | getYunpiaoInvoice | 云票获取发票数据 |
+| 22 | sendVerifyCode | 发送邮箱验证码 |
+| 23 | bandMail | 绑定邮箱 |
+| 24 | queryMyMailList | 查询我的邮箱列表 |
+| 25 | unBandMail | 解绑邮箱 |
+| 26 | mailTask | 邮箱取票任务列表 |
+| 27 | mailRetryTask | 邮箱重试任务 |
+| 28 | mailDelTask | 邮箱删除任务 |
+| 29 | createInvoicePdf | 生成底账 PDF |
+| 30 | msgCollectConfirm | 短信取票-确认取票 |
+| 31 | msgTaskList | 短信取票-获取任务列表 |
+| 32 | msgTaskRetry | 短信取票-重试失败任务 |
+| 33 | msgTaskDel | 短信取票-删除任务 |
+| 34 | invoiceParamSerialNoQuery | 根据流水号查询数据 |
+| 35 | pureRecognition | 睿琪纯识别 |
+| 37 | getTenantToken | 获取租户 token |
+| 38 | getTenantInfo | 获取租户信息 |
+| 39 | getClientRights | 获取用户权益 |
+| 40 | syncXkBlackListInfo | 信科黑名单数据同步 |
+| 41 | syncConfig | 同步邮箱配置 |
+| 42 | queryTaskList | 分页查询任务列表 |
+| 43 | queryTaskDetail | 查询任务详情 |
+| 44 | syncMailEnable | 同步邮箱可用状态 |
+| 46 | parseLink | 链接解析（二维码，含识别+查验） |
+
+- **数据同步中断排查**: eventType=2 调用 `collectorRpcService.queryInvoices()`，同步逻辑在 api-invoice-collector；定时任务关闭/重启导致中断时需按 clientId 重新触发全量同步；aws 无切片记录故中断后必须全量重跑
+- **枚举表兜底**: 若上表中找不到对应 eventType，先拉取最新代码确认当前枚举全集，再判断是 bug（已有 eventType 行为异常）还是需求（缺少 eventType 或新功能诉求）：
+  ```bash
+  git -C {BILLING_CODE_BASE_DIR}/input-project/standard/input/api-invoice-frame pull
+  grep -n "case " {BILLING_CODE_BASE_DIR}/input-project/standard/input/api-invoice-frame/src/main/java/com/kingdee/controller/firmament/FirmamentApiController.java
+  ```
 - **深入**: Read `api-invoice-frame/docs/旗舰版接口对接文档.md`
 
 ### 发票助手 / fpzs / api-fpzs

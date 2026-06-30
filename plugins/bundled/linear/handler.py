@@ -15,6 +15,7 @@ from api.services.agent_service import AgentService
 
 from plugins.bundled.linear.linear_client import LinearClient, LinearAPIError
 from plugins.bundled.linear.token_store import TokenStore
+from plugins.bundled.linear import diagnosis_store
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,7 @@ class LinearSessionHandler:
         self._active_sessions: set = set()
         # linear_session_id -> claude_session_id 映射，支持多轮续接
         self._session_map: Dict[str, str] = {}
-        # linear_session_id -> 诊断结论文本，供 prompted 阶段判断是否触发 code-fix
-        self._session_diagnosis: Dict[str, str] = {}
+        # 诊断结论持久化到 SQLite（diagnosis_store），重启后不丢失
 
     # ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -131,7 +131,7 @@ class LinearSessionHandler:
             "fix",
             "修复",
         )
-        prior_diagnosis = self._session_diagnosis.get(session_id, "")
+        prior_diagnosis = diagnosis_store.get(session_id)
         if prior_diagnosis and any(
             kw in prompt_context.lower() for kw in _CODE_INTENT_KEYWORDS
         ):
@@ -152,7 +152,7 @@ class LinearSessionHandler:
                     client=client,
                 )
                 # 编码触发后清除诊断缓存，避免重复触发
-                self._session_diagnosis.pop(session_id, None)
+                diagnosis_store.delete(session_id)
             return
 
         claude_session_id = self._session_map.get(session_id)
@@ -394,7 +394,7 @@ class LinearSessionHandler:
                 trace_id=trace_id,
                 client=client,
             )
-        # 非 CODE_BUG 结论时，保存诊断结论供用户后续回复「编码」时使用
+        # 非 CODE_BUG 结论时，持久化诊断结论供用户后续回复「编码」时使用
         elif (
             not error_text
             and result_text
@@ -408,7 +408,7 @@ class LinearSessionHandler:
                 )
             )
         ):
-            self._session_diagnosis[session_id] = result_text
+            diagnosis_store.save(session_id, result_text)
 
         logger.info(f"[{trace_id}][Linear] Completed: session={session_id}")
 

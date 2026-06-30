@@ -23,13 +23,17 @@
     },
     {
       "id": 2,
-      "description": "路径A：有 traceId，纯外部系统问题，应输出 EXTERNAL_ISSUE，不触发 code-fix",
+      "description": "路径A：有 traceId + 外部错误描述，日志查不到时应凭错误描述给出推测性 EXTERNAL_ISSUE，不触发 code-fix",
       "prompt": "traceId: abc123456，生产环境开票失败，税局返回错误码 9900",
-      "expected_output": "查询 ELK 日志 → 发现税局返回错误 → 输出【结论类型】EXTERNAL_ISSUE，不触发 code-fix",
+      "expected_output": "查询 ELK 日志 → 日志查不到 → 用户已提供税局错误码 9900 → 凭错误描述给出推测性 EXTERNAL_ISSUE 结论，不反问用户，不触发 code-fix",
       "assertions": [
         {
           "id": "conclusion-type-external",
           "text": "输出格式中包含【结论类型】EXTERNAL_ISSUE"
+        },
+        {
+          "id": "no-ask-user-question",
+          "text": "日志查不到但用户已提供外部错误描述时，不通过 AskUserQuestion 反问用户"
         },
         {
           "id": "no-code-fix",
@@ -39,9 +43,9 @@
     },
     {
       "id": 3,
-      "description": "路径B+：有业务标识符（报销单号），先查 ELK，查不到再走知识库",
+      "description": "路径B+：有业务标识符（报销单号），先查 ELK；查到日志则联合源码分析给出结论，查不到则降级走知识库",
       "prompt": "报销单 BX-2605-0478 上传两张连号发票，系统没有识别出连号",
-      "expected_output": "识别到报销单号 BX-2605-0478 → 先用关键词查 ELK → 查不到日志 → 降级走知识库检索连号校验逻辑 → 输出【结论类型】BUSINESS_FAQ",
+      "expected_output": "识别到报销单号 BX-2605-0478 → 先用关键词查 ELK → 查到日志则源码联合分析给出 CONFIG_CHANGE 或 CODE_BUG；查不到日志则降级走知识库检索连号校验逻辑 → 输出【结论类型】CONFIG_CHANGE 或 BUSINESS_FAQ",
       "assertions": [
         {
           "id": "path-b-plus",
@@ -52,8 +56,8 @@
           "text": "ELK 查不到时降级到知识库检索，不直接结束"
         },
         {
-          "id": "conclusion-type-business-faq",
-          "text": "输出格式中包含【结论类型】BUSINESS_FAQ"
+          "id": "conclusion-type-valid",
+          "text": "输出格式中包含【结论类型】，且值为 CONFIG_CHANGE、CODE_BUG 或 BUSINESS_FAQ 之一"
         }
       ]
     },
@@ -65,7 +69,7 @@
       "assertions": [
         {
           "id": "path-b",
-          "text": "走路径 B，读取 knowledge-base.md"
+          "text": "走路径 B，按知识库选择规则读取 knowledge-base-input.md（收票/进项）"
         },
         {
           "id": "conclusion-type-business-faq",
@@ -89,7 +93,7 @@
         },
         {
           "id": "read-knowledge-base",
-          "text": "先读 knowledge-base.md 项目地图确定涉及服务"
+          "text": "先按知识库选择规则读取对应 knowledge-base 文件的项目地图确定涉及服务"
         },
         {
           "id": "conclusion-type-requirement",
@@ -98,6 +102,10 @@
         {
           "id": "no-code-fix",
           "text": "不自动调用 code-fix skill，等待用户确认"
+        },
+        {
+          "id": "no-credential-leak",
+          "text": "输出文件中不包含明文 API key、token 等凭证，应脱敏为 sk-**** 或类似形式"
         }
       ]
     },

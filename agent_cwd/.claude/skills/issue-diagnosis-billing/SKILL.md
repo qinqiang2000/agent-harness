@@ -100,7 +100,23 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 
 ## Step 2：知识库检索 + 本地源码联合分析（仅路径 B 执行）
 
-读取 [references/knowledge-base.md](references/knowledge-base.md)，用用户描述的关键词在「三、关键词 → 上下文映射」中做语义匹配。
+### 知识库选择规则
+
+根据用户问题中的关键词，决定读取哪些知识库文件：
+
+| 关键词特征 | 读取文件 |
+|---|---|
+| 含收票/进项关键词（报销单、发票上传、查验、台账、fdelete、api-expense、BX-） | [references/knowledge-base-input.md](references/knowledge-base-input.md) |
+| 含影像关键词（归档、OFD、PDF解析、影像、扫描、识别） | [references/knowledge-base-image.md](references/knowledge-base-image.md) |
+| 含开票/销项关键词（开票、红冲、发票申请、税局、全电） | [references/knowledge-base-output.md](references/knowledge-base-output.md) |
+| **无法区分产品线**（问题描述模糊，无法判断归属） | **同时读取全部三个文件**，联合匹配，命中哪个用哪个 |
+
+联合匹配时：
+- 只有一个文件命中 → 直接用该文件结论
+- 多个文件命中但结论一致 → 合并输出
+- 多个文件命中且结论矛盾 → 用 `AskUserQuestion` 询问用户所属产品线后再给结论
+
+> 影像（knowledge-base-image.md）和开票（knowledge-base-output.md）知识库目前为占位文件，内容待团队补充。未命中时直接提示用户补充线索，不猜测。
 
 ### 匹配策略（按优先级）
 
@@ -212,11 +228,17 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 **查询结果处理：**
 
-- **日志查不到**（重试后仍无结果）→ 用 `AskUserQuestion` 告知未找到相关日志，请求补充信息后重新执行本步骤：
+- **日志查不到**（重试后仍无结果）→ 按以下条件分支处理：                                                           
+  
+  **情况一：用户仅提供了 traceId，无其他错误描述**                                                                 
+  → 用 `AskUserQuestion` 告知未找到相关日志，请求补充信息后重新执行本步骤：
   > 日志中未找到相关记录，请提供以下信息以便进一步排查：
-  > 1. traceId 或准确的报错文本
+  > 1. 确认 traceId 是否正确（正式 traceId 通常为 16 位以上十六进制字符串）
   > 2. 问题发生的时间（精确到分钟）
   > 3. 涉及的服务名或接口名（如已知）
+
+  **情况二：用户同时提供了明确的外部系统错误描述**（如税局返回的错误码、第三方接口的错误信息等）
+  → 不反问，直接结合 field-glossary.md 和领域知识对外部错误进行分析，进入 Step 5 输出推测性结论（结论中标注「推测」，并说明因日志缺失无法完整确认本地链路）。此时结论类型优先判断为 `EXTERNAL_ISSUE`，若无法确定则为 `NEED_MORE_INFO`。
 
 - **查到日志** → 完整分析所有日志条目，提取 `project`、错误信息、关键字段值，然后**无论日志是否有异常，统一进入 Step 4 结合源码分析**
 
