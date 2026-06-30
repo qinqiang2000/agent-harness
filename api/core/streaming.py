@@ -117,7 +117,7 @@ class StreamProcessor:
             set_session_id(self.request.session_id)
             await self._ensure_session_registered(self.request.session_id)
 
-        timeout_ms = int(os.environ.get("API_TIMEOUT_MS", "600000"))
+        timeout_ms = int(os.environ.get("API_TIMEOUT_MS", "1800000"))
         timeout_s = timeout_ms / 1000.0
 
         try:

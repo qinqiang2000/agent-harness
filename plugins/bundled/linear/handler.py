@@ -39,6 +39,8 @@ class LinearSessionHandler:
         self._active_sessions: set = set()
         # linear_session_id -> claude_session_id 映射，支持多轮续接
         self._session_map: Dict[str, str] = {}
+        # linear_session_id -> 诊断结论文本，供 prompted 阶段判断是否触发 code-fix
+        self._session_diagnosis: Dict[str, str] = {}
 
     # ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -116,6 +118,43 @@ class LinearSessionHandler:
             return
 
         trace_id = _new_trace_id()
+
+        # 检测编码意图：用户回复「编码」等关键词，且该 session 有非 CODE_BUG 的历史诊断结论
+        _CODE_INTENT_KEYWORDS = (
+            "编码",
+            "按方案编码",
+            "帮我写代码",
+            "开始编码",
+            "落地",
+            "写代码",
+            "code",
+            "fix",
+            "修复",
+        )
+        prior_diagnosis = self._session_diagnosis.get(session_id, "")
+        if prior_diagnosis and any(
+            kw in prompt_context.lower() for kw in _CODE_INTENT_KEYWORDS
+        ):
+            token = self._get_token(workspace_id)
+            if token:
+                client = LinearClient(token)
+                try:
+                    await client.send_thought(
+                        session_id, "收到，正在按方案进行编码落地..."
+                    )
+                except Exception:
+                    pass
+                await self._trigger_code_fix(
+                    session_id=session_id,
+                    result_text=prior_diagnosis,
+                    workspace_id=workspace_id,
+                    trace_id=trace_id,
+                    client=client,
+                )
+                # 编码触发后清除诊断缓存，避免重复触发
+                self._session_diagnosis.pop(session_id, None)
+            return
+
         claude_session_id = self._session_map.get(session_id)
         logger.info(
             f"[{trace_id}][Linear] prompted: linear_session={session_id}, claude_session={claude_session_id}"
@@ -355,6 +394,21 @@ class LinearSessionHandler:
                 trace_id=trace_id,
                 client=client,
             )
+        # 非 CODE_BUG 结论时，保存诊断结论供用户后续回复「编码」时使用
+        elif (
+            not error_text
+            and result_text
+            and any(
+                f"【结论类型】{t}" in result_text
+                for t in (
+                    "REQUIREMENT",
+                    "CONFIG_CHANGE",
+                    "BUSINESS_FAQ",
+                    "EXTERNAL_ISSUE",
+                )
+            )
+        ):
+            self._session_diagnosis[session_id] = result_text
 
         logger.info(f"[{trace_id}][Linear] Completed: session={session_id}")
 
