@@ -314,7 +314,7 @@ class AgentService:
             options = dc_replace(
                 _base_options,
                 model=_meta.get("model") or _base_options.model,
-                max_turns=int(_meta.get("max_turns", 40)),
+                max_turns=int(_meta.get("max_turns", 80)),
                 resume=request.session_id,
                 skills=skills,
             )
