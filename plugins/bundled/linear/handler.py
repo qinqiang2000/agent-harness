@@ -132,6 +132,11 @@ class LinearSessionHandler:
             "修复",
         )
         prior_diagnosis = diagnosis_store.get(session_id)
+        # 只有 prior_diagnosis 是 CODE_BUG 类型才允许触发 code-fix；
+        # 非 CODE_BUG 结论（BUSINESS_FAQ/REQUIREMENT 等）不应触发编码，清除缓存走正常流程
+        if prior_diagnosis and "【结论类型】CODE_BUG" not in prior_diagnosis:
+            diagnosis_store.delete(session_id)
+            prior_diagnosis = ""
         if prior_diagnosis and any(
             kw in prompt_context.lower() for kw in _CODE_INTENT_KEYWORDS
         ):
