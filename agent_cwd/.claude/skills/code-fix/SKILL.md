@@ -76,6 +76,21 @@ LOCAL_DIR="{localDir}" && GITLAB_BASE="${GITLAB_BASE_URL:-http://123.207.158.7:5
 git clone "$(echo $GITLAB_BASE | sed 's|://|://token:'"$GITLAB_TOKEN"'@|')/{projectId}.git" "$LOCAL_DIR")
 ```
 
+**clone 失败时的强制中断规则（无任何例外）**：
+
+clone 失败（认证错误、网络超时、仓库不存在等任何原因）时，**必须立即停止并通过 `AskUserQuestion` 告知用户**，禁止任何降级操作：
+
+- ❌ 禁止：`cp -r /tmp/gitlab/src/... /tmp/gitlab/fix/...` + `git init`（复制诊断目录再初始化）
+- ❌ 禁止：直接在 `/tmp/gitlab/src/` 或 `$BILLING_CODE_BASE_DIR` 下修改代码
+- ❌ 禁止：用任何方式绕过 clone，在非隔离目录中写入修复代码
+
+clone 失败时唯一允许的操作：
+```
+AskUserQuestion：GitLab clone 失败（{错误信息}），无法创建隔离目录进行修复。
+可能原因：1）GITLAB_TOKEN 已过期或无效；2）仓库路径不存在。
+请检查 .env 中的 GITLAB_TOKEN 是否有效，更新后重新触发修复。
+```
+
 若 `targetFile` 未知，根据根因描述中的类名在本地目录 Grep 定位：
 
 ```bash
