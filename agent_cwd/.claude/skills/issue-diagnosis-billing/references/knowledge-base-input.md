@@ -274,7 +274,7 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 - **fdelete 状态**: verifyCollect=true 时识别入库 fdelete=2（软删除待确认）→ 用户确认后 fdelete=1（可用）
 - **深入**: Read `bill-bm-ocr-invoice/docs/商家平台发票采集接口文档.md`
 
-### 台账查询 / 台账统计 / 数据统计 / bill-bm-ocr-invoice
+### 台账查询 / 台账统计 / 数据统计
 - **入口服务**: bill-bm-ocr-invoice
 - **两条路径**:
   - 旧版台账：`InvoiceAccountController` → `InvoiceAccountService`（本地查询）
