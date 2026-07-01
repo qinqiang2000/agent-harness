@@ -251,16 +251,6 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 - **核心表**: t_bill_expense, t_bill_expense_relation
 - **产品线差异**: EAS(前端推送+缓存) / 苍穹(同接口status区分) / 星空(linkKey+扫码)
 
-### 台账统计 / 数据统计 / 手机号筛选 / countInvoiceType / InputAccountController
-- **项目**: api-invoice-input-query
-- **入口**: `InputAccountController.countInvoiceType()` / `countInvoiceAmount()`
-- **调用链**: `InputAccountController` → `InputAccountService.initParam()` → `InputAccountQueryMapper.typeCount()`
-- **关键 DTO**: `InputAccountQueryParamDTO`，只有 `uid`（Integer）字段，**没有手机号字段**
-- **管理员筛选手机号不生效根因**: `initParam()` 中无手机号→uid 转换，`uid` 为 null 时 SQL 过滤条件跳过，返回全部数据
-- **手机号→userId 转换**: 通过 `base-iam` 服务 `GET /iam/invoice/user/queryByPhone?tenantNo={clientId}&phone={mobile}`，实现类 `InvoiceUserNewService.queryByPhone()`，返回 `List<String>` userId 列表
-- **管理员 vs 个人视角**: admin=true 可查全部并按手机号筛选；admin=false 只查当前用户（按 uid 过滤）
-- **深入**: Read `bill-bm-ocr-invoice/CLAUDE.md` 台账统计章节
-
 - **旧台账**: t_bill_belong_relation（JOIN多表，慢）
 - **新台账**: t_bill_account_company + t_bill_account_user（宽表，快10倍+）
 - **同步**: AOP自动同步 (Bill0AccountAop + VatRecognitionAccountAop)
@@ -283,6 +273,13 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 - **两步流程**: `/portal/bm/ocr/recognition/upload`（识别+查验）→ `/portal/bm/ocr/recognition/upload/save`（确认上传）
 - **fdelete 状态**: verifyCollect=true 时识别入库 fdelete=2（软删除待确认）→ 用户确认后 fdelete=1（可用）
 - **深入**: Read `bill-bm-ocr-invoice/docs/商家平台发票采集接口文档.md`
+
+### 台账查询 / 台账统计 / 数据统计 / bill-bm-ocr-invoice
+- **入口服务**: bill-bm-ocr-invoice
+- **两条路径**:
+  - 旧版台账：`InvoiceAccountController` → `InvoiceAccountService`（本地查询）
+  - 新版台账（全票池）：`InputAccountController` → `InputInvoiceQueryRpcService`（RPC → api-invoice-input-query）
+- **深入**: Read bill-bm-ocr-invoice 对应 Controller 源码
 
 ### 发票导入 taxRate / 税率字段
 - **接口**: `POST /m4/fpzs/expense/invoice/insert`
