@@ -55,7 +55,7 @@ class OpenApiHandler:
     def __init__(self, agent_service: AgentService, session_service: SessionService, config: dict):
         self.agent_service = agent_service
         self.session_service = session_service
-        self.default_skill = config.get("default_skill", "customer-service")
+        self.default_skill = config.get("default_skill", "")
         self.session_mapper = PluginSessionMapper(
             timeout_seconds=config.get("session_timeout", 3600),
             channel_id="open_api",

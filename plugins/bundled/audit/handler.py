@@ -28,7 +28,7 @@ class AuditHandler:
     ):
         self.agent_service = agent_service
         self.session_service = session_service
-        self.default_skill = config.get("default_skill", "financial-audit")
+        self.default_skill = config.get("default_skill", "")
 
         self.session_mapper = PluginSessionMapper(
             timeout_seconds=config.get("session_timeout", 3600),

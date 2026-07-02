@@ -55,7 +55,7 @@ class YunzhijiaHandler:
         self.session_service = session_service
 
         # Read config with defaults
-        self.default_skill = config.get("default_skill", "customer-service")
+        self.default_skill = config.get("default_skill", "")
         session_timeout = config.get("session_timeout", 3600)
         card_template_id = config.get("card_template_id", "")
         max_img_per_card = config.get("max_img_per_card", 3)

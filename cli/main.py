@@ -62,8 +62,8 @@ def parse_args():
     parser.add_argument(
         '-s', '--skill',
         type=str,
-        default='customer-service',
-        help='指定要使用的skill名称 (默认: customer-service)'
+        default='',
+        help='指定要使用的skill名称'
     )
     return parser.parse_args()
 

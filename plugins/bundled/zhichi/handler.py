@@ -40,7 +40,7 @@ class ZhichiHandler:
         self.agent_service = agent_service
         self.session_service = session_service
         # self.message_sender = message_sender
-        self.default_skill = config.get("default_skill", "customer-service")
+        self.default_skill = config.get("default_skill", "")
         self.transfer_group = config.get("transfer_group", "")
         session_timeout = config.get("session_timeout", 3600)
 

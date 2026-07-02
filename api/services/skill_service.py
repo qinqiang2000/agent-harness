@@ -24,7 +24,7 @@ _VERSION_RE = re.compile(r"^(.+):v(\d+)$", re.IGNORECASE)
 
 def get_managed_skills() -> list[str]:
     """从环境变量读取受管理的 skill 列表。"""
-    raw = os.getenv("MANAGED_SKILLS", "customer-service,customer-service-feishu")
+    raw = os.getenv("MANAGED_SKILLS", "")
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
