@@ -221,7 +221,21 @@ push 失败时：
 
 **仅在 push 成功时执行本步骤。** push 失败时跳过。
 
-将 Step 7 的修复结论文本写入临时文件，调用 `run_cicd.py` 触发构建流程：
+**先写入 session 映射**（push 成功后立即执行，必须在 CICD 启动之前完成，避免超时导致记录丢失）：
+
+若成功提取到 `issueId`，将本次修复信息持久化到 SQLite：
+
+```bash
+SESSION_STORE="$(find /root -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
+if [ -z "$SESSION_STORE" ]; then
+  SESSION_STORE="$(find . -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
+fi
+python3 "$SESSION_STORE" set "{issueId}" "{repoName}" "{localDir}" "{BRANCH_NAME}"
+```
+
+未能提取 `issueId` 时跳过此步骤。
+
+然后将 Step 7 的修复结论文本写入临时文件，调用 `run_cicd.py` 触发构建流程：
 
 ```bash
 SCRIPT="$(find /root -path "*/code-fix/scripts/run_cicd.py" 2>/dev/null | head -1)"
@@ -238,20 +252,6 @@ nohup python3 "$SCRIPT" --file "$TMP_FIX" > /tmp/cicd_run_$(date +%Y%m%d%H%M%S).
 CICD_PID=$!
 echo "✅ CICD 已在后台启动 (PID=$CICD_PID)，日志: /tmp/cicd_run_$(date +%Y%m%d%H%M%S).log"
 ```
-
-**写入 session 映射**（push 成功后，CICD 启动后执行）：
-
-若成功提取到 `issueId`，将本次修复信息持久化到 SQLite：
-
-```bash
-SESSION_STORE="$(find /root -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
-if [ -z "$SESSION_STORE" ]; then
-  SESSION_STORE="$(find . -path "*/code-fix/scripts/session_store.py" 2>/dev/null | head -1)"
-fi
-python3 "$SESSION_STORE" set "{issueId}" "{repoName}" "{localDir}" "{BRANCH_NAME}"
-```
-
-未能提取 `issueId` 时跳过此步骤。
 
 脚本会依次：
 1. 从文本中解析所有「仓库：xxx」+「分支：xxx」对（支持一个 issue 涉及多个服务）
