@@ -129,7 +129,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 知识库命中后，**不直接输出**，必须进一步读本地源码验证和深化结论：
 
 1. 从命中条目中提取涉及的服务名和核心类名
-2. 根据 knowledge-base.md「一、项目地图」中的本地路径，用 Grep 在对应服务目录下搜索核心类：
+2. 根据 service-repo-map.md「项目地图」中的本地路径，用 Grep 在对应服务目录下搜索核心类：
    ```bash
    grep -r "class {ClassName}" {本地服务路径} --include="*.java" -l
    ```
@@ -183,8 +183,8 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 
 ### 2C.2 读知识库确定涉及服务
 
-读取 [references/knowledge-base.md](references/knowledge-base.md)，重点看：
-- **一、项目地图**：各服务职责说明，用 `targetFunction` 关键词匹配找到涉及的服务名和本地路径
+读取 [references/service-repo-map.md](references/service-repo-map.md)，重点看：
+- **项目地图**：各服务职责说明，用 `targetFunction` 关键词匹配找到涉及的服务名和本地路径
 - **命中** → 确认 `service` 和本地代码路径，进入 2C.3
 - **未命中** → 在本地代码目录全局 Grep `targetFunction` 关键词，确认涉及服务后进入 2C.3
 
