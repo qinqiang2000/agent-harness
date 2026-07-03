@@ -46,6 +46,12 @@ def _strip_markdown(text: str) -> str:
     ]
     for kw, replacement in _SQL_KEYWORD_MAP:
         text = re.sub(rf'\b{kw}\b', replacement, text, flags=re.IGNORECASE)
+    # 云之家会拦截含运维命令关键词的消息，替换为描述性文字
+    _CMD_KEYWORD_MAP = [
+        ('nslookup', 'DNS查询命令(nslookup)'),
+    ]
+    for kw, replacement in _CMD_KEYWORD_MAP:
+        text = re.sub(rf'\b{re.escape(kw)}\b', replacement, text, flags=re.IGNORECASE)
     return text
 
 
