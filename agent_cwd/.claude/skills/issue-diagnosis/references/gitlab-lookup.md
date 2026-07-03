@@ -1,8 +1,8 @@
-# GitLab 源码动态定位策略
+# 源码动态定位策略
 
 ## 一、从 project 推断仓库
 
-日志中 `project` 即服务名（如 `smkp`）。读取 [references/service-repo-map.md](references/service-repo-map.md)，匹配 `project` 获得 `project_id`。
+日志中 `project` 即服务名（如 `smkp`）。读取 [references/service-repo-map.md](references/service-repo-map.md)，匹配 `project` 获得 `project_id` 和 `host`。
 
 映射表未命中时，跳过源码分析，直接凭日志给出结论。
 
@@ -12,10 +12,22 @@
 
 > **强制规范**：查看任何项目源码，必须将整个仓库 clone 到本地后再检索。
 
-获得 `project_id` 后，用单条 Bash 命令完成 clone 或 pull。GitLab 地址由环境变量 `GITLAB_BASE_URL` 控制，默认为 `http://123.207.158.7:5000/ai-agent/git`。**必须原样使用以下模板，禁止修改 URL 格式（特别是不得省略 `token:$GITLAB_TOKEN@` 部分，否则会因认证失败导致 clone 失败）**：
+根据 `service-repo-map.md` 中的 `host` 列选择对应模板：
+
+### host = gitlab
+
+GitLab 地址由环境变量 `GITLAB_BASE_URL` 控制，默认为 `http://123.207.158.7:5000/ai-agent/git`。**必须原样使用以下模板，禁止修改 URL 格式（特别是不得省略 `token:$GITLAB_TOKEN@` 部分，否则会因认证失败导致 clone 失败）**：
 
 ```bash
 LOCAL_DIR="/tmp/gitlab/src/{repo-name}" && GITLAB_BASE="${GITLAB_BASE_URL:-http://123.207.158.7:5000/ai-agent/git}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "$(echo $GITLAB_BASE | sed 's|://|://token:'"$GITLAB_TOKEN"'@|')/{namespace/repo-name}.git" "$LOCAL_DIR")
+```
+
+### host = github
+
+GitHub 认证使用环境变量 `GITHUB_TOKEN`。**必须原样使用以下模板**：
+
+```bash
+LOCAL_DIR="/tmp/github/src/{repo-name}" && ([ -d "$LOCAL_DIR/.git" ] && git -C "$LOCAL_DIR" pull || git clone "https://$GITHUB_TOKEN@github.com/{org/repo-name}.git" "$LOCAL_DIR")
 ```
 
 - clone / pull 成功后，所有源码检索均在本地目录进行
