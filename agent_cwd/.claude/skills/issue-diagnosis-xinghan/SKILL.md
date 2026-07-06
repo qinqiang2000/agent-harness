@@ -81,8 +81,8 @@ Step X3：综合输出（格式同 issue-diagnosis Step 6）
 1. 按 `references/xinghan-jar-index.md` 中的「业务关键词 → Wiki 文件映射」定位文档
 2. 若无命中，用 Glob 搜索：
    ```
-   Glob(pattern="data/kb/Product-Wiki/wiki/entities/*{关键词}*.md")
-   Glob(pattern="data/kb/Product-Wiki/raw/**/*{关键词}*.md")
+   Glob(pattern="data/Product-Wiki/wiki/entities/*{关键词}*.md")
+   Glob(pattern="data/Product-Wiki/raw/**/*{关键词}*.md")
    ```
 3. 读取命中的实体文档，提取：
    - 入口类名（推单方式表格中的「入口类」列）
@@ -104,7 +104,7 @@ Step X3：综合输出（格式同 issue-diagnosis Step 6）
 
 用 Glob 列出已有的 KB 版本：
 ```
-Glob(pattern="data/kb/source/xinghan/*/index.md")
+Glob(pattern="data/source/xinghan/*/index.md")
 ```
 
 版本号格式为 `X.Y.Z`，数字越大越新。无任何版本时（KB 未建）→ 告知用户「源码 KB 尚未构建，请运行 `issue-diagnosis-xinghan/scripts/build_xinghan_kb.sh --from-patch <补丁包路径>` 生成后重试」，仅凭路径 A 和日志输出结论，标注「（推测，未经源码确认）」。
@@ -122,7 +122,7 @@ Glob(pattern="data/kb/source/xinghan/*/index.md")
 
 用类名搜索（加 `class` 限定避免误匹配注释）：
 ```
-Grep(pattern="class {ClassName}", path="data/kb/source/xinghan/{版本号}/", glob="*.java")
+Grep(pattern="class {ClassName}", path="data/source/xinghan/{版本号}/", glob="*.java")
 ```
 
 **步骤 3：读取目标方法**

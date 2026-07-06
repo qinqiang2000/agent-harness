@@ -44,8 +44,8 @@ else
     echo "  ✅ 已克隆: $WIKI_DIR"
   fi
 
-  # 建软链到 data/kb/Product-Wiki
-  LINK_PATH="$AGENT_CWD_ABS/data/kb/Product-Wiki"
+  # 建软链到 data/Product-Wiki
+  LINK_PATH="$AGENT_CWD_ABS/data/Product-Wiki"
   mkdir -p "$(dirname "$LINK_PATH")"
   ln -sfn "$WIKI_DIR" "$LINK_PATH"
   echo "  ✅ 软链: $LINK_PATH -> $WIKI_DIR"

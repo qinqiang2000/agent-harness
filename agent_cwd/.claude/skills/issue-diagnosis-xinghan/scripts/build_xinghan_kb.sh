@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # build_xinghan_kb.sh
-# 批量反编译星瀚 jar 包，输出到 data/kb/source/xinghan/
+# 批量反编译星瀚 jar 包，输出到 data/source/xinghan/
 #
 # 用法：
 #   # 模式1：从补丁包 zip 自动提取（推荐）
@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENT_CWD="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-DEFAULT_OUT_DIR="$AGENT_CWD/data/kb/source/xinghan"
+DEFAULT_OUT_DIR="$AGENT_CWD/data/source/xinghan"
 WORK_DIR="/tmp/xinghan_build_$$"
 
 OUT_DIR="$DEFAULT_OUT_DIR"

@@ -5,7 +5,7 @@
 由 `scripts/build_xinghan_kb.sh` 预先生成（Vineflower 反编译），skill 运行时直接读取，禁止实时反编译：
 
 ```
-data/kb/source/xinghan/
+data/source/xinghan/
 ├── 8.0.4/
 ├── 8.0.9/
 └── 8.0.14/    ← 当前最大版本号即最新版本
@@ -27,7 +27,7 @@ data/kb/source/xinghan/
 
 列出已有版本（版本号为目录名，数字越大越新）：
 ```
-Glob(pattern="data/kb/source/xinghan/*/index.md")
+Glob(pattern="data/source/xinghan/*/index.md")
 ```
 
 ---
@@ -51,7 +51,7 @@ Vineflower 反编译输出的是接近原始代码的 Java 源文件，分析时
 
 软链路径（由 `scripts/setup_knowledge.sh` 初始化）：
 ```
-data/kb/Product-Wiki/
+data/Product-Wiki/
 ├── wiki/
 │   ├── entities/   ← 实体文档（优先查）
 │   ├── flows/      ← 全链路流程文档
@@ -67,17 +67,17 @@ data/kb/Product-Wiki/
 
 | 关键词 | 优先查阅路径 |
 |--------|------------|
-| 开票申请单、BOTP、BOTP下推 | `data/kb/Product-Wiki/wiki/entities/开票-开票申请单.md` → `data/kb/Product-Wiki/raw/星瀚开票/simdoc/BOTP下推开票申请单匹配功能文档.md` |
-| 开票人、开票方、drawer、DrawerStrategy | `data/kb/Product-Wiki/raw/星瀚开票/simdoc/metadata/sim_drawer_setting(开票方实体).md` |
-| 拆分、合并、BotpHelper、closeBills | `data/kb/Product-Wiki/wiki/entities/开票-开票申请单.md` → `data/kb/Product-Wiki/wiki/flows/开票-开票全链路.md` |
-| 红字确认单、红冲、负数申请单 | `data/kb/Product-Wiki/wiki/entities/开票-红字确认单.md` |
-| 数电发票、全电发票 | `data/kb/Product-Wiki/wiki/entities/开票-数电发票.md` |
-| 开票回调、回写 | `data/kb/Product-Wiki/wiki/entities/开票-开票回调.md` |
-| 特殊票种 | `data/kb/Product-Wiki/wiki/entities/开票-特殊票种处理.md` |
-| 开票全链路、完整流程 | `data/kb/Product-Wiki/wiki/flows/开票-开票全链路.md` |
+| 开票申请单、BOTP、BOTP下推 | `data/Product-Wiki/wiki/entities/开票-开票申请单.md` → `data/Product-Wiki/raw/星瀚开票/simdoc/BOTP下推开票申请单匹配功能文档.md` |
+| 开票人、开票方、drawer、DrawerStrategy | `data/Product-Wiki/raw/星瀚开票/simdoc/metadata/sim_drawer_setting(开票方实体).md` |
+| 拆分、合并、BotpHelper、closeBills | `data/Product-Wiki/wiki/entities/开票-开票申请单.md` → `data/Product-Wiki/wiki/flows/开票-开票全链路.md` |
+| 红字确认单、红冲、负数申请单 | `data/Product-Wiki/wiki/entities/开票-红字确认单.md` |
+| 数电发票、全电发票 | `data/Product-Wiki/wiki/entities/开票-数电发票.md` |
+| 开票回调、回写 | `data/Product-Wiki/wiki/entities/开票-开票回调.md` |
+| 特殊票种 | `data/Product-Wiki/wiki/entities/开票-特殊票种处理.md` |
+| 开票全链路、完整流程 | `data/Product-Wiki/wiki/flows/开票-开票全链路.md` |
 
 未在映射表中 → 用 Glob 搜索：
 ```
-Glob(pattern="data/kb/Product-Wiki/wiki/entities/*{关键词}*.md")
-Glob(pattern="data/kb/Product-Wiki/raw/**/*{关键词}*.md")
+Glob(pattern="data/Product-Wiki/wiki/entities/*{关键词}*.md")
+Glob(pattern="data/Product-Wiki/raw/**/*{关键词}*.md")
 ```
