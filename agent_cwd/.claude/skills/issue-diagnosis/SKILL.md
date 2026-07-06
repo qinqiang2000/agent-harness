@@ -49,10 +49,14 @@ FAQ 条目和专项流程只定义"查什么关键字、提取哪些字段"，�
 - `service`：用户提及的服务名（可选）
 - `timeRange`：时间范围（可选，如"今天上午"、"2025-03-05 10:00"）
 - `env`：环境信息，按以下规则识别：
-  - 用户提到"生产"或未指明环境 → `prod`
-  - 用户提到"测试","sit环境" → `test`
-  - 用户提到"演示","dev环境" → `demo`
+  - 用户提到"生产"或未指明环境 → `生产`
+  - 用户提到"测试"、"sit环境"、"test" → `测试`
+  - 用户提到"演示"、"demo环境" → `演示`
   - 用户提到"at" / "AT环境" → `at`
+  - 用户提到"星瀚"+"测试"或"沙箱" → `星瀚沙箱`
+  - 用户提到"星瀚"+"生产"或"正式" → `星瀚生产`
+  - 用户提到"新加坡"、"singapore"、"sg" → `新加坡`
+  - 用户提到"法兰克福"、"frankfurt"、"欧洲"、"eu" → `法兰克福`
 - `erpSystem`：ERP 系统类型，从以下关键词识别：
   - `星瀚` / `星空旗舰版` / `天梯` / `monitor` → `xinghan`
   - `星空企业版` / `EAS` / `金税连接` → `eas`
@@ -71,6 +75,7 @@ FAQ 条目和专项流程只定义"查什么关键字、提取哪些字段"，�
 |---|---|---|
 | 进项发票采集任务 | 用户提到"进项发票采集任务"、"任务号"、"批次号"、"batchNo"、"任务状态"、"任务失败"、"任务处理中" | [references/invoice-task-diagnosis.md](references/invoice-task-diagnosis.md) |
 | 接口代码查阅 | 用户询问某接口的处理流程、代码位置，或提到"接口"+"业务名称"（如"查验接口"、"开票接口"），且 `data/kb/接口文档/` 目录存在 | [references/api-lookup.md](references/api-lookup.md) |
+| 星瀚问题定位 | `erpSystem=xinghan`，或堆栈/关键词含 `kd.imc.`、`imc-bdm`、`imc-sim`、`imc-invsm`、`imc-rim`、`BotpHelper`、`DrawerStrategy` 等星瀚特有类/模块名 | 立即执行：`Read: {cwd}/.claude/skills/issue-diagnosis-xinghan/SKILL.md`，按该文件指引完整处理 |
 
 未命中专项场景 → 继续 Step 1.5。
 
