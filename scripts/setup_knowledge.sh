@@ -44,11 +44,15 @@ else
     echo "  ✅ 已克隆: $WIKI_DIR"
   fi
 
-  # 建软链到 data/Product-Wiki
-  LINK_PATH="$AGENT_CWD_ABS/data/Product-Wiki"
-  mkdir -p "$(dirname "$LINK_PATH")"
-  ln -sfn "$WIKI_DIR" "$LINK_PATH"
-  echo "  ✅ 软链: $LINK_PATH -> $WIKI_DIR"
+  # 直接同步到 data/Product-Wiki（不用软链，Claude glob 无法穿透软链）
+  DEST_DIR="$AGENT_CWD_ABS/data/Product-Wiki"
+  # 如果目标是软链先删除，避免 rsync 写入原始目录
+  if [[ -L "$DEST_DIR" ]]; then
+    rm "$DEST_DIR"
+  fi
+  mkdir -p "$DEST_DIR"
+  rsync -a --delete "$WIKI_DIR/" "$DEST_DIR/"
+  echo "  ✅ 已同步: $WIKI_DIR -> $DEST_DIR"
 fi
 
 echo ""
