@@ -159,7 +159,7 @@ class AgentService:
             model=_current_config.model or "claude-sonnet-4-6",
             env=_env,
             stderr=lambda line: logger.error(f"[CLI stderr] {line.rstrip()}"),
-            max_turns=40,
+            max_turns=60,
             system_prompt={"type": "preset", "preset": "claude_code", "exclude_dynamic_sections": True},
             mcp_servers=self.mcp_servers,
             setting_sources=["project"],
