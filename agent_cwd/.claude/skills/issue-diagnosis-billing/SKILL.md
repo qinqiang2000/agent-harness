@@ -107,7 +107,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 | 关键词特征 | 读取文件 |
 |---|---|
 | 含收票/进项关键词（报销单、发票上传、查验、台账、fdelete、api-expense、BX-） | [references/knowledge-base-input.md](references/knowledge-base-input.md) |
-| 含影像关键词（归档、OFD、PDF解析、影像、扫描、识别） | [references/knowledge-base-image.md](references/knowledge-base-image.md) |
+| 含影像关键词（影像、影像采集、影像匹配、归档、封面、提交ERP、收单机、归档箱、UEX） | [references/knowledge-base-image.md](references/knowledge-base-image.md) |
 | 含开票/销项关键词（开票、红冲、发票申请、税局、全电） | [references/knowledge-base-output.md](references/knowledge-base-output.md) |
 | **无法区分产品线**（问题描述模糊，无法判断归属） | **同时读取全部三个文件**，联合匹配，命中哪个用哪个 |
 
@@ -116,7 +116,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 - 多个文件命中但结论一致 → 合并输出
 - 多个文件命中且结论矛盾 → 用 `AskUserQuestion` 询问用户所属产品线后再给结论
 
-> 影像（knowledge-base-image.md）和开票（knowledge-base-output.md）知识库目前为占位文件，内容待团队补充。未命中时直接提示用户补充线索，不猜测。
+> 开票（knowledge-base-output.md）知识库目前为占位文件，内容待团队补充。未命中时直接提示用户补充线索，不猜测。
 
 ### 匹配策略（按优先级）
 
@@ -164,7 +164,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 
 ### 注意
 
-- 开票、影像业务知识（knowledge-base.md 四、五节）暂为占位，未命中时直接提示用户补充线索
+- 开票业务知识（knowledge-base-output.md）暂为占位，未命中时直接提示用户补充线索
 - 知识库不覆盖的场景，不要凭主观猜测给答案，诚实告知并引导用户提供可查的线索
 
 ---

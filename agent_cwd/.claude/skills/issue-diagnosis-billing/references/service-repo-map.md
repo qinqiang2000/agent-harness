@@ -44,7 +44,6 @@ clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.
 | api-invoice-output-query | piaozone/output/api-invoice-output-query | 输出层-发票查询服务 |
 | api-invoice-sm | piaozone/output/api-invoice-sm | 输出层-税务服务 |
 | api-interface | piaozone/output/api-interface | 输出层-对外接口服务 |
-| api-gateway | piaozone/imgsys-archive/api-gateway | 影像档案-网关服务 |
 | api-archive | piaozone/imgsys-archive/api-archive | 影像档案-档案管理服务 |
 | api-archive-scan | piaozone/imgsys-archive/api-archive-scan | 影像档案-扫描服务 |
 | api-archive-scan-move | piaozone/imgsys-archive/api-archive-scan-move | 影像档案-扫描文件迁移服务 |
