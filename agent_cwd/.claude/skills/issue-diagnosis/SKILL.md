@@ -166,8 +166,8 @@ FAQ 条目和专项流程只定义"查什么关键字、提取哪些字段"，�
 
 **⚠️ 严禁在本地工作目录（agent_cwd）用 Grep/Glob 搜索源码。**
 
-必须严格按 [references/gitlab-lookup.md](references/gitlab-lookup.md) 的顺序执行：
-1. 读 `references/service-repo-map.md`，用日志中的 `project` 精确匹配，获取 `project_id`
+必须严格按 [{cwd}/.claude/skills/issue-diagnosis/references/gitlab-lookup.md]({cwd}/.claude/skills/issue-diagnosis/references/gitlab-lookup.md) 的顺序执行：
+1. 读 `{cwd}/.claude/skills/issue-diagnosis/references/service-repo-map.md`，用日志中的 `project` 精确匹配，获取 `project_id`
 2. 映射表未命中时，跳过源码分析，直接凭日志分析给出结论，不要妄自猜测
 3. 获得 `project_id` 后，**必须使用 `references/gitlab-lookup.md` 中的 clone 模板**，原样替换 `{repo-name}` 和 `{namespace/repo-name}`，**禁止自行简化命令或省略 `token:$GITLAB_TOKEN@`**
 4. 在本地 clone 目录用 Grep 搜索目标类
