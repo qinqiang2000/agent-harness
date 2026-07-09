@@ -300,7 +300,9 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 #### 子 Agent 调用规范
 
-使用 `Agent` tool，prompt 严格按以下格式：
+使用 `Agent` tool，**禁止指定 `subagent_type` 参数**（服务端不支持自定义类型，指定后子 agent 会立即退出不执行任何工具）。只传 `prompt`，让 SDK 使用默认类型。
+
+prompt 严格按以下格式：
 
 ```
 你是源码分析专家，只做源码定位和分析，不做诊断结论。
