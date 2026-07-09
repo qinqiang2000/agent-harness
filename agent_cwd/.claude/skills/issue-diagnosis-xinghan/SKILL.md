@@ -19,13 +19,16 @@ description: >-
 ```
 Step X0：星瀚 FAQ 快速检索（优先）
     ↓ 未命中或需要深入分析
-Step X1：日志分析（复用 issue-diagnosis Step 3 规范）
-    ↓
-Step X2：源码定位（双路径：Product-Wiki + 预编译 Java 源码检索）
-    ↓
-Step X3：飞书知识库检索（按需）
-    ↓
-Step X4：综合输出（格式同 issue-diagnosis Step 6）
+Step X1：日志分析
+    ├── deployMode=private + 用户无法提供日志/堆栈
+    │       → 进入 Step X2（仅走路径 A：Product-Wiki）→ Step X4
+    └── 其他情况
+            ↓
+        Step X2：源码定位（双路径：Product-Wiki + 预编译 Java 源码检索）
+            ↓
+        Step X3：飞书知识库检索（按需）
+            ↓
+        Step X4：综合输出
 ```
 
 ---
@@ -55,8 +58,7 @@ Step X4：综合输出（格式同 issue-diagnosis Step 6）
 ## Step X1：日志分析
 
 **输入处理**：
-- 用户提供本地日志文件路径（如 `/Users/.../xxx.txt`）→ 直接 Read 该文件提取堆栈，不查 ELK
-- 用户直接粘贴了堆栈文本 → 从对话中提取，不查 ELK
+- 用户直接粘贴了堆栈或日志文本 → 从对话中提取，不查 ELK
 - 用户提供 traceId 或关键词 → 调用 `mcp__elastic__searchTraceOrKeyWordsLog`，按全局查询规范构建参数
 
 同时从用户描述中识别部署模式（供 Step X2 版本选择使用）：
@@ -64,11 +66,51 @@ Step X4：综合输出（格式同 issue-diagnosis Step 6）
 - 用户提到「私有化」、「本地部署」、「自己部署」、「客户现场」 → `deployMode=private`
 - 无法判断 → `deployMode=unknown`
 
+**⚠️ `deployMode=private` 时的特殊处理（私有化环境无 ELK，日志查询无效）：**
+
+用 `AskUserQuestion` 询问用户是否能提供日志或堆栈，然后按回答分支处理：
+
+- **能提供日志文本或堆栈** → 用户粘贴后，直接从文本中提取信息，**跳过 ELK 查询**，继续后续步骤（Step X2 源码定位等）
+- **无法提供日志或堆栈** → **跳过 Step X1 剩余部分**，直接进入 Step X2，但**仅执行路径 A（Product-Wiki 检索）**，跳过路径 B（源码 KB），在 Step X4 注明「私有化环境无日志，结论基于 Product-Wiki 文档分析，建议结合实际现象验证」
+
 从日志/堆栈中重点提取：
 - **异常类名**：如 `kd.imc.bdm.common.helper.BotpHelper`
 - **方法名**：如 `calDiscountRowCombineAmt`
 - **行号**：如 `BotpHelper.java:292`
 - **关键字段值**：异常参数、状态码、枚举值
+
+---
+
+### ⚠️ 跨集群诊断：星瀚调用发票云接口
+
+**识别条件**：日志 message 中含 `api.piaozone.com`（或 sit/演示环境域名），且来自 `HttpUtil.doPost` 或 `HttpUtil.doPostWithStatus` 等 HTTP 调用日志。
+
+日志格式：
+```
+HttpUtil.doPost:{URL} 耗时：{ms}，结果：{发票云返回JSON}
+```
+
+**环境域名映射**：
+
+| 域名 | 对应发票云 ELK 环境 |
+|------|-------------------|
+| `api.piaozone.com` | `生产` |
+| `api-sit.piaozone.com` | `测试` |
+| `api-dev.piaozone.com` | `演示` |
+
+**处理步骤**：
+
+1. 从 URL 提取关键参数：接口路径、`taxNo`、`reqid` 等
+2. 从返回 JSON 提取：`traceId`（发票云侧）、`errcode`、`description`
+3. 判断根因归属：
+   - **发票云返回正常，但星瀚侧处理异常** → 根因在星瀚，继续走 Step X2 定位星瀚源码，无需深入发票云侧
+   - **发票云返回错误**（errcode 非正常、description 含报错）→ 根因在发票云侧，执行第4步
+4. 根因在发票云侧时，以提取到的参数为输入，**从 `issue-diagnosis` Step 2 开始执行**（跳过 Step 1 场景识别，直接进入 FAQ 检索），完整走完 Step 2→3→4→5→6 的发票云诊断流程：
+   - 传入参数：发票云侧 `traceId`（优先）或 `taxNo` + 时间范围 + 接口路径（备用），环境按上方域名映射表确定
+   - `issue-diagnosis` 后续新增的任何诊断步骤自动覆盖，无需在此同步
+   - 发票云侧诊断结论返回后，与星瀚侧调用上下文（接口路径、errcode、taxNo）合并，进入 Step X4 输出，注明「跨集群调用，根因在发票云侧」
+
+---
 
 **决定是否进入 Step X2**：
 
