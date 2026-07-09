@@ -107,7 +107,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 | 关键词特征 | 读取文件 |
 |---|---|
 | 含收票/进项关键词（报销单、发票上传、查验、台账、fdelete、api-expense、BX-） | [references/knowledge-base-input.md](references/knowledge-base-input.md) |
-| 含影像关键词（影像、影像采集、影像匹配、归档、封面、提交ERP、收单机、归档箱、UEX） | [references/knowledge-base-image.md](references/knowledge-base-image.md) |
+| 含影像关键词（影像、影像采集、影像匹配、发票匹配、匹配接口、归档、封面、扫描、识别、提交ERP、收单机、归档箱、UEX） | [references/knowledge-base-image.md](references/knowledge-base-image.md) |
 | 含开票/销项关键词（开票、红冲、发票申请、税局、全电） | [references/knowledge-base-output.md](references/knowledge-base-output.md) |
 | **无法区分产品线**（问题描述模糊，无法判断归属） | **同时读取全部三个文件**，联合匹配，命中哪个用哪个 |
 
@@ -228,7 +228,11 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 **查询结果处理：**
 
-- **日志查不到**（重试后仍无结果）→ 按以下条件分支处理：                                                           
+> ⚠️ **工具异常 vs 空结果必须严格区分**：
+> - 工具调用报错（抛出异常、返回错误码）→ 才是"工具不可用"，重试一次后提示用户
+> - 工具调用成功但返回空列表 → 是"查无结果"，**不得误判为工具不可用**，应按路径 B+ 降级规则处理
+
+- **日志查不到**（工具调用成功但返回空结果，重试后仍无结果）→ 按以下条件分支处理：                                                           
   
   **情况一：用户仅提供了 traceId，无其他错误描述**                                                                 
   → 用 `AskUserQuestion` 告知未找到相关日志，请求补充信息后重新执行本步骤：
