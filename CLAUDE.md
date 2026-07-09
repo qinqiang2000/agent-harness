@@ -83,7 +83,16 @@ code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个�
 - 路径 B：纯业务疑问 → 知识库检索 + 源码分析
 - 路径 C：需求/变更任务 → 知识库项目地图确定服务 → 源码定位 → 输出变更方案
 
-**知识库**：skill 只读 `.claude/skills/issue-diagnosis-billing/references/` 下的固定文件，`data/kb/` 下文件**不会被自动检索**。
+**知识库**：skill 只读 `.claude/skills/issue-diagnosis-billing/references/` 下的固定文件，`data/kb/` 下文件**不会被自动检索**。知识库按业务拆分为三个文件：
+- `knowledge-base-input.md` — 收票业务（含 fpzs-pc/portal-web 前端排查指引）
+- `knowledge-base-image.md` — 影像业务（含 image-system/image-asst 前端排查指引及 URL 路由规则）
+- `knowledge-base-output.md` — 开票/销项业务（占位，待补充）
+
+**前端影响面检查**：输出 CODE_BUG/REQUIREMENT 结论时，必须检查被改接口是否被前端调用，结论中包含【前端影响面】字段。前端项目路径：`{BILLING_CODE_BASE_DIR}/input-project/standard/frontend/`
+
+**源码分析（子 agent 模式）**：Step 4.2 中，跨 2+ 文件或 3+ 源码文件时强制派发子 agent 专职读码，只返回摘要，主 agent 保持 context 轻量。
+
+**max_turns**：`agent_service.py` 中 `build_default_options` 和 metadata 覆盖路径均设为 80（原为 40），避免复杂诊断超限中断。
 
 ## 注意事项
 
