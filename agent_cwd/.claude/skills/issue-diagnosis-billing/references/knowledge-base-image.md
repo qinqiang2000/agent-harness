@@ -35,11 +35,33 @@ standard/input/
 └── api-archive-alarm-monitor/    # 告警监控
 
 standard/frontend/
-├── image-system/                 # 影像管理主站（Egg.js + React + Dva）
-└── image-asst/                   # 影像助手（Egg.js + React + Recoil）
+├── image-system/                 # 影像管理主站（Egg.js + React + Dva，端口 10024）
+└── image-asst/                   # 影像助手（Egg.js + React + Recoil，端口 10203）
 ```
 
 > 注：`bill-eureka`、`base-gateway`、`archive-dataSource-utils`、`archive-pub-utils`、AI 子系统（`base-ai-file-cls`）**未克隆**，源码分析时不可用。
+
+### 前端排查指引
+
+后台代码找不到入口或逻辑时，可通过前端代码辅助排查：
+- `image-system`：PC 端，负责影像采集、查看、匹配、审核等主流程
+- `image-asst`：移动端（影像助手），负责附件上传、影像采集辅助
+
+**分析前端代码时，优先读对应项目根目录的 `CLAUDE.md`**，其中有完整的架构说明和路由约定。
+
+**前端→后端 URL 路由规则**（已从代码确认）：
+
+| 前端 URL 前缀 | 后端服务 | 说明 |
+|---|---|---|
+| `/archivebase` 开头 | `api-archive-organization` | 登录、鉴权、组织、用户、License 相关 |
+| `/imgsys` 开头 | `api-archive-scan` | 影像采集、匹配、提交、附件等所有业务接口 |
+
+**接口路由位置**：
+- `image-system`：`app/routeGroup/api.js`（archivebase 路由）+ `app/routeGroup/forwardRoutes/`（imgsys 转发路由）
+- `image-asst`：`app/router/index.js` + `app/router/forwardRoutes/assistant.js`（k0~k8 转发路由）
+
+**image-system 路由前缀**：页面 `/imgsys-web`，API `/imgsys-web/api`，后端 `/imgsys`
+**image-asst 路由前缀**：页面 `/imgasst-web`，API `/imgasst-web/api`，后端 `/imgsys`
 
 ### 核心服务：api-archive-scan 包结构
 
@@ -101,11 +123,14 @@ com.kingdee/
 ## 二、服务调用关系
 
 ```
-客户端（前端 image-system / image-asst / 扫描设备）
+客户端（浏览器 / 移动端）
         ▼
+    image-system（PC，端口 10024）   image-asst（移动端，端口 10203）
+        │  Egg.js BFF 代理转发              │  Egg.js BFF 代理转发
+        ▼                                   ▼
     base-gateway
-        ├──→ api-archive-scan         影像相关接口入口（扫描/匹配/提交/导出等）
-        ├──→ api-archive-organization 组织/登录/授权相关接口入口
+        ├──→ api-archive-scan         /imgsys 开头的 URL → 影像相关接口入口
+        ├──→ api-archive-organization /archivebase 开头的 URL → 组织/登录/授权接口入口
         └──→ api-archive              档案相关接口入口
 
 api-archive-scan 内部 Feign 调用：
