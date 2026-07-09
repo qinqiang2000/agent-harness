@@ -19,9 +19,9 @@
 ### 标准版项目结构
 
 ```
-standard/front/
-├── fpzs-pc                   # 发票助手 PC 端前端（React + dva，端口 9000，对应后端 api-fpzs）
-└── portal-web                # 商家平台前端页面项目（Vue，对应后端 bill-bm-ocr-invoice / bill-portal）
+standard/frontend/
+├── fpzs-pc                   # 发票助手 PC 端前端（React + dva，端口 9000，路由前缀 /m4-web，对应后端 api-fpzs）
+└── portal-web                # 商家平台前端（Egg.js BFF，对应后端 bill-bm-ocr-invoice / bill-portal）
 
 standard/input/
 ├── bill-bm-ocr-invoice       # 商家平台发票采集（两步上传：upload + upload/save，verifyCollect 软删除控制）
@@ -45,6 +45,24 @@ standard/common/
 ├── base-file-center-server   # 文档中心（识别分流：网关拦截 → 按 url_config 执行上传/快照/识别/验签 → 结果注入请求体 → 转发业务接口）
 └── base-gateway / bill-gateway  # 网关（FileStreamFilter 拦截文件操作请求，分流至文档中心）
 ```
+
+### 前端排查指引
+
+后台代码找不到入口或逻辑时，可通过前端代码辅助排查：
+- `fpzs-pc`：发票助手 PC 端，负责发票列表、报销、查验等主流程，无 CLAUDE.md，直接分析代码
+- `portal-web`：商家平台，负责发票采集、台账、开票管理等，无 CLAUDE.md，直接分析代码
+
+**接口路由位置**：
+- `fpzs-pc`：`easNew/` 目录下各模块的 `services/` 文件，API 前缀 `/m4`
+- `portal-web`：`app/routes/forwardRoutes/` 目录（31 个子文件按业务拆分），主路由 `app/router.js`
+
+**portal-web 主要接口前缀**：
+| 前缀 | 说明 |
+|---|---|
+| `/portal/platform/` | 商家平台主业务（收票、查验、开票管理等） |
+| `/portal/bm/ocr/` | 商家平台 OCR 识别采集 |
+| `/m26/iam/` | 登录、菜单、组织 |
+| `/m4/fpzs/` | 发票助手接口（fpzs-pc 调用） |
 
 ### 重构版项目结构
 

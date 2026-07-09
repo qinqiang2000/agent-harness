@@ -200,7 +200,7 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 ### 2C.4 输出变更方案
 
-找到源码后，输出以下内容：
+找到源码后，**先做前端影响面检查**（见下方通用规则），再输出：
 
 ```
 【结论类型】REQUIREMENT
@@ -214,9 +214,25 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 【变更方案】
 {具体可操作的改动说明，包括需修改的文件、行号、改法}
+
+【前端影响面】（如无前端改动则注明"无需前端改动"）
+{涉及的前端项目名 + 文件路径 + 需要调整的内容}
 ```
 
 输出后**不自动触发 code-fix**，等待用户确认后续操作。
+
+### 通用：前端影响面检查规则
+
+每次输出变更方案或 CODE_BUG 结论时，必须执行以下检查：
+
+1. **确认被改动的接口路径**（如 `/m4/fpzs/expense/upload`、`/imgsys/bill/scanner/commit`）
+2. **在对应前端项目的路由/services 目录中搜索该路径**，确认是否有前端调用：
+   - 收票业务：搜索 `fpzs-pc/easNew/` 和 `portal-web/app/routes/forwardRoutes/`
+   - 影像业务：搜索 `image-system/app/routeGroup/` 和 `image-asst/app/router/`
+3. **命中前端调用** → 分析影响面（入参变化/返回值变化/字段增删），在结论中列出需同步修改的前端文件和改动点
+4. **未命中** → 结论中注明"无需前端改动"
+
+> 前端项目路径基准：`{BILLING_CODE_BASE_DIR}/input-project/standard/frontend/`
 
 ---
 
@@ -387,6 +403,9 @@ grep -r "{methodName}" {代码目录} --include="*.java" -l
 
 【解决建议】
 {具体可操作的建议}
+
+【前端影响面】（CODE_BUG/REQUIREMENT 类型必填，其他类型如无影响注明"无需前端改动"）
+{涉及的前端项目名 + 文件路径 + 需要调整的内容；若未检查则注明原因}
 ```
 
 **【结论类型】枚举值说明（必须从以下六个值中选一个，不得自造）：**
