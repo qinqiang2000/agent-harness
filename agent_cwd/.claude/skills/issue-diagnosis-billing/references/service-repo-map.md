@@ -54,6 +54,8 @@ clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.
 | api-archive-webservice | piaozone/imgsys-archive/api-archive-webservice | 影像档案-WebService 接口服务 |
 | api-archive-job | piaozone/imgsys-archive/api-archive-job | 影像档案-定时任务服务 |
 | api-archive-alarm-monitor | piaozone/imgsys-archive/api-archive-alarm-monitor | 影像档案-告警监控服务 |
+| image-system | piaozone/frontend/imgsys-archive/image-system | 影像档案-影像管理主站前端（Egg.js + React + Dva） |
+| image-asst | piaozone/frontend/imgsys-archive/image-asst | 影像档案-影像助手前端（Egg.js + React + Recoil） |
 | api-elc-digital-invoice | piaozone/elc-integration/api-elc-digital-invoice | 集成层-全电发票服务 |
 | api-elc-invoice-lqpt | piaozone/elc-integration/api-elc-invoice-lqpt | 集成层-乐企票通适配服务 |
 | api-elc-invoice-create | piaozone/elc-integration/api-elc-invoice-create | 集成层-全电平台开票适配器 |

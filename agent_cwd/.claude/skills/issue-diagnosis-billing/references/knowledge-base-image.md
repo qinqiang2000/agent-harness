@@ -33,9 +33,13 @@ standard/input/
 ├── api-archive-license/          # License 管理
 ├── api-archive-webservice/       # WebService 对接
 └── api-archive-alarm-monitor/    # 告警监控
+
+standard/frontend/
+├── image-system/                 # 影像管理主站（Egg.js + React + Dva）
+└── image-asst/                   # 影像助手（Egg.js + React + Recoil）
 ```
 
-> 注：`bill-eureka`、`base-gateway`、`archive-dataSource-utils`、`archive-pub-utils`、前端（`image-system`/`image-asst`）、AI 子系统（`base-ai-file-cls`）**未克隆**，源码分析时不可用。
+> 注：`bill-eureka`、`base-gateway`、`archive-dataSource-utils`、`archive-pub-utils`、AI 子系统（`base-ai-file-cls`）**未克隆**，源码分析时不可用。
 
 ### 核心服务：api-archive-scan 包结构
 
@@ -433,7 +437,7 @@ ErpBillPushFpzsInformTask       → ERP 单据推送通知发票助手
 
 ## 六、全量文档索引
 
-### 标准版（相对 `{BILLING_CODE_BASE_DIR}/input-project/standard/input/`）
+### 标准版后端（相对 `{BILLING_CODE_BASE_DIR}/input-project/standard/input/`）
 
 | 文档路径 | 说明 |
 |---------|------|
@@ -441,6 +445,13 @@ ErpBillPushFpzsInformTask       → ERP 单据推送通知发票助手
 | `api-archive-scan/db/` | 影像项目 DDL 存放点 |
 | `api-archive-invoice/db/试用账号初始化租户过期字段.ddl` | 试用账号 DDL |
 | `api-archive-job/db/xxl-job-ddl-mysql.sql` | XXL-JOB Admin 表 DDL |
+
+### 标准版前端（相对 `{BILLING_CODE_BASE_DIR}/input-project/standard/frontend/`）
+
+| 仓库 | 说明 |
+|------|------|
+| `image-system/` | 影像管理主站（Egg.js + React + Dva），对应后端 `api-archive-scan` |
+| `image-asst/` | 影像助手（Egg.js + React + Recoil），对应后端 `api-archive-scan` |
 
 ### 重点源码索引（相对 `{BILLING_CODE_BASE_DIR}/input-project/standard/input/`）
 
