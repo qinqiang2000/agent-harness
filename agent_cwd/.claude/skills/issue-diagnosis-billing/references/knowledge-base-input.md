@@ -49,10 +49,10 @@ standard/common/
 ### 前端排查指引
 
 后台代码找不到入口或逻辑时，可通过前端代码辅助排查：
-- `fpzs-pc`：发票助手 PC 端，负责发票列表、报销、查验等主流程，无 CLAUDE.md，直接分析代码
-- `portal-web`：商家平台，负责发票采集、台账、开票管理等，无 CLAUDE.md，直接分析代码
+- `fpzs-pc`：发票助手 PC 端，负责发票列表、报销、查验等主流程
+- `portal-web`：商家平台，负责发票采集、台账、开票管理等
 
-**接口路由位置**：
+**分析前端代码时，优先读对应项目根目录的 `CLAUDE.md`**（如有），其中有完整的架构说明和路由约定；如无则直接分析代码。
 - `fpzs-pc`：`easNew/` 目录下各模块的 `services/` 文件，API 前缀 `/m4`
 - `portal-web`：`app/routes/forwardRoutes/` 目录（31 个子文件按业务拆分），主路由 `app/router.js`
 
