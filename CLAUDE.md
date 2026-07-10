@@ -62,6 +62,8 @@ Agent allowed_tools 在 `api/services/agent_service.py` 中配置，包含基础
 
 **权限配置**：`agent_service.py` 中 `permission_mode="acceptEdits"`，`add_dirs=["/tmp/gitlab"]`，允许修改 `/tmp/gitlab/` 下文件。
 
+**服务仓库映射**：`agent_cwd/.claude/skills/code-fix/references/service-repo-map.md` 和 `gitlab-lookup.md` 与 `issue-diagnosis-billing/references/` 下同名文件内容保持一致，两份独立维护，更新时需同步修改两处。
+
 ## CICD + autotest 自动化链路
 
 code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个入口（Linear / Chat UI）行为一致：
