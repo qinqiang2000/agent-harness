@@ -221,6 +221,51 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Daily report scheduled at %02d:00", report_hour)
 
+    # Daily retrospective for self-improving agent
+    from api.services.retrospective_service import run_daily_retrospective
+
+    async def _run_retrospective():
+        try:
+            await run_daily_retrospective()
+        except Exception:
+            logger.exception("Daily retrospective failed")
+
+    retrospective_hour = int(os.getenv("RETROSPECTIVE_HOUR", "2"))
+    retrospective_minute = int(os.getenv("RETROSPECTIVE_MINUTE", "0"))
+    # 本地验证模式：RETROSPECTIVE_TEST_INTERVAL_MINUTES=1 时改用 interval 触发
+    test_interval = os.getenv("RETROSPECTIVE_TEST_INTERVAL_MINUTES", "")
+    if test_interval:
+        try:
+            test_minutes = int(test_interval)
+            scheduler.add_job(
+                _run_retrospective,
+                "interval",
+                minutes=test_minutes,
+                id="daily_retrospective",
+            )
+            logger.info(
+                "Retrospective scheduled every %d minutes (TEST MODE)", test_minutes
+            )
+        except ValueError:
+            logger.warning(
+                "Invalid RETROSPECTIVE_TEST_INTERVAL_MINUTES, falling back to cron"
+            )
+            test_interval = ""
+
+    if not test_interval:
+        scheduler.add_job(
+            _run_retrospective,
+            "cron",
+            hour=retrospective_hour,
+            minute=retrospective_minute,
+            id="daily_retrospective",
+        )
+        logger.info(
+            "Retrospective scheduled at %02d:%02d daily",
+            retrospective_hour,
+            retrospective_minute,
+        )
+
     try:
         scheduler.start()
     except Exception:

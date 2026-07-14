@@ -96,7 +96,28 @@ code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个�
 
 **max_turns**：`agent_service.py` 中 `build_default_options` 和 metadata 覆盖路径均设为 80（原为 40），避免复杂诊断超限中断。
 
-## 注意事项
+## issue-retrospective skill（Self-Improving Agent）
+
+`agent_cwd/.claude/skills/issue-retrospective/` — 每日复盘 skill，分析诊断 session 中的 Agent 错误，自动生成知识库改进草稿。
+
+**触发方式**：APScheduler 每天凌晨 2:00 自动触发（`api/services/retrospective_service.py`），不对用户暴露。
+
+**分析逻辑**：
+- 读取前一天的归档日志 `log/interactions.log.YYYY-MM-DD`
+- 识别纠正信号：用户问题含"不是/不对/应该是"等关键词、回复"2 未解决"、同 session ≥3 轮才收敛
+- 调用 LLM（Haiku）分析根因，推断错误类型（知识缺失/推理路径偏差/服务定位错误）并生成具体知识条目
+
+**草稿目录**：`agent_cwd/.claude/skills/issue-retrospective/pending/`，文件名格式 `{YYYYMMDD}_correction_{sessionId}.md`
+
+**运维流程**：每天早上看云之家通知 → 打开 pending/ 下草稿 → 确认 AI 分析内容 → 把知识条目复制到对应 `references/` 文件
+
+**环境变量**：
+- `RETROSPECTIVE_NOTIFY_URL` — 云之家 notify 接口完整 URL（含 access_token）
+- `RETROSPECTIVE_NOTIFY_NAME` — 通知接收人姓名
+- `RETROSPECTIVE_HOUR/MINUTE` — 触发时间（默认 02:00）
+- `RETROSPECTIVE_TEST_INTERVAL_MINUTES` — 本地验证用，设为 1 改为每分钟触发
+
+
 
 - `claude_agent_sdk` 不一定可用（如 CLI 上下文）。CLI 工具链用到的模块不能在顶层 import 它，需用 lazy import 或 `TYPE_CHECKING` guard
 - `.custom-settings.json` 由 `AgentService` 初始化时写入，包含安全配置（拒绝读取 `.env`、密钥文件等）
