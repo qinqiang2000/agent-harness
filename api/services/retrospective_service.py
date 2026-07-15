@@ -13,9 +13,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# 纠正信号关键词
+# 纠正信号关键词（需足够明确，避免误匹配正常对话）
 CORRECTION_KEYWORDS = [
-    "不是",
     "不对",
     "应该是",
     "实际上",
@@ -23,6 +22,8 @@ CORRECTION_KEYWORDS = [
     "错了",
     "不准确",
     "重新看",
+    "你搞错了",
+    "理解有误",
 ]
 
 # 目标 skill（只复盘诊断类）
@@ -97,7 +98,7 @@ def _parse_log_entries(log_path: Path, target_date: datetime.date) -> list[dict]
 
 def _detect_correction(entry: dict) -> bool:
     """
-    判断该 session 是否存在用户纠正信号。
+    判断该单条记录是否存在明确的用户纠正信号（关键词匹配）。
 
     Args:
         entry: 单条 interactions.log 记录
@@ -106,7 +107,6 @@ def _detect_correction(entry: dict) -> bool:
         True 表示存在纠正信号
     """
     question = entry.get("question", "")
-    answer = entry.get("answer", "")
 
     # 用户问题中含纠正关键词
     for kw in CORRECTION_KEYWORDS:
@@ -117,6 +117,33 @@ def _detect_correction(entry: dict) -> bool:
     if "2" in question and "未解决" in question:
         return True
     if question.strip() == "2":
+        return True
+
+    return False
+
+
+def _detect_session_correction(session_entries: list[dict]) -> bool:
+    """
+    判断同一 session 的多条记录中是否存在纠正信号。
+    规则：第一条 Agent 回答含【结论类型】后，后续还有用户继续追问（说明用户对结论不满意）。
+
+    Args:
+        session_entries: 同一 session 的所有记录，按时间正序
+
+    Returns:
+        True 表示存在纠正信号
+    """
+    if len(session_entries) <= 1:
+        return False
+
+    # 检查是否有单条记录命中关键词
+    for entry in session_entries:
+        if _detect_correction(entry):
+            return True
+
+    # 检查：第一条含结论类型，且后续还有追问（用户对结论不认可继续对话）
+    first_answer = session_entries[0].get("answer", "")
+    if "【结论类型】" in first_answer and len(session_entries) >= 2:
         return True
 
     return False
@@ -145,32 +172,40 @@ def _detect_multi_turn_convergence(entries: list[dict]) -> list[str]:
 def _analyze_entries(entries: list[dict]) -> list[dict]:
     """
     分析当天日志，找出需要复盘的 session。
+    触发条件：session 维度存在纠正信号（关键词/未解决/结论后继续追问），纯多轮成功不触发。
 
     Args:
         entries: 当天所有日志条目
 
     Returns:
-        需要复盘的条目列表，附加 reason 字段说明触发原因
+        需要复盘的代表性条目列表（每个 session 取第一条），附加 _retrospective_reasons 和 _session_entries
     """
-    multi_turn_sessions = set(_detect_multi_turn_convergence(entries))
-    flagged = []
-
-    seen_sessions = set()
+    # 按 session 分组，保持时间顺序
+    session_map: dict[str, list[dict]] = {}
     for entry in entries:
         sid = entry.get("session_id", "")
-        if sid in seen_sessions:
+        if not sid:
             continue
+        session_map.setdefault(sid, []).append(entry)
+
+    flagged = []
+    for sid, session_entries in session_map.items():
+        has_correction = _detect_session_correction(session_entries)
+        total_turns = sum(e.get("num_turns", 1) for e in session_entries)
+        in_multi_turn = total_turns >= 3
 
         reasons = []
-        if _detect_correction(entry):
+        if has_correction:
             reasons.append("用户纠正")
-        if sid in multi_turn_sessions:
+        if in_multi_turn and has_correction:
             reasons.append("多轮收敛(>=3轮)")
 
         if reasons:
-            entry["_retrospective_reasons"] = reasons
-            flagged.append(entry)
-            seen_sessions.add(sid)
+            # 取第一条作为代表，附加完整 session 记录供 LLM 分析
+            rep = session_entries[0].copy()
+            rep["_retrospective_reasons"] = reasons
+            rep["_session_entries"] = session_entries
+            flagged.append(rep)
 
     return flagged
 
@@ -314,27 +349,71 @@ async def _llm_analyze_session(entry: dict) -> dict:
     question = entry.get("question", "")
     answer = entry.get("answer", "")
     reasons = entry.get("_retrospective_reasons", [])
+    status = entry.get("status", "")
+    num_turns = entry.get("num_turns", 1)
+    session_entries = entry.get("_session_entries", [entry])
 
-    prompt = f"""你是一个 AI Agent 系统的质量分析师。以下是一次诊断对话，其中 Agent 的回答出现了问题（触发原因：{', '.join(reasons)}）。
+    # 判断 session 是否最终成功完成（含"修复完成"标记）
+    all_answers = " ".join(e.get("answer", "") for e in session_entries)
+    is_completed = status == "success" and "修复完成" in all_answers
 
-【用户问题】
-{question[:500]}
+    # 读取项目架构文件，让 LLM 自己理解系统设计，而不是硬编码描述
+    agent_cwd = os.getenv("AGENT_CWD", "agent_cwd")
+    project_context = ""
+    context_files = [
+        "CLAUDE.md",
+    ]
+    # 读取各 skill 的 SKILL.md
+    skills_dir = Path(agent_cwd) / ".claude" / "skills"
+    if skills_dir.exists():
+        for skill_dir in sorted(skills_dir.iterdir()):
+            skill_md = skill_dir / "SKILL.md"
+            if skill_md.exists():
+                context_files.append(str(skill_md))
 
-【Agent 回答】
-{answer[:800]}
+    for fpath in context_files:
+        p = Path(fpath)
+        if p.exists():
+            try:
+                content = p.read_text(encoding="utf-8")[:2000]
+                project_context += f"\n\n=== {fpath} ===\n{content}"
+            except Exception:
+                pass
 
-请分析：
-1. Agent 犯了什么错误？（知识缺失 / 推理路径偏差 / 服务定位错误，三选一）
-2. 根因是什么？（一句话描述 Agent 不知道什么或哪里推理错了）
-3. 应该补充什么知识？（具体的知识条目内容，50-150字）
-4. 应该写入哪个知识库文件？（从以下选择：knowledge-base-input.md / knowledge-base-image.md / knowledge-base-output.md，或填"SKILL.md修改建议"）
+    # 构建完整 session 对话记录
+    session_dialogue = ""
+    for i, e in enumerate(session_entries, 1):
+        session_dialogue += f"\n--- 第{i}轮 ---\n用户：{e.get('question','')[:300]}\nAgent：{e.get('answer','')[:500]}\n"
+
+    prompt = f"""你是一个 AI Agent 系统的质量分析师。请结合以下项目文件，分析一次存在问题的诊断对话。
+
+【项目架构文件】（请仔细阅读，理解各 skill 的职责分工和知识库结构）
+{project_context[:4000]}
+
+【Session 信息】
+- 触发原因：{', '.join(reasons)}
+- 最终状态：{status}
+- 对话轮次：{num_turns}
+- 是否已完成修复：{"是（含修复完成标记）" if is_completed else "否"}
+
+【完整对话记录】
+{session_dialogue[:2000]}
+
+请先判断：该 session 是否真的存在需要改进的问题？
+- 如果 session 最终成功完成（状态 success 且含"修复完成"），说明整体流程正常，触发原因可能是误判，请返回 needs_review: false
+- 如果存在明确的诊断错误或知识缺失，请返回 needs_review: true 并分析
+
+分析时请注意：
+1. 结合项目文件理解各 skill 的职责边界，不要把"符合设计的行为"判断为错误
+2. target_file 必须给出完整相对路径（参考 CLAUDE.md 中的知识库路径说明）
 
 请严格按以下 JSON 格式输出，不要有其他内容：
 {{
+  "needs_review": true,
   "error_type": "知识缺失",
   "root_cause": "Agent 不了解 xxx 的业务语义",
   "knowledge_content": "具体知识条目内容",
-  "target_file": "knowledge-base-input.md"
+  "target_file": "agent_cwd/.claude/skills/issue-diagnosis-billing/references/knowledge-base-input.md"
 }}"""
 
     try:
@@ -451,6 +530,12 @@ async def run_daily_retrospective(target_date: Optional[datetime.date] = None):
     for entry in flagged:
         try:
             analysis = await _llm_analyze_session(entry)
+            # LLM 判断不需要复盘时跳过草稿生成
+            if not analysis.get("needs_review", True):
+                logger.info(
+                    f"[Retrospective] LLM 判断无需复盘，跳过：{entry.get('session_id', '')[:8]}"
+                )
+                continue
             filepath, _ = _generate_draft(entry, date_str, analysis)
             draft_paths.append(filepath)
             logger.info(f"[Retrospective] 生成草稿：{filepath.name}")
