@@ -36,20 +36,21 @@ DIAGNOSIS_SKILLS = {
 def _get_interactions_log_path(target_date: "datetime.date") -> Path:
     """
     获取指定日期的 interactions.log 路径。
-    当天日志在 interactions.log，归档日志在 interactions.log.YYYY-MM-DD。
+    优先读归档文件 interactions.log.YYYY-MM-DD，不存在时回退到 interactions.log（按日期过滤）。
 
     Args:
         target_date: 要读取的日期
 
     Returns:
-        对应的日志文件路径
+        对应的日志文件路径（调用方负责按日期过滤内容）
     """
     log_dir = os.getenv("LOG_DIR", "log")
     log_base = Path(log_dir)
-    today = datetime.now().date()
-    if target_date == today:
-        return log_base / "interactions.log"
-    return log_base / f"interactions.log.{target_date.strftime('%Y-%m-%d')}"
+    archived = log_base / f"interactions.log.{target_date.strftime('%Y-%m-%d')}"
+    if archived.exists():
+        return archived
+    # 归档文件不存在（服务未重启导致未归档），回退到当前 interactions.log，_parse_log_entries 会按日期过滤
+    return log_base / "interactions.log"
 
 
 def _parse_log_entries(log_path: Path, target_date: datetime.date) -> list[dict]:
@@ -276,23 +277,37 @@ async def _llm_analyze_session(entry: dict) -> dict:
         logger.warning("[Retrospective] anthropic 未安装，跳过 LLM 分析")
         return {}
 
-    api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    auth_token = os.getenv("ANTHROPIC_AUTH_TOKEN")
     base_url = os.getenv("ANTHROPIC_BASE_URL")
     model = (
         os.getenv("ANTHROPIC_SMALL_FAST_MODEL")
         or os.getenv("ANTHROPIC_MODEL")
-        or "claude-haiku-4-5-20251001"
+        or "claude-sonnet-4-6"
     )
 
-    if not api_key and not base_url:
+    # 兜底：LiteLLM 代理（服务器默认配置）
+    if not api_key and not auth_token and not base_url:
+        litellm_key = os.getenv("LITELLM_API_KEY")
+        litellm_url = os.getenv("LITELLM_BASE_URL")
+        if litellm_key and litellm_url:
+            auth_token = litellm_key
+            base_url = litellm_url
+            model = (
+                os.getenv("LITELLM_SMALL_FAST_MODEL")
+                or os.getenv("LITELLM_MODEL")
+                or model
+            )
+
+    if not api_key and not auth_token:
         logger.warning("[Retrospective] Anthropic API 未配置，跳过 LLM 分析")
         return {}
 
     client_kwargs: dict = {}
-    if os.getenv("ANTHROPIC_API_KEY"):
-        client_kwargs["api_key"] = os.getenv("ANTHROPIC_API_KEY")
-    elif os.getenv("ANTHROPIC_AUTH_TOKEN"):
-        client_kwargs["auth_token"] = os.getenv("ANTHROPIC_AUTH_TOKEN")
+    if api_key:
+        client_kwargs["api_key"] = api_key
+    elif auth_token:
+        client_kwargs["auth_token"] = auth_token
     if base_url:
         client_kwargs["base_url"] = base_url
 
@@ -340,7 +355,15 @@ async def _llm_analyze_session(entry: dict) -> dict:
         end = text.rfind("}") + 1
         if start == -1 or end == 0:
             return {}
-        return _json.loads(text[start:end])
+        json_str = text[start:end]
+        # 替换中文引号为英文引号，清理可能导致解析失败的字符
+        json_str = (
+            json_str.replace("“", '"')
+            .replace("”", '"')
+            .replace("‘", "'")
+            .replace("’", "'")
+        )
+        return _json.loads(json_str)
     except Exception as e:
         logger.warning(f"[Retrospective] LLM 分析失败: {e}")
         return {}
