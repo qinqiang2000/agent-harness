@@ -526,15 +526,30 @@ async def run_daily_retrospective(target_date: Optional[datetime.date] = None):
     flagged = _analyze_entries(entries)
     logger.info(f"[Retrospective] 需要复盘的 session：{len(flagged)} 个")
 
+    # 已处理的 session 集合（pending + confirmed 目录下的文件名提取）
+    agent_cwd = os.getenv("AGENT_CWD", "agent_cwd")
+    retro_dir = Path(agent_cwd) / ".claude" / "skills" / "issue-retrospective"
+    processed_sessions: set[str] = set()
+    for sub in ("pending", "confirmed"):
+        d = retro_dir / sub
+        if d.exists():
+            for f in d.iterdir():
+                # 文件名格式：{日期}_correction_{sessionId前8位}.md
+                parts = f.stem.split("_correction_")
+                if len(parts) == 2:
+                    processed_sessions.add(parts[1])
+
     draft_paths = []
     for entry in flagged:
         try:
+            sid8 = entry.get("session_id", "")[:8]
+            if sid8 in processed_sessions:
+                logger.info(f"[Retrospective] 已有草稿，跳过：{sid8}")
+                continue
             analysis = await _llm_analyze_session(entry)
             # LLM 判断不需要复盘时跳过草稿生成
             if not analysis.get("needs_review", True):
-                logger.info(
-                    f"[Retrospective] LLM 判断无需复盘，跳过：{entry.get('session_id', '')[:8]}"
-                )
+                logger.info(f"[Retrospective] LLM 判断无需复盘，跳过：{sid8}")
                 continue
             filepath, _ = _generate_draft(entry, date_str, analysis)
             draft_paths.append(filepath)
