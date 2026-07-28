@@ -403,6 +403,7 @@ class AgentService:
                     )
 
                     answer_parts = []
+                    interaction_logged = False  # result 事件是否已记录交互日志
 
                     async for message in processor.process():
                         got_message = True
@@ -443,12 +444,39 @@ class AgentService:
                                         ).get("product_selected"),
                                     }
                                 )
+                                interaction_logged = True
                             except Exception as e:
                                 logger.warning(f"Failed to log interaction: {e}")
                         yield message
 
-                except Exception:
+                except Exception as _stream_exc:
                     healthy = False
+                    # 流中断（如 600s 超时、连接异常）不会产生 result 事件，
+                    # 导致该 session 无法被 interactions.log 记录、retrospective 复盘不到。
+                    # 此处兜底补记一条 status=interrupted 交互日志，确保异常 session 可被复盘。
+                    if not interaction_logged:
+                        try:
+                            await interaction_logger.log(
+                                {
+                                    "question": request.prompt,
+                                    "answer": "".join(answer_parts),
+                                    "skill": request.skill,
+                                    "tenant_id": request.tenant_id,
+                                    "session_id": request.session_id,
+                                    "status": "interrupted",
+                                    "error_type": type(_stream_exc).__name__,
+                                    "error_msg": str(_stream_exc)[:200],
+                                    "asked_user_question": asked_user_question,
+                                    "product_selected": (request.metadata or {}).get(
+                                        "product_selected"
+                                    ),
+                                }
+                            )
+                            interaction_logged = True
+                        except Exception as _e:
+                            logger.warning(
+                                f"Failed to log interrupted interaction: {_e}"
+                            )
                     raise
                 except GeneratorExit:
                     raise

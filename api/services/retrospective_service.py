@@ -193,12 +193,27 @@ def _analyze_entries(entries: list[dict]) -> list[dict]:
         has_correction = _detect_session_correction(session_entries)
         total_turns = sum(e.get("num_turns", 1) for e in session_entries)
         in_multi_turn = total_turns >= 3
+        # 异常中断（600s 超时、流异常）或 error 状态本身就是最强的"需改进"信号，
+        # 这类 session 往往只有 1 条记录、无用户纠正关键词，必须单独识别，否则会被漏掉。
+        has_abnormal = any(
+            e.get("status") in ("interrupted", "error") for e in session_entries
+        )
 
         reasons = []
         if has_correction:
             reasons.append("用户纠正")
         if in_multi_turn and has_correction:
             reasons.append("多轮收敛(>=3轮)")
+        if has_abnormal:
+            _st = next(
+                (
+                    e.get("status")
+                    for e in session_entries
+                    if e.get("status") in ("interrupted", "error")
+                ),
+                "error",
+            )
+            reasons.append("异常中断" if _st == "interrupted" else "执行报错")
 
         if reasons:
             # 取第一条作为代表，附加完整 session 记录供 LLM 分析
