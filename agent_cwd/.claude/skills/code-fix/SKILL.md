@@ -64,9 +64,16 @@ python3 {skill_dir}/scripts/session_store.py set {issueId} {repoName} {localDir}
 
 **禁止重新查询 ELK 日志或重走诊断流程**。
 
+**⚠️ 根因结论是既定事实，禁止重新验证或推翻（防止陷入自证死循环导致 600s 流超时）**：
+- 传入的【根因分析】【证据】里指出的文件、方法、字段名、调用链，直接当作已确认事实使用，**不得**为了"确认根因是否准确"再去反复读取源码交叉验证、追溯上下游调用链、查架构配置（如 MapperScan、mapperLocations、Feign 注入方式等）。
+- 修复阶段的探索目的**只有一个**：定位到 `targetFile` 并确认改法，不是重新做一遍诊断。诊断阶段已经做过源码分析，code-fix 不重复这一步。
+- 若定位或改法过程中发现代码实际情况与诊断结论有出入（如提到的方法/字段不存在），**最多再花 5 次工具调用**核实这一处具体分歧，仍无法确认就直接用 `AskUserQuestion` 反问用户，禁止绕开分歧自行展开新一轮全链路排查。
+
 ---
 
 ## Step 1.5：补全缺失上下文
+
+**⚠️ 工具调用预算：本步骤定位 `targetFile`（Grep/Glob/Read/Bash 累计）不得超过 15 次。达到上限仍未定位到具体文件，立即停止，用 `AskUserQuestion` 询问用户提供文件路径或类名，禁止继续扩大范围搜索。**
 
 若 `localDir`（`/tmp/gitlab/fix/{repoName}_{sessionSuffix}`）不存在，**必须 clone 到此隔离目录，禁止直接使用 `$BILLING_CODE_BASE_DIR` 或任何已有本地代码目录**，按 `references/gitlab-lookup.md` 中的 clone 模板执行：
 
