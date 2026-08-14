@@ -21,7 +21,9 @@
 ```
 standard/frontend/
 ├── fpzs-pc                   # 发票助手 PC 端前端（React + dva，端口 9000，路由前缀 /m4-web，对应后端 api-fpzs）
-└── portal-web                # 商家平台前端（Egg.js BFF，对应后端 bill-bm-ocr-invoice / bill-portal）
+├── portal-web                # 商家平台前端（Egg.js BFF，对应后端 bill-bm-ocr-invoice / bill-portal）
+├── dd-fpzs                   # 发票助手 H5（移动端网页，如发票夹列表等），仓库路径 piaozone/frontend/mini-program/dd-fpzs
+└── kingdee-invoice           # 发票助手小程序端，仓库路径 piaozone/frontend/mini-program/kingdee-invoice；页面结构与 dd-fpzs 基本一致，改动需两边同步
 
 standard/input/
 ├── bill-bm-ocr-invoice       # 商家平台发票采集（两步上传：upload + upload/save，verifyCollect 软删除控制）
@@ -35,7 +37,7 @@ standard/input/
 ├── api-invoice-input-db      # 数据库实体和 Mapper（底层依赖，82 个实体类）
 ├── api-invoice-input-utils   # 工具类和常量
 ├── api-invoice-input-query   # 查询服务
-├── bill-wechat-mini-program  # 微信小程序（移动端推送）
+├── bill-wechat-mini-program  # 微信小程序服务端（移动端推送；内含旧版 H5 模板 personalInvoices.html，已被独立前端 dd-fpzs/kingdee-invoice 取代，排查时勿与其混淆）
 └── bill-portal               # 门户管理后台
 
 standard/common/
@@ -51,10 +53,15 @@ standard/common/
 后台代码找不到入口或逻辑时，可通过前端代码辅助排查：
 - `fpzs-pc`：发票助手 PC 端，负责发票列表、报销、查验等主流程
 - `portal-web`：商家平台，负责发票采集、台账、开票管理等
+- `dd-fpzs`：发票助手 H5（移动端网页），如"发票夹"列表等移动端页面
+- `kingdee-invoice`：发票助手小程序端，页面结构与 `dd-fpzs` 基本一致
+
+**工单提到"H5发票夹/小程序发票夹"等移动端场景时，定位到 `dd-fpzs`（H5）和 `kingdee-invoice`（小程序），不是 `bill-wechat-mini-program` 里的旧版 Java 模板**（那是已废弃的服务端渲染页面）。且这两个项目页面基本一样，一处改动通常需要**两边同步修改**。
 
 **分析前端代码时，优先读对应项目根目录的 `CLAUDE.md`**（如有），其中有完整的架构说明和路由约定；如无则直接分析代码。
 - `fpzs-pc`：`easNew/` 目录下各模块的 `services/` 文件，API 前缀 `/m4`
 - `portal-web`：`app/routes/forwardRoutes/` 目录（31 个子文件按业务拆分），主路由 `app/router.js`
+- `dd-fpzs` / `kingdee-invoice`：本地暂未克隆，首次排查时先按下方仓库映射 clone，再读根目录 `CLAUDE.md`（如有）确认路由约定
 
 **portal-web 主要接口前缀**：
 | 前缀 | 说明 |

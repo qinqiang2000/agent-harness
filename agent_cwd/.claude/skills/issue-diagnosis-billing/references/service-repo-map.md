@@ -76,6 +76,8 @@ clone 地址格式：`http://token:$GITLAB_TOKEN@{GITLAB_BASE_URL}/{project_id}.
 | base-file-center-server | piaozone/base/base-file-center-server | 基础层-文档中心（识别分流：网关拦截→上传/快照/识别/验签） |
 | fpzs-pc | piaozone/frontend/fpzs-pc | 前端-发票助手 PC 端（React + dva，端口 9000） |
 | portal-web | piaozone/frontend/portal-web | 前端-商家平台前端（Vue） |
+| dd-fpzs | piaozone/frontend/mini-program/dd-fpzs | 前端-发票助手 H5（移动端网页，如发票夹列表） |
+| kingdee-invoice | piaozone/frontend/mini-program/kingdee-invoice | 前端-发票助手小程序端（页面与 dd-fpzs 基本一致，需两边同步改动） |
 | fpy-parent | piaozone-v2/fpy-parent | 重构版-父 POM（统一依赖管理） |
 | fpy-sdk-base | piaozone-v2/sdk/fpy-sdk-base | 重构版-基础 SDK（实体、工具、配置） |
 | fpy-base-query | piaozone-v2/base/fpy-base-query | 重构版-查询服务（响应式，规则引擎，虚拟线程） |
