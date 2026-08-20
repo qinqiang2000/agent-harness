@@ -297,6 +297,7 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 ### 商家平台发票采集 / bill-bm-ocr-invoice / verifyCollect / fdelete
 - **两步流程**: `/portal/bm/ocr/recognition/upload`（识别+查验）→ `/portal/bm/ocr/recognition/upload/save`（确认上传）
 - **fdelete 状态**: verifyCollect=true 时识别入库 fdelete=2（软删除待确认）→ 用户确认后 fdelete=1（可用）
+- **影响面**: fdelete 状态直接影响台账「采集人」展示，相关排查见下方「台账查询」
 - **深入**: Read `bill-bm-ocr-invoice/docs/商家平台发票采集接口文档.md`
 
 ### 台账查询 / 台账统计 / 数据统计
@@ -304,7 +305,8 @@ api-fpzs → api-push-service-new (WebSocket/长轮询推送给ERP)
 - **两条路径**:
   - 旧版台账：`InvoiceAccountController` → `InvoiceAccountService`（本地查询）
   - 新版台账（全票池）：`InputAccountController` → `InputInvoiceQueryRpcService`（RPC → api-invoice-input-query）
-- **深入**: Read bill-bm-ocr-invoice 对应 Controller 源码
+- **采集人字段**: 台账「采集人」由 `InvoiceAccountService` 经 `InvoiceBelongRelationMapper` 关联 `t_bill_belong_relation` 得到，需按 fdelete 状态区分是否已导入（状态语义见上方 fdelete 小节）
+- **深入**: Read bill-bm-ocr-invoice 对应 Controller 源码；采集人相关问题另需 Read `InvoiceAccountService` + `InvoiceBelongRelationMapper.xml`，确认过滤条件落在 SQL 还是 Java 层
 
 ### 发票导入 taxRate / 税率字段
 - **接口**: `POST /m4/fpzs/expense/invoice/insert`
