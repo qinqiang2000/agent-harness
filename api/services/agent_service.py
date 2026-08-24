@@ -417,6 +417,37 @@ class AgentService:
                                 pass
                         elif event == "ask_user_question":
                             asked_user_question = True
+                        elif event == "error":
+                            # StreamProcessor.process() 内部吞掉了 asyncio.TimeoutError
+                            # 只 yield 一条 error 事件、不重新抛出异常，导致外层
+                            # except Exception 分支永远不会触发，兜底记录逻辑失效，
+                            # 这类超时 session 完全不落 interactions.log、retrospective 复盘不到。
+                            if not interaction_logged:
+                                try:
+                                    err_data = json.loads(message["data"])
+                                    await interaction_logger.log(
+                                        {
+                                            "question": request.prompt,
+                                            "answer": "".join(answer_parts),
+                                            "skill": request.skill,
+                                            "tenant_id": request.tenant_id,
+                                            "session_id": request.session_id,
+                                            "status": "interrupted",
+                                            "error_type": "StreamTimeoutOrError",
+                                            "error_msg": str(
+                                                err_data.get("message", "")
+                                            )[:200],
+                                            "asked_user_question": asked_user_question,
+                                            "product_selected": (
+                                                request.metadata or {}
+                                            ).get("product_selected"),
+                                        }
+                                    )
+                                    interaction_logged = True
+                                except Exception as _e:
+                                    logger.warning(
+                                        f"Failed to log error-event interaction: {_e}"
+                                    )
                         elif event == "result":
                             try:
                                 data = json.loads(message["data"])
