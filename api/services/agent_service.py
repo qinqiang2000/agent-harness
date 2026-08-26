@@ -334,6 +334,9 @@ class AgentService:
 
             cache = get_cache()
             cache_key = request.session_id  # 只有 resume 时才有值
+            # 实际 session_id：新会话经 SDK on_session_id 回调拿到 real_sid 后写入，
+            # 供 interrupted 日志记录使用，避免依赖 cache 是否启用导致 session_id 丢失。
+            actual_sid = request.session_id
 
             for attempt in range(2):
                 healthy = True
@@ -351,7 +354,8 @@ class AgentService:
                         t.mark("SDK_COLD_START")
 
                 async def _on_session_id(real_sid: str) -> None:
-                    nonlocal cache_key
+                    nonlocal cache_key, actual_sid
+                    actual_sid = real_sid
                     if cache and not cache_key:
                         async with cache._lock:
                             if real_sid not in cache._cache:
@@ -431,7 +435,7 @@ class AgentService:
                                             "answer": "".join(answer_parts),
                                             "skill": request.skill,
                                             "tenant_id": request.tenant_id,
-                                            "session_id": request.session_id,
+                                            "session_id": actual_sid,
                                             "status": "interrupted",
                                             "error_type": "StreamTimeoutOrError",
                                             "error_msg": str(
@@ -493,7 +497,7 @@ class AgentService:
                                     "answer": "".join(answer_parts),
                                     "skill": request.skill,
                                     "tenant_id": request.tenant_id,
-                                    "session_id": request.session_id,
+                                    "session_id": actual_sid,
                                     "status": "interrupted",
                                     "error_type": type(_stream_exc).__name__,
                                     "error_msg": str(_stream_exc)[:200],
