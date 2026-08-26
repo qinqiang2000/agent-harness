@@ -416,6 +416,7 @@ async def _llm_analyze_session(entry: dict) -> dict:
 
 请先判断：该 session 是否真的存在需要改进的问题？
 - 如果 session 最终成功完成（状态 success 且含"修复完成"），说明整体流程正常，触发原因可能是误判，请返回 needs_review: false
+- 如果 session 因外部服务故障失败（回答中只有 API Error 类报错，如模型网关 504/429、限流、预算耗尽、推理服务超时等，且没有任何诊断分析过程），根因在外部推理网关而非 Agent 的诊断能力，请返回 needs_review: false（其余字段填空字符串）
 - 如果存在明确的诊断错误或知识缺失，请返回 needs_review: true 并分析
 
 分析时请注意：
