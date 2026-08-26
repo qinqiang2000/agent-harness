@@ -13,14 +13,19 @@ logger = logging.getLogger(__name__)
 _DEFAULT_FALLBACK = "glm"
 DEFAULT_CONFIG = os.getenv("DEFAULT_MODEL_CONFIG", _DEFAULT_FALLBACK)
 
+
 @dataclass
 class ModelConfig:
     """Configuration for a single model provider."""
+
     name: str
     description: str
     base_url: str
     auth_token_env: str  # Environment variable name for auth token
-    timeout_ms: int = 600000
+    # Agent 会话流超时（毫秒），经 API_TIMEOUT_MS 透传给 StreamProcessor 包裹整个多轮会话。
+    # 「issue-diagnosis-billing 诊断 + code-fix 修复」为串行长链路，600s 会截断修复的提交/推送，
+    # 导致 CODE_BUG 修复无法落地，故提升到 30 分钟。
+    timeout_ms: int = 1800000
     model: Optional[str] = None
     small_fast_model: Optional[str] = None
     sonnet_model: Optional[str] = None
@@ -106,33 +111,34 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         description="Claude Code Router (本地代理)",
         base_url="http://127.0.0.1:3456",
         auth_token_env="CLAUDE_ROUTER_AUTH_TOKEN",
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env="CLAUDE_ROUTER_PROXY",  # Read from environment variable
-        extra_env={
-            "DISABLE_TELEMETRY": "true",
-            "DISABLE_COST_WARNINGS": "true"
-        }
+        extra_env={"DISABLE_TELEMETRY": "true", "DISABLE_COST_WARNINGS": "true"},
     ),
     "claude": ModelConfig(
         name="claude",
         description="Claude Official API (官方 API，使用 SDK 内置认证)",
         base_url="",  # Use SDK default (https://api.anthropic.com)
         auth_token_env="",  # 不设置，使用 SDK 内置认证（需先 claude login）
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env="CLAUDE_PROXY",  # Optional proxy for official API
-        small_fast_model=os.getenv("ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001"),  # 子 agent（Explore 等）用 Haiku
+        small_fast_model=os.getenv(
+            "ANTHROPIC_SMALL_FAST_MODEL", "claude-haiku-4-5-20251001"
+        ),  # 子 agent（Explore 等）用 Haiku
         supports_vision=True,
-        extra_env={}
+        extra_env={},
     ),
     "litellm": ModelConfig(
         name="litellm",
         description="LiteLLM Proxy (通过 LiteLLM 代理访问 Claude)",
         base_url=os.getenv("LITELLM_BASE_URL", "http://129.226.88.226:4000"),
         auth_token_env="LITELLM_API_KEY",
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env=None,
         model=os.getenv("LITELLM_MODEL") or None,
-        small_fast_model=os.getenv("LITELLM_SMALL_FAST_MODEL") or os.getenv("LITELLM_MODEL") or None,
+        small_fast_model=os.getenv("LITELLM_SMALL_FAST_MODEL")
+        or os.getenv("LITELLM_MODEL")
+        or None,
         auth_env_target="api_key",
         vision_model=os.getenv("LITELLM_VISION_MODEL", "claude-haiku-4-5-20251001"),
         extra_env={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
@@ -142,7 +148,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         description="MiniMax M2.7 (Anthropic 兼容接口，纯文本)",
         base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic"),
         auth_token_env="MINIMAX_API_KEY",
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env=None,
         model="MiniMax-M2.7",
         small_fast_model="MiniMax-M2.7",
@@ -157,9 +163,11 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
     "tencentmaas": ModelConfig(
         name="tencentmaas",
         description="腾讯云 MaaS DeepSeek-V4-Flash",
-        base_url=os.getenv("TENCENTMAAS_BASE_URL", "https://tokenhub.tencentmaas.com/plan/anthropic"),
+        base_url=os.getenv(
+            "TENCENTMAAS_BASE_URL", "https://tokenhub.tencentmaas.com/plan/anthropic"
+        ),
         auth_token_env="TENCENTMAAS_API_KEY",
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env=None,
         model="deepseek-v4-flash",
         small_fast_model="deepseek-v4-flash",
@@ -177,7 +185,7 @@ PREDEFINED_CONFIGS: Dict[str, ModelConfig] = {
         description="DeepSeek 官方 API (Anthropic 兼容接口)",
         base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
         auth_token_env="DEEPSEEK_API_KEY",
-        timeout_ms=600000,
+        timeout_ms=1800000,
         proxy_env=None,
         model="deepseek-v4-flash",
         small_fast_model="deepseek-v4-flash",
@@ -217,10 +225,13 @@ class ConfigService:
     ENV_KEY_MAPPING = {
         # Claude SDK基础配置
         "ANTHROPIC_BASE_URL": lambda c: c.base_url,
-        "ANTHROPIC_AUTH_TOKEN": lambda c: c.get_auth_token() if c.auth_env_target in ("auth_token", "both") else "",
-        "ANTHROPIC_API_KEY": lambda c: c.get_auth_token() if c.auth_env_target in ("api_key", "both") else "",
+        "ANTHROPIC_AUTH_TOKEN": lambda c: (
+            c.get_auth_token() if c.auth_env_target in ("auth_token", "both") else ""
+        ),
+        "ANTHROPIC_API_KEY": lambda c: (
+            c.get_auth_token() if c.auth_env_target in ("api_key", "both") else ""
+        ),
         "API_TIMEOUT_MS": lambda c: str(c.timeout_ms),
-
         # 可选模型配置
         "ANTHROPIC_MODEL": lambda c: c.model,
         "ANTHROPIC_SMALL_FAST_MODEL": lambda c: c.small_fast_model,
@@ -261,8 +272,7 @@ class ConfigService:
         """Get the current active configuration."""
         with self._lock:
             return PREDEFINED_CONFIGS.get(
-                self._current_config,
-                PREDEFINED_CONFIGS["claude-router"]
+                self._current_config, PREDEFINED_CONFIGS["claude-router"]
             )
 
     def get_available_configs(self) -> List[Dict]:
@@ -274,7 +284,7 @@ class ConfigService:
                     "name": config.name,
                     "description": config.description,
                     "base_url": config.base_url,
-                    "is_active": config.name == current
+                    "is_active": config.name == current,
                 }
                 for config in PREDEFINED_CONFIGS.values()
             ]
@@ -331,7 +341,14 @@ class ConfigService:
             config: 模型配置
         """
         # Clear all proxy settings first
-        proxy_keys = ["https_proxy", "http_proxy", "HTTPS_PROXY", "HTTP_PROXY", "no_proxy", "NO_PROXY"]
+        proxy_keys = [
+            "https_proxy",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "no_proxy",
+            "NO_PROXY",
+        ]
         for key in proxy_keys:
             os.environ.pop(key, None)
 
@@ -340,10 +357,14 @@ class ConfigService:
         if proxy_settings:
             for key, value in proxy_settings.items():
                 os.environ[key] = value
-            logger.info(f"Applied proxy settings from {config.proxy_env}: {list(proxy_settings.keys())}")
+            logger.info(
+                f"Applied proxy settings from {config.proxy_env}: {list(proxy_settings.keys())}"
+            )
         else:
             if config.proxy_env:
-                logger.info(f"No proxy configured ({config.proxy_env} not set, using direct connection)")
+                logger.info(
+                    f"No proxy configured ({config.proxy_env} not set, using direct connection)"
+                )
             else:
                 logger.info("No proxy configured (direct connection)")
 
@@ -377,8 +398,4 @@ class ConfigService:
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
         ]
         with self._lock:
-            return {
-                key: os.getenv(key, "")
-                for key in relevant_keys
-                if os.getenv(key)
-            }
+            return {key: os.getenv(key, "") for key in relevant_keys if os.getenv(key)}
