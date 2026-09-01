@@ -76,7 +76,7 @@ echo $GITLAB_TOKEN            # GitLab 访问 token（必须设置）
 → **直接进入 Step 3（日志查询）**，跳过 Step 2
 
 **路径 B+ — 有业务标识符**（无 traceId/报错，但描述中包含以下任意一种可查询的业务标识符）：
-- 报销单号：匹配 `BX-` 开头的字符串（如 `BX-2605-0478`）
+- 报销单号：匹配 `BX-` 或 `CBBX-` 开头的字符串（如 `BX-2605-0478`、`CBBX-2026-00020089`）
 - 工单号：匹配 `IWO` 开头的字符串
 - 发票号：20位纯数字
 - clientId：用户明确描述为"客户ID"、"clientId"、"租户"等
@@ -239,6 +239,8 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 ## Step 3：ELK 日志查询（路径 A 执行）
 
 **直接调用 `mcp__elastic__searchTraceOrKeyWordsLog`**（禁止用任何工具搜索该工具名，直接使用），按全局查询规范构建参数。
+
+> ⚠️ **参数红线（每次调用前自检）**：**严禁传 `projectList` 参数**，即使能从上下文推断出服务名也绝对不允许。详见 [references/query-strategy.md](references/query-strategy.md)。
 
 查询返回后，严格按 [references/log-analysis.md](references/log-analysis.md) 中的「查询后处理」和「日志读取规则」执行，从返回日志的 `project` 字段提取服务名。
 
