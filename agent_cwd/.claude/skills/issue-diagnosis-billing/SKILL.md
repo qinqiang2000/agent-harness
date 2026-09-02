@@ -236,6 +236,8 @@ grep -r "{targetFunction关键词}" {代码目录} --include="*.java" --include=
 
 > 前端项目路径基准：`{BILLING_CODE_BASE_DIR}/input-project/standard/frontend/`
 
+> ⚠️ **外部 npm 包版本检查规范**：若结论涉及前端外部 npm 包（如 `@piaozone.com/xxx`），检查 `package.json` 确认版本号即可。**严禁**因 `node_modules` 未安装而多轮重试读取包内容——直接在结论中标注「需人工确认该包版本是否已支持 XX 功能」，一轮结束，不得继续消耗 turns 探查包内容。
+
 ---
 
 ## Step 3：ELK 日志查询（路径 A 执行）
