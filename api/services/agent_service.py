@@ -23,6 +23,46 @@ from api.services.vision_service import describe_images, VisionFallbackError
 logger = logging.getLogger(__name__)
 
 
+def _format_asked_questions(raw_data) -> str:
+    """
+    把 ask_user_question SSE 事件的数据格式化为可读文本，用于并入 interactions.log
+    的 answer 字段，使 retrospective 复盘能看到 Agent 反问的问题与候选选项。
+
+    Args:
+        raw_data: ask_user_question 事件的 data 字段，JSON 字符串或 dict，
+                  结构为 {"questions": [{"question": str, "options": [{"label", "description"}]}]}
+
+    Returns:
+        形如 "\n【Agent 反问】问题文本\n  选项1：xxx — yyy\n" 的文本；
+        解析失败或无有效问题时返回空串，不影响原有 answer 内容。
+    """
+    try:
+        data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        questions = (data or {}).get("questions") or []
+        if not isinstance(questions, list):
+            return ""
+
+        lines = []
+        for q in questions:
+            if not isinstance(q, dict):
+                continue
+            lines.append(f"\n【Agent 反问】{q.get('question', '')}")
+            options = q.get("options") or []
+            if not isinstance(options, list):
+                continue
+            for idx, opt in enumerate(options, 1):
+                if isinstance(opt, dict):
+                    label = opt.get("label", "")
+                    desc = opt.get("description", "")
+                    lines.append(f"  选项{idx}：{label}" + (f" — {desc}" if desc else ""))
+                else:
+                    lines.append(f"  选项{idx}：{opt}")
+        return "\n".join(lines) + "\n" if lines else ""
+    except Exception as e:
+        logger.warning(f"Failed to format asked questions for interaction log: {e}")
+        return ""
+
+
 class AgentService:
     """
     Agent business logic service.
@@ -421,6 +461,14 @@ class AgentService:
                                 pass
                         elif event == "ask_user_question":
                             asked_user_question = True
+                            # 反问的问题与选项此前只记一个布尔标记，内容完全不落
+                            # interactions.log，导致 retrospective 复盘读 answer 时
+                            # 看不到 Agent 究竟问了什么、给了哪些选项，反问质量问题
+                            # 无法被自我改进机制捕获。此处把反问内容并入 answer_parts，
+                            # 三处日志记录点（result / error / 兜底）自动带上。
+                            answer_parts.append(
+                                _format_asked_questions(message.get("data"))
+                            )
                         elif event == "error":
                             # StreamProcessor.process() 内部吞掉了 asyncio.TimeoutError
                             # 只 yield 一条 error 事件、不重新抛出异常，导致外层
