@@ -215,11 +215,24 @@ def _analyze_entries(entries: list[dict]) -> list[dict]:
             )
             reasons.append("异常中断" if _st == "interrupted" else "执行报错")
 
+        # 反问未应答：session 最后一条记录以 AskUserQuestion 收尾，当天再无后续记录，
+        # 说明任务悬停在等待用户确认、从未真正闭环（用户回复会续接同一 claude session，
+        # 见 plugins/bundled/linear/handler.py 的 _session_map）。这类 session
+        # status=success、常仅 1 条记录、无纠正关键词，会被上面三类条件全部漏掉。
+        # 实证：20260908 的 code-fix session 95fc911a 反问 4 次无人应答后自行拍板
+        # 推送两个生产仓库，当日复盘 flagged=0 完全未捕获。
+        pending_reply = (
+            bool(session_entries[-1].get("asked_user_question")) and not has_abnormal
+        )
+        if pending_reply:
+            reasons.append("反问未应答")
+
         if reasons:
             # 取第一条作为代表，附加完整 session 记录供 LLM 分析
             rep = session_entries[0].copy()
             rep["_retrospective_reasons"] = reasons
             rep["_session_entries"] = session_entries
+            rep["_pending_reply"] = pending_reply
             flagged.append(rep)
 
     return flagged
@@ -465,7 +478,10 @@ async def _llm_analyze_session(entry: dict) -> dict:
 
 
 async def _send_yunzhijia_notification(
-    draft_paths: list[Path], total_analyzed: int, flagged_count: int
+    draft_paths: list[Path],
+    total_analyzed: int,
+    flagged_count: int,
+    pending_reply_entries: Optional[list[dict]] = None,
 ):
     """
     通过云之家 notify 接口发送复盘完成通知给管理员。
@@ -475,6 +491,8 @@ async def _send_yunzhijia_notification(
         draft_paths: 生成的草稿文件路径列表
         total_analyzed: 当天分析的 session 总数
         flagged_count: 需要复盘的 session 数量
+        pending_reply_entries: 反问后无人应答、任务悬停未闭环的 session 条目，
+            不生成草稿但需在通知中提醒人工跟进
     """
     notify_url = os.getenv("RETROSPECTIVE_NOTIFY_URL", "")
     notify_name = os.getenv("RETROSPECTIVE_NOTIFY_NAME", "管理员")
@@ -485,9 +503,34 @@ async def _send_yunzhijia_notification(
         )
         return
 
+    pending_reply_entries = pending_reply_entries or []
+
+    # 反问后无人应答的 session：任务悬停未闭环，需人工回到对话里回复
+    pending_text = ""
+    if pending_reply_entries:
+        lines = []
+        for e in pending_reply_entries[:10]:
+            sid8 = e.get("session_id", "unknown")[:8]
+            skill = e.get("skill", "-")
+            lines.append(f"  - {sid8}（{skill}）")
+        if len(pending_reply_entries) > 10:
+            lines.append(f"  ... 共 {len(pending_reply_entries)} 个")
+        pending_text = (
+            f"\n\n⏳ {len(pending_reply_entries)} 个会话反问后无人应答，任务未闭环：\n"
+            + "\n".join(lines)
+            + "\n请回到对话中回复，否则该工单不会被继续处理。"
+        )
+
     if flagged_count == 0:
         msg = (
             f"✅ 今日复盘完成\n共分析 {total_analyzed} 个诊断 session，无需复盘的条目。"
+        )
+    elif not draft_paths and pending_reply_entries:
+        # 全部条目都只是"反问未应答"，没有需要 review 的知识库草稿
+        msg = (
+            f"📋 今日复盘完成\n"
+            f"共分析 {total_analyzed} 个诊断 session，无需 review 的知识库草稿。"
+            f"{pending_text}"
         )
     else:
         paths_text = "\n".join(f"  - {p.name}" for p in draft_paths[:10])
@@ -498,6 +541,7 @@ async def _send_yunzhijia_notification(
             f"共分析 {total_analyzed} 个诊断 session，发现 {flagged_count} 个需复盘。\n\n"
             f"草稿文件（待 review）：\n{paths_text}\n\n"
             f"路径：agent_cwd/.claude/skills/issue-retrospective/pending/"
+            f"{pending_text}"
         )
 
     import aiohttp
@@ -556,9 +600,19 @@ async def run_daily_retrospective(target_date: Optional[datetime.date] = None):
                     processed_sessions.add(parts[1])
 
     draft_paths = []
+    pending_reply_entries: list[dict] = []
     for entry in flagged:
         try:
             sid8 = entry.get("session_id", "")[:8]
+            # 仅因"反问未应答"入选的 session 不是 Agent 错误，生成知识库改进草稿没有意义
+            # （LLM 也会判 needs_review=false），直接进通知提醒人工跟进即可。
+            # 若同时命中其他信号（用户纠正/异常中断），仍走正常草稿流程。
+            if (
+                entry.get("_pending_reply")
+                and len(entry.get("_retrospective_reasons", [])) == 1
+            ):
+                pending_reply_entries.append(entry)
+                continue
             if sid8 in processed_sessions:
                 logger.info(f"[Retrospective] 已有草稿，跳过：{sid8}")
                 continue
@@ -575,5 +629,11 @@ async def run_daily_retrospective(target_date: Optional[datetime.date] = None):
                 f"[Retrospective] 生成草稿失败：{entry.get('session_id', '')}"
             )
 
-    await _send_yunzhijia_notification(draft_paths, len(entries), len(flagged))
+    if pending_reply_entries:
+        logger.info(
+            f"[Retrospective] 反问未应答的 session：{len(pending_reply_entries)} 个"
+        )
+    await _send_yunzhijia_notification(
+        draft_paths, len(entries), len(flagged), pending_reply_entries
+    )
     logger.info(f"[Retrospective] 复盘完成，共生成 {len(draft_paths)} 个草稿")
