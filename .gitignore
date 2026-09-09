@@ -16,6 +16,7 @@ __pycache__/
 # Environment
 .env
 .env.local
+.env.server
 *-settings.json
 
 # IDE
