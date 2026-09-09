@@ -16,6 +16,7 @@ from api.services.agent_service import AgentService
 from plugins.bundled.linear.linear_client import LinearClient, LinearAPIError
 from plugins.bundled.linear.token_store import TokenStore
 from plugins.bundled.linear import diagnosis_store
+from api.services import token_usage_store
 
 logger = logging.getLogger(__name__)
 
@@ -184,10 +185,16 @@ class LinearSessionHandler:
         try:
             from api.models.requests import QueryRequest
 
+            _issue = token_usage_store.lookup_channel_issue("linear", session_id)
             request = QueryRequest(
                 prompt=prompt_context,
                 language="中文",
                 session_id=claude_session_id,
+                metadata={
+                    "channel": "linear",
+                    "issue_key": _issue["issue_key"],
+                    "issue_id": _issue["issue_id"],
+                },
             )
             new_claude_session_id = claude_session_id
             async for event in self.agent_service.process_query(request):
@@ -332,10 +339,22 @@ class LinearSessionHandler:
         try:
             from api.models.requests import QueryRequest
 
+            # 绑定 Linear AgentSession → issue，使后续 prompted / code-fix
+            # 轮次都能归到同一个 issue 上做 token 聚合
+            if issue_identifier:
+                token_usage_store.bind_channel_issue(
+                    "linear", session_id, issue_identifier, issue_id
+                )
+
             request = QueryRequest(
                 prompt=final_prompt,
                 skill="issue-diagnosis-billing",
                 language="中文",
+                metadata={
+                    "channel": "linear",
+                    "issue_key": issue_identifier or None,
+                    "issue_id": issue_id,
+                },
             )
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("type") or event.get("event", "")
@@ -512,11 +531,19 @@ class LinearSessionHandler:
         try:
             from api.models.requests import QueryRequest
 
-            # 将诊断结论作为上下文，指定使用 code-fix skill
+            # 将诊断结论作为上下文，指定使用 code-fix skill。
+            # code-fix 是全新 session，靠 metadata 里的 issue_key 才能和诊断
+            # session 一起归到同一个 issue 的 token 账上。
+            _issue = token_usage_store.lookup_channel_issue("linear", session_id)
             request = QueryRequest(
                 prompt=result_text,
                 skill="code-fix",
                 language="中文",
+                metadata={
+                    "channel": "linear",
+                    "issue_key": _issue["issue_key"],
+                    "issue_id": _issue["issue_id"],
+                },
             )
             async for event in self.agent_service.process_query(request):
                 event_type = event.get("type") or event.get("event", "")

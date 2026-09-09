@@ -26,3 +26,8 @@ PLUGINS_DIR = AGENTS_ROOT / "plugins"                  # /agents/plugins
 BUNDLED_PLUGINS_DIR = PLUGINS_DIR / "bundled"          # /agents/plugins/bundled
 INSTALLED_PLUGINS_DIR = PLUGINS_DIR / "installed"      # /agents/plugins/installed
 PLUGIN_CONFIG_FILE = PLUGINS_DIR / "config.json"       # /agents/plugins/config.json
+
+
+# 云之家推送消息统一前缀，便于在众多通知中一眼识别消息来源项目。
+# 可用环境变量 NOTIFY_MSG_PREFIX 覆盖。
+NOTIFY_MSG_PREFIX = os.getenv("NOTIFY_MSG_PREFIX", "【CodingAgent项目】")

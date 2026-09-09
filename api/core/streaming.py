@@ -36,7 +36,9 @@ from claude_agent_sdk import (
     ResultMessage,
     SystemMessage,
     TextBlock,
+    ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 
 from api.models.requests import QueryRequest
@@ -67,6 +69,7 @@ class StreamProcessor:
         request: QueryRequest,
         session_service=None,
         on_session_id=None,
+        usage_sink=None,
     ):
         """
         Args:
@@ -74,16 +77,26 @@ class StreamProcessor:
             request: Query request
             session_service: Session service (optional, dependency injection)
             on_session_id: async callable(session_id) — 新会话拿到真实 session_id 时调用
+            usage_sink: callable(dict) — 流结束时回调，接收本次请求的 token 用量与
+                归因明细（session 汇总 + turn 级增量 + 工具返回体积），由上层落库。
+                任何异常都在内部吞掉，不影响回答链路。
         """
         self.client = client
         self.request = request
         self.session_service = session_service
         self.on_session_id = on_session_id
+        self.usage_sink = usage_sink
         self.session_id_sent = False
         self.actual_session_id = request.session_id
         self.first_message_received = False
         self.session_registered = False
         self.sdk_logger = SDKLogger(logger)  # Enhanced SDK message logger
+
+        # ---- token 用量采集状态 ----
+        self._turn_idx = 0            # 主 agent 轮次计数
+        self._tool_volume = []        # 工具返回内容体积（口径 B）
+        self._tool_targets = {}       # tool_use_id → (工具名, 目标描述)
+        self._usage_reported = False  # 防止 result 事件重复上报
 
     async def _ensure_session_registered(self, session_id: str):
         """确保会话已注册（消除重复逻辑）
@@ -139,6 +152,11 @@ class StreamProcessor:
                         async for sse_msg in self._handle_assistant_message(msg):
                             yield sse_msg
 
+                    elif isinstance(msg, UserMessage):
+                        # UserMessage 承载 tool_result，只用于统计工具返回体积，
+                        # 不产生任何 SSE 事件，因此不进入 yield 链路。
+                        self._collect_tool_results(msg)
+
                     elif isinstance(msg, ResultMessage):
                         async for sse_msg in self._handle_result_message(msg):
                             yield sse_msg
@@ -186,11 +204,108 @@ class StreamProcessor:
                 # Register session
                 await self._ensure_session_registered(self.actual_session_id)
 
+    def _record_turn_usage(self, msg: AssistantMessage) -> None:
+        """统计主 agent 轮次，并暂存本轮调用的工具，供后续归因定位。
+
+        注意：SDK 在流式模式下不填充 AssistantMessage.usage（实测恒为
+        {"input_tokens": 0, "output_tokens": 0}），因此无法在此拿到逐轮 token。
+        归因改由 tool_volume 的内容体积按轮次加权推算，总量以 ResultMessage
+        的真实 usage 为锚，见 token_usage_store.attribute_buckets。
+
+        Args:
+            msg: SDK 的 AssistantMessage
+
+        Returns:
+            None
+        """
+        # 子 agent（parent_tool_use_id 非空）不占主 agent 的上下文轮次
+        if not msg.parent_tool_use_id:
+            self._turn_idx += 1
+
+    def _collect_tool_results(self, msg: UserMessage) -> None:
+        """统计工具返回内容的字符数，用于体积归因（口径 B）。
+
+        回答"具体哪个文件 / 哪次 ELK 查询最肥"，与增量归因互补。
+
+        Args:
+            msg: SDK 的 UserMessage，其 content 中可能含 ToolResultBlock
+
+        Returns:
+            None。采集失败只记 debug 日志。
+        """
+        try:
+            if not isinstance(msg.content, list):
+                return
+            for block in msg.content:
+                if not isinstance(block, ToolResultBlock):
+                    continue
+                content = block.content
+                if isinstance(content, str):
+                    chars = len(content)
+                elif isinstance(content, list):
+                    chars = sum(
+                        len(str(item.get("text", "")))
+                        for item in content
+                        if isinstance(item, dict)
+                    )
+                else:
+                    chars = 0
+                name, target = self._tool_targets.get(
+                    block.tool_use_id, ("unknown", "")
+                )
+                self._tool_volume.append(
+                    {
+                        "tool_name": name,
+                        "target": target,
+                        "result_chars": chars,
+                        "turn_idx": max(self._turn_idx - 1, 0),
+                        "is_subagent": bool(msg.parent_tool_use_id),
+                    }
+                )
+        except Exception as e:
+            logger.debug(f"[TokenUsage] 统计工具返回体积失败: {e}")
+
+    def _report_usage(self, msg: ResultMessage) -> None:
+        """把本次请求的完整用量与归因明细交给 usage_sink 落库。
+
+        Args:
+            msg: SDK 的 ResultMessage，含 usage / total_cost_usd / model_usage
+
+        Returns:
+            None。sink 抛异常只记 warning，绝不影响 SSE 输出。
+        """
+        if self._usage_reported or not self.usage_sink:
+            return
+        self._usage_reported = True
+        try:
+            model = None
+            if isinstance(msg.model_usage, dict) and msg.model_usage:
+                model = next(iter(msg.model_usage.keys()), None)
+            self.usage_sink(
+                {
+                    "session_id": msg.session_id,
+                    "usage": msg.usage,
+                    "model_usage": msg.model_usage,
+                    "cost_sdk_usd": msg.total_cost_usd,
+                    "model": model,
+                    "num_turns": msg.num_turns,
+                    "duration_ms": msg.duration_ms,
+                    "status": "error" if msg.is_error else "success",
+                    "total_turns": self._turn_idx,
+                    "tool_volume": self._tool_volume,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"[TokenUsage] usage_sink 上报失败: {e}")
+
     async def _handle_assistant_message(
         self, msg: AssistantMessage
     ) -> AsyncGenerator[dict, None]:
         """Handle assistant message."""
+        self._record_turn_usage(msg)
         tool_blocks = [b for b in msg.content if isinstance(b, ToolUseBlock)]
+        for b in tool_blocks:
+            self._tool_targets[b.id] = (b.name, _tool_target(b))
         if len(tool_blocks) > 1:
             tool_names = [b.name for b in tool_blocks]
             logger.info(f"[Turn] {len(tool_blocks)} parallel tool calls: {tool_names}")
@@ -286,6 +401,14 @@ class StreamProcessor:
             "num_turns": msg.num_turns,
         }
 
+        # token 用量透出到 SSE，同时上报给 usage_sink 落库
+        usage = msg.usage or {}
+        if usage:
+            result_data["usage"] = usage
+        if msg.total_cost_usd is not None:
+            result_data["total_cost_usd"] = msg.total_cost_usd
+        self._report_usage(msg)
+
         # Include result field if present (SDK final output)
         if msg.result:
             m = _TRANSFER_PATTERN.search(msg.result)
@@ -329,3 +452,20 @@ class StreamProcessor:
         t = PerfTimer.current()
         if t:
             t.mark(f"DONE (sdk_api={msg.duration_api_ms}ms turns={msg.num_turns})")
+
+
+def _tool_target(block: ToolUseBlock) -> str:
+    """从工具调用入参中提取可读的目标标识，用于体积归因排行。
+
+    Args:
+        block: SDK 的 ToolUseBlock
+
+    Returns:
+        目标描述，如文件路径、搜索关键词、子 agent 描述；无法识别时返回空串
+    """
+    inp = block.input if isinstance(block.input, dict) else {}
+    for key in ("file_path", "path", "pattern", "query", "index", "command", "description", "skill"):
+        val = inp.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()[:200]
+    return ""

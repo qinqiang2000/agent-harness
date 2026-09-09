@@ -96,6 +96,39 @@ code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个�
 
 **max_turns**：`agent_service.py` 中 `build_default_options` 和 metadata 覆盖路径均设为 80（原为 40），避免复杂诊断超限中断。
 
+## Token 成本统计与归因
+
+按 issue 统计 token 消耗与成本，回答"每个 issue 花了多少、被什么内容占用"。
+
+**数据链路**：`StreamProcessor`（采集）→ `usage_sink` 回调 → `api/services/token_usage_store.py`（SQLite `data/token_usage.db`）
+
+**三张表**：
+- `session_usage` — 一行 = 一次 `process_query`，永久保留
+- `tool_volume` — 一行 = 一次工具返回（含字符数、轮次），归因用，默认保留 14 天
+- `channel_issue_map` / `issue_sessions` — issue ↔ 会话绑定
+
+**issue 归因**：一个 Linear issue 会产生多个独立 session（诊断 / code-fix / 追问），靠 `QueryRequest.metadata` 里的 `issue_key`（Linear identifier，如 CNPRD-1276）聚合。`handler.py` 在诊断时调 `bind_channel_issue` 绑定 AgentSession → issue，后两处调 `lookup_channel_issue` 反查。
+
+**归因算法**（`attribute_buckets`）：
+- **SDK 在流式模式下不填充 `AssistantMessage.usage`（实测恒为 0）**，拿不到逐轮 token，因此不能用相邻轮次 input 增量归因
+- 改用工具返回体积按轮次加权：第 k 轮产生的内容会被其后每轮重放计费，权重 = 估算 token × (总轮数 − k)
+- 各桶按权重分摊 `ResultMessage` 的真实 input 总量，残差归"系统底座"
+- **占比是估算的，但各桶之和恒等于真实计费 token**
+- 盲区：子 agent 内部消耗计入总量但无法细分
+
+**成本口径**：`total_cost_usd` 走 litellm 代理时按上游模型定价，**实测与本地单价表偏差 +67%**，故以 `TOKEN_PRICE_*` 自算为准，日报中并列展示两个数供对照。
+
+**日报**：`scripts/token_report.py`，每天 `TOKEN_REPORT_HOUR:MINUTE`（默认 09:10）走云之家 **notify 私聊**推送（复用 `RETROSPECTIVE_NOTIFY_URL/NAME`），与 `daily_report.py` 的群机器人 webhook 是两条独立通道。
+
+所有云之家推送（token 日报 + 复盘通知）统一带前缀 `NOTIFY_MSG_PREFIX`（默认 `【CodingAgent项目】`，定义在 `api/constants.py`），便于在众多通知中辨识来源。
+
+```bash
+python scripts/token_report.py --date 20260908 --dry-run   # 预览日报
+python scripts/token_report.py --issue CNPRD-1276          # 单 issue 明细
+```
+
+**接口**：`GET /api/report/tokens?date=`、`GET /api/report/tokens/issue/{issue_key}`、`POST /api/report/tokens/send`
+
 ## issue-retrospective skill（Self-Improving Agent）
 
 `agent_cwd/.claude/skills/issue-retrospective/` — 每日复盘 skill，分析诊断 session 中的 Agent 错误，自动生成知识库改进草稿。
@@ -126,8 +159,10 @@ code-fix Step 8（push 成功后执行）统一负责 CICD + autotest，两个�
 - `claude_agent_sdk` 不一定可用（如 CLI 上下文）。CLI 工具链用到的模块不能在顶层 import 它，需用 lazy import 或 `TYPE_CHECKING` guard
 - `.custom-settings.json` 由 `AgentService` 初始化时写入，包含安全配置（拒绝读取 `.env`、密钥文件等）
 - 环境变量参考 `.env.example`，模型供应商通过 `DEFAULT_MODEL_CONFIG` 切换
+- 模型名的 `[1m]` 后缀（如 `claude-agy-sonnet[1m]`）是 Claude Code 客户端约定，**不是** provider 侧的模型名。Agent SDK 会剥离后缀，实际发送 base model 名 + header `anthropic-beta: ...,context-1m-2025-08-07,...`。因此用裸 curl 打 provider 的 `/v1/messages` 带 `[1m]` 会报模型不存在/无权限，属正常现象，必须走 agent 接口验证
+- 本地与生产 `.env` 各自独立维护，改配置时两端分别改、分别重启验证，禁止用本地 `.env` 覆盖生产（rsync 已 `--exclude='.env'`）
 - Claude Router 指 [claude-code-router](https://github.com/musistudio/claude-code-router)（ccr），使用前需 `eval "$(ccr activate)"`
-- 服务器部署在 `/root/panda_li/agent-harness`，端口 9125，详见 CLAUDE.local.md
+- 服务器部署在 `/data/panda_li/agent-harness`，端口 9125，详见 CLAUDE.local.md
 - 服务器使用 Python 3.12，`claude-agent-sdk` 从 `/root/jinfan/linear-cc/agent-harness/.venv` 复制安装
 - 服务器 MCP elastic URL：内网地址，详见 CLAUDE.local.md
 - `run.sh` Linux 环境不带 `--reload`，macOS 保留热重载

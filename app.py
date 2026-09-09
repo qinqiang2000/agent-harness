@@ -221,6 +221,35 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Daily report scheduled at %02d:00", report_hour)
 
+    # Token 成本日报（默认开启，走云之家 notify 私聊）
+    if os.getenv("TOKEN_REPORT_ENABLED", "true").lower() in ("1", "true", "yes"):
+        from scripts.token_report import generate_and_send as _gen_token_report
+
+        async def _run_token_report():
+            from datetime import datetime, timedelta
+
+            date_str = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+            try:
+                result = await _gen_token_report(date_str)
+                logger.info("Token report sent: %s", result)
+            except Exception:
+                logger.exception("Token report failed")
+
+        token_report_hour = int(os.getenv("TOKEN_REPORT_HOUR", "9"))
+        token_report_minute = int(os.getenv("TOKEN_REPORT_MINUTE", "10"))
+        scheduler.add_job(
+            _run_token_report,
+            "cron",
+            hour=token_report_hour,
+            minute=token_report_minute,
+            id="token_report",
+        )
+        logger.info(
+            "Token report scheduled at %02d:%02d",
+            token_report_hour,
+            token_report_minute,
+        )
+
     # Daily retrospective for self-improving agent
     from api.services.retrospective_service import run_daily_retrospective
 

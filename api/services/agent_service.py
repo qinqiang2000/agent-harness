@@ -15,6 +15,7 @@ from api.core.streaming import StreamProcessor
 from api.utils import build_initial_prompt, format_sse_message
 from api.utils.perf_timer import PerfTimer
 from api.utils.interaction_logger import interaction_logger, FALLBACK_PHRASE
+from api.services import token_usage_store
 from api.constants import AGENTS_ROOT, DATA_DIR, AGENT_CWD
 from api.services.sdk_pool import get_cache, CachedSession
 from api.utils.image_loader import load_image_blocks, ImageLoadError
@@ -437,6 +438,50 @@ class AgentService:
                     logger.info(f"Query sent: {prompt[:80]}...")
                     yield format_sse_message("heartbeat", {"status": "processing"})
 
+                    # ---- token 用量采集 ----
+                    # issue_key 由渠道插件通过 metadata 透传（Linear 传 identifier，
+                    # 如 CNPRD-1276）。同一 issue 的诊断 / code-fix / 追问是多个独立
+                    # session，靠这个键才能聚合成"一个 issue 花了多少"。
+                    _usage_request_id = token_usage_store.new_request_id()
+                    _issue_key = _meta.get("issue_key")
+                    _issue_id = _meta.get("issue_id")
+                    _channel = _meta.get("channel")
+
+                    def _usage_sink(payload: dict) -> None:
+                        """接收 StreamProcessor 上报的用量并落库。
+
+                        同步写 SQLite：单次请求仅几十行 insert，本地写入毫秒级，
+                        不值得为此引入线程池；且必须在流结束前写完，放到后台任务
+                        会因请求结束被取消而丢数据。
+
+                        Args:
+                            payload: 含 session_id / usage / cost_sdk_usd / model /
+                                num_turns / total_turns / duration_ms / status /
+                                tool_volume
+
+                        Returns:
+                            None。内部已对写库异常做兜底，不会抛到调用方。
+                        """
+                        token_usage_store.record_session(
+                            request_id=_usage_request_id,
+                            session_id=payload.get("session_id"),
+                            issue_key=_issue_key,
+                            issue_id=_issue_id,
+                            skill=request.skill,
+                            tenant_id=request.tenant_id,
+                            channel=_channel,
+                            model=payload.get("model"),
+                            usage=payload.get("usage"),
+                            cost_sdk_usd=payload.get("cost_sdk_usd"),
+                            num_turns=payload.get("num_turns"),
+                            total_turns=payload.get("total_turns", 0),
+                            duration_ms=payload.get("duration_ms"),
+                            status=payload.get("status", "success"),
+                        )
+                        token_usage_store.record_tool_volume(
+                            _usage_request_id, payload.get("tool_volume") or []
+                        )
+
                     processor = StreamProcessor(
                         client=client,
                         request=request,
@@ -444,6 +489,7 @@ class AgentService:
                         on_session_id=(
                             _on_session_id if not request.session_id else None
                         ),
+                        usage_sink=_usage_sink,
                     )
 
                     answer_parts = []

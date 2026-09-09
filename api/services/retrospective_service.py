@@ -546,7 +546,9 @@ async def _send_yunzhijia_notification(
 
     import aiohttp
 
-    payload = {"name": notify_name, "type": "text", "text": msg}
+    from api.constants import NOTIFY_MSG_PREFIX
+
+    payload = {"name": notify_name, "type": "text", "text": NOTIFY_MSG_PREFIX + msg}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
